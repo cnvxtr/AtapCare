@@ -1,0 +1,11 @@
+{
+  "name": "atap-care-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "echo 'Backend server coming soon — Node.js menyusul'"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.7"
+  }
+}
