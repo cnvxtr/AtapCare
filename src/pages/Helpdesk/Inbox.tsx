@@ -208,9 +208,9 @@ export default function Inbox() {
     }
 
     return (
-        <div className="p-4 sm:p-6">
+        <div className="space-y-6">
             {/* HEADER */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-display font-bold text-foreground">Antrean Masuk</h2>
                     <p className="text-sm text-muted-foreground mt-1">Pusat pendaratan laporan keluhan baru</p>
@@ -222,7 +222,7 @@ export default function Inbox() {
             </div>
 
             {/* TOOLBAR */}
-            <div className="bg-card p-4 rounded-xl border-2 border-border shadow-sm mb-6 space-y-4">
+            <div className="bg-card p-4 rounded-2xl border border-border space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                     <div className="flex items-center gap-2 flex-wrap">
                         <Calendar className="w-4 h-4 text-muted-foreground" />
@@ -266,15 +266,15 @@ export default function Inbox() {
             </div>
 
             {/* TABEL */}
-            <div className="bg-card rounded-xl border-2 border-border shadow-sm overflow-hidden">
+                <div className="rounded-2xl border border-border bg-card overflow-hidden">
                 <div className="overflow-x-auto">
                     <div className="min-w-[900px]">
                         <table className="w-full text-left">
-                            <thead className="bg-muted text-muted-foreground text-xs uppercase border-b-2 border-border">
+                            <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                                 <tr>
-                                    <th className="p-4 font-semibold">Kode</th><th className="p-4 font-semibold">Pelapor</th><th className="p-4 font-semibold">Site</th>
-                                    <th className="p-4 font-semibold">Unit</th><th className="p-4 font-semibold">Prioritas</th><th className="p-4 font-semibold">Status</th>
-                                    <th className="p-4 font-semibold text-right">Aksi</th>
+                                    <th className="px-4 py-3 font-medium">Kode</th><th className="px-4 py-3 font-medium">Pelapor</th><th className="px-4 py-3 font-medium">Site</th>
+                                    <th className="px-4 py-3 font-medium">Unit</th><th className="px-4 py-3 font-medium">Prioritas</th><th className="px-4 py-3 font-medium">Status</th>
+                                    <th className="px-4 py-3 font-medium text-right">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">

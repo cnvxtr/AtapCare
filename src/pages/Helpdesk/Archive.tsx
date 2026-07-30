@@ -49,8 +49,8 @@ export default function Archive() {
     })
 
     return (
-        <div className="p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
                         <ArchiveIcon className="w-6 h-6 text-muted-foreground" />
@@ -68,7 +68,7 @@ export default function Archive() {
             </div>
 
             {/* Filter & Search Bar */}
-            <div className="bg-card p-4 rounded-xl border-2 border-border shadow-sm mb-6 flex flex-col sm:flex-row gap-4">
+            <div className="bg-card p-4 rounded-2xl border border-border flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
                     <input
@@ -95,19 +95,19 @@ export default function Archive() {
             </div>
 
             {/* Tabel Arsip */}
-            <div className="bg-card rounded-xl border-2 border-border shadow-sm overflow-hidden">
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
                 <div className="overflow-x-auto">
                     <div className="min-w-[900px]">
                         <table className="w-full text-left">
-                            <thead className="bg-muted text-muted-foreground text-xs uppercase border-b-2 border-border">
+                            <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                                 <tr>
-                                    <th className="p-4 font-semibold">Kode Tiket</th>
-                                    <th className="p-4 font-semibold">Pelanggan</th>
-                                    <th className="p-4 font-semibold">Site</th>
-                                    <th className="p-4 font-semibold">Unit</th>
-                                    <th className="p-4 font-semibold">Status</th>
-                                    <th className="p-4 font-semibold">Tanggal Tutup</th>
-                                    <th className="p-4 font-semibold text-right">Aksi</th>
+                                    <th className="px-4 py-3 font-medium">Kode Tiket</th>
+                                    <th className="px-4 py-3 font-medium">Pelanggan</th>
+                                    <th className="px-4 py-3 font-medium">Site</th>
+                                    <th className="px-4 py-3 font-medium">Unit</th>
+                                    <th className="px-4 py-3 font-medium">Status</th>
+                                    <th className="px-4 py-3 font-medium">Tanggal Tutup</th>
+                                    <th className="px-4 py-3 font-medium text-right">Aksi</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">

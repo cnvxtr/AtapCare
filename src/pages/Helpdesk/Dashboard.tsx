@@ -56,63 +56,60 @@ export default function Dashboard() {
         .slice(0, 10) // Tampilkan 10 teratas
 
     return (
-        <div className="space-y-4 md:space-y-6 p-4 sm:p-6">
-            {/* 1. Header & Time Filter */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b-2 border-border">
-                <div>
-                    <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Dashboard Helpdesk</h1>
-                    <p className="text-xs sm:text-sm text-muted-foreground mt-1">Pusat pantau harian operasional tiket.</p>
-                </div>
-                <div className="flex bg-card border-2 border-border rounded-lg p-1 w-full sm:w-fit shadow-sm overflow-x-auto">
-                    {[
-                        { id: 'today', label: 'Hari Ini' },
-                        { id: '7days', label: '7 Hari' },
-                        { id: 'month', label: 'Bulan Ini' }
-                    ].map((period) => (
-                        <button
-                            key={period.id}
-                            onClick={() => setActiveTimeFilter(period.id)}
-                            className={`flex-1 sm:flex-none px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTimeFilter === period.id
-                                    ? 'bg-foreground text-primary-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                                }`}
-                        >
-                            {period.label}
-                        </button>
-                    ))}
-                </div>
+        <div className="space-y-6">
+            {/* 1. Time Filter */}
+            <div className="flex items-center gap-2 p-1 rounded-lg border border-border bg-card w-fit">
+                {[
+                    { id: 'today', label: 'Hari Ini' },
+                    { id: '7days', label: '7 Hari' },
+                    { id: 'month', label: 'Bulan Ini' }
+                ].map((period) => (
+                    <button
+                        key={period.id}
+                        onClick={() => setActiveTimeFilter(period.id)}
+                        className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition font-medium ${activeTimeFilter === period.id
+                                ? 'bg-foreground text-background'
+                                : 'text-muted-foreground hover:text-foreground'
+                            }`}
+                    >
+                        {period.label}
+                    </button>
+                ))}
             </div>
 
             {/* 2. KPI Cards */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div className="bg-card border-2 border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all hover:border-border">
+                <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
+                    <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-xs font-medium text-muted-foreground">Tiket Baru</p>
-                            <h3 className="text-2xl font-mono font-bold text-foreground mt-1">{getTicketCount('NEW')}</h3>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Tiket Baru</p>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('NEW')}</h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><Inbox className="w-5 h-5 text-muted-foreground" /></div>
                     </div>
                 </div>
-                <div className="bg-card border-2 border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all hover:border-border">
+                <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
+                    <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-xs font-medium text-muted-foreground">Diproses</p>
-                            <h3 className="text-2xl font-mono font-bold text-foreground mt-1">{getTicketCount('OPEN') + getTicketCount('WORKING') + getTicketCount('PENDING')}</h3>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Diproses</p>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('OPEN') + getTicketCount('WORKING') + getTicketCount('PENDING')}</h3>
                         </div>
                         <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg"><Clock className="w-5 h-5 text-amber-600" /></div>
                     </div>
                 </div>
-                <div className="bg-card border-2 border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-all hover:border-border">
+                <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
+                    <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-xs font-medium text-muted-foreground">Menunggu PM</p>
-                            <h3 className="text-2xl font-mono font-bold text-foreground mt-1">{getTicketCount('UNASSIGNED') + getTicketCount('SCHEDULED') + getTicketCount('EN_ROUTE')}</h3>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Menunggu PM</p>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('UNASSIGNED') + getTicketCount('SCHEDULED') + getTicketCount('EN_ROUTE')}</h3>
                         </div>
                         <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg"><Users className="w-5 h-5 text-blue-600" /></div>
                     </div>
                 </div>
-                <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all relative overflow-hidden group hover:border-red-300">
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-red-300">
                     <div className="absolute right-2 top-2 opacity-20 group-hover:opacity-30 transition-opacity">
                         <AlertTriangle className="w-12 h-12 text-red-600" />
                     </div>
@@ -120,15 +117,15 @@ export default function Dashboard() {
                         <p className="text-[10px] font-black text-red-600 uppercase tracking-wider flex items-center gap-1">
                             <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span> SLA Overdue
                         </p>
-                        <h3 className="text-3xl font-mono font-black text-red-600 mt-1">
+                        <h3 className="text-4xl font-display font-black text-red-600 mt-2 tracking-tight">
                             {tickets.filter(t => t.slaTimeLeft <= 4 && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)).length}
                         </h3>
                     </div>
                 </div>
             </div>
 
-            {/* 3. QUICK FILTER BAR (FITUR BARU) */}
-            <div className="bg-card p-3 rounded-xl border-2 border-border shadow-sm flex flex-col lg:flex-row lg:items-center gap-4">
+            {/* 3. QUICK FILTER BAR */}
+            <div className="bg-card p-3 rounded-2xl border border-border flex flex-col lg:flex-row lg:items-center gap-4">
                 <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground whitespace-nowrap">
                     <Filter className="w-4 h-4" /> Quick Filter:
                 </div>
@@ -166,8 +163,8 @@ export default function Dashboard() {
 
             {/* 4. Grafik (2 Kolom) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <div className="bg-card border-2 border-border rounded-xl p-4 sm:p-6 shadow-sm hover:border-border transition-all w-full">
-                    <h3 className="text-base font-display font-semibold text-foreground mb-3 border-b border-border pb-2">Distribusi Status Tiket</h3>
+                <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 transition-all w-full">
+                    <h3 className="font-display font-bold text-foreground mb-4">Distribusi Status Tiket</h3>
                     <div className="h-64 w-full relative">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>
@@ -181,8 +178,8 @@ export default function Dashboard() {
                     </div>
                 </div>
 
-                <div className="bg-card border-2 border-border rounded-xl p-4 sm:p-6 shadow-sm hover:border-border transition-all w-full">
-                    <h3 className="text-base font-display font-semibold text-foreground mb-3 border-b border-border pb-2">Beban Prioritas Aktif</h3>
+                <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 transition-all w-full">
+                    <h3 className="font-display font-bold text-foreground mb-4">Beban Prioritas Aktif</h3>
                     <div className="h-64 w-full relative">
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={priorityData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
@@ -197,33 +194,33 @@ export default function Dashboard() {
             </div>
 
             {/* 5. Tabel Operasional (Tier 2) */}
-            <div className="bg-card border-2 border-border rounded-xl shadow-sm overflow-hidden hover:border-border transition-all">
-                <div className="p-4 border-b-2 border-border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 bg-muted">
-                    <h3 className="text-base font-display font-semibold text-foreground">Tiket Operasional (Top 10)</h3>
-                    <button onClick={() => navigate('/inbox')} className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 font-medium self-start sm:self-auto">
+            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+                    <h3 className="font-display font-bold text-foreground">Tiket Operasional (Top 10)</h3>
+                    <button onClick={() => navigate('/inbox')} className="text-xs font-medium hover:underline inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition">
                         Lihat Semua di Inbox <ArrowUpRight className="w-3 h-3" />
                     </button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left min-w-[900px]">
-                        <thead className="bg-muted text-muted-foreground text-xs uppercase border-b-2 border-border">
+                        <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                             <tr>
-                                <th className="px-4 py-3 font-semibold">Kode</th>
-                                <th className="px-4 py-3 font-semibold">Pelanggan</th>
-                                <th className="px-4 py-3 font-semibold">Site</th>
-                                <th className="px-4 py-3 font-semibold">Unit</th>
-                                <th className="px-4 py-3 font-semibold">Prioritas</th>
-                                <th className="px-4 py-3 font-semibold">Status</th>
-                                <th className="px-4 py-3 font-semibold">SLA (Jam)</th>
-                                <th className="px-4 py-3 font-semibold text-right">Aksi</th>
+                                <th className="px-4 py-3 font-medium">Kode</th>
+                                <th className="px-4 py-3 font-medium">Pelanggan</th>
+                                <th className="px-4 py-3 font-medium">Site</th>
+                                <th className="px-4 py-3 font-medium">Unit</th>
+                                <th className="px-4 py-3 font-medium">Prioritas</th>
+                                <th className="px-4 py-3 font-medium">Status</th>
+                                <th className="px-4 py-3 font-medium">SLA</th>
+                                <th className="px-4 py-3 font-medium text-right">Aksi</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {displayTickets.length === 0 ? (
-                                <tr><td colSpan={8} className="p-8 text-center text-muted-foreground text-sm">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                <tr><td colSpan={8} className="p-8 text-center text-xs text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                             ) : (
                                 displayTickets.map(ticket => (
-                                    <tr key={ticket.id} className="hover:bg-muted transition-colors">
+                                    <tr key={ticket.id} className="hover:bg-accent/40 transition group">
                                         <td className="px-4 py-3 font-mono text-xs text-foreground font-medium whitespace-nowrap">{ticket.code}</td>
                                         <td className="px-4 py-3 text-xs text-foreground truncate max-w-[120px]" title={ticket.customer}>{ticket.customer}</td>
                                         <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{ticket.site || '-'}</td>
