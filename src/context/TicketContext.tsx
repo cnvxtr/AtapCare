@@ -124,15 +124,6 @@ interface AddTicketData {
     photos?: File[]
 }
 
-interface TicketUpdatePayload {
-    status: TicketStatus
-    updated_at: string
-    priority?: Priority
-    resolved_by?: 'helpdesk' | 'technician'
-    rejection_reason?: string
-    closed_at?: string
-}
-
 interface TicketContextType {
     tickets: Ticket[]
     loading: boolean
@@ -197,47 +188,38 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         const initialStatus = data.initialStatus || 'NEW'
         const initialPriority = data.priority || 'P2'
 
-        const { data: newTicket, error } = await supabase
-            .from('tickets')
-            .insert({
-                code,
-                customer: data.reporterName,
-                company: data.company || 'Internal',
-                site: data.site,
-                unit: data.unit,
-                status: initialStatus,
-                priority: initialPriority,
-                category: data.category,
-                location: data.location,
-                description: data.description,
-                photo_url: data.photoUrl,
-                created_by: user.id
-            })
-            .select()
-            .single()
+        let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
+        if (data.photos?.length) {
+            try {
+                const imgs = await Promise.all(data.photos.map(compressImage))
+                const photoBlock = `Foto keluhan (${imgs.length}):\n${imgs.join('\n')}`
+                details = details ? `${details}\n${photoBlock}` : photoBlock
+            } catch {
+                toast.error('Gagal memproses foto. Foto tidak tersimpan.')
+            }
+        }
+
+        const { data: newTicket, error } = await supabase.rpc('create_internal_ticket', {
+            p_code: code,
+            p_customer: data.reporterName,
+            p_company: data.company || 'Internal',
+            p_site: data.site,
+            p_unit: data.unit,
+            p_status: initialStatus,
+            p_priority: initialPriority,
+            p_category: data.category,
+            p_location: data.location,
+            p_description: data.description,
+            p_photo_url: data.photoUrl,
+            p_activity_action: `Tiket dibuat dengan status ${STATUS_LABELS[initialStatus] || initialStatus}`,
+            p_activity_details: details,
+        })
 
         if (error) {
             console.error('Error adding ticket:', error)
             toast.error('Gagal menyimpan tiket: ' + error.message)
             return null
         } else {
-            let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
-            if (data.photos?.length) {
-                try {
-                    const imgs = await Promise.all(data.photos.map(compressImage))
-                    const photoBlock = `Foto keluhan (${imgs.length}):\n${imgs.join('\n')}`
-                    details = details ? `${details}\n${photoBlock}` : photoBlock
-                } catch {
-                    toast.error('Gagal memproses foto. Foto tidak tersimpan.')
-                }
-            }
-            await supabase.from('activities').insert({
-                ticket_id: newTicket.id,
-                user_id: user.id,
-                user_name: user.full_name || user.email,
-                action: `Tiket dibuat dengan status ${STATUS_LABELS[initialStatus] || initialStatus}`,
-                details
-            })
             await fetchTickets()
             const slaRemaining = await fetchSlaRemaining([newTicket.id])
             return mapTicketRow(newTicket as SupabaseTicketRow, slaRemaining)
@@ -263,29 +245,18 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             'VOID': 'Tiket dibatalkan', 'DUPLICATE': 'Tiket diduplikasi'
         }
 
-        const updatePayload: TicketUpdatePayload = {
-            status: newStatus,
-            updated_at: new Date().toISOString()
-        }
-        if (newPriority) updatePayload.priority = newPriority
-        if (resolvedBy) updatePayload.resolved_by = resolvedBy
-        if (rejectionReason) updatePayload.rejection_reason = rejectionReason
-        if (newStatus === 'CLOSED' || newStatus === 'VOID' || newStatus === 'DUPLICATE') {
-            updatePayload.closed_at = new Date().toISOString()
-        }
-
-        const { error: ticketError } = await supabase.from('tickets').update(updatePayload).eq('id', id)
-
-        const { error: activityError } = await supabase.from('activities').insert({
-            ticket_id: id,
-            user_id: user.id,
-            user_name: user.full_name || user.email,
-            action: actionMap[newStatus],
-            details: actionDetails || rejectionReason
+        const { error: ticketError } = await supabase.rpc('update_ticket_status', {
+            p_ticket_id: id,
+            p_new_status: newStatus,
+            p_new_priority: newPriority,
+            p_resolved_by: resolvedBy,
+            p_rejection_reason: rejectionReason,
+            p_activity_action: actionMap[newStatus],
+            p_activity_details: actionDetails || rejectionReason,
         })
 
-        if (ticketError || activityError) {
-            console.error('Error updating status:', ticketError, activityError)
+        if (ticketError) {
+            console.error('Error updating status:', ticketError)
             toast.error('Gagal memperbarui status tiket.')
         } else {
             await fetchTickets()
@@ -303,28 +274,18 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         note?: string
     ) => {
         if (!user) return
-        const updatePayload: { [k: string]: unknown } = { updated_at: new Date().toISOString() }
         const action = technicianId
             ? `Tiket ditugaskan ke ${technicianName || 'Teknisi'}`
             : 'Penugasan dibatalkan'
-        if (technicianId) {
-            updatePayload.assigned_to = technicianId
-            updatePayload.status = 'SCHEDULED'
-        } else {
-            updatePayload.assigned_to = null
-            updatePayload.status = 'UNASSIGNED'
-        }
 
-        const { error: ticketError } = await supabase.from('tickets').update(updatePayload).eq('id', id)
-        const { error: activityError } = await supabase.from('activities').insert({
-            ticket_id: id,
-            user_id: user.id,
-            user_name: user.full_name || user.email,
-            action,
-            details: note || undefined
+        const { error: ticketError } = await supabase.rpc('assign_ticket', {
+            p_ticket_id: id,
+            p_technician_id: technicianId,
+            p_activity_action: action,
+            p_activity_details: note,
         })
-        if (ticketError || activityError) {
-            console.error('Error updating assignment:', ticketError, activityError)
+        if (ticketError) {
+            console.error('Error updating assignment:', ticketError)
             toast.error('Gagal menyimpan penugasan.')
         } else {
             await fetchTickets()
