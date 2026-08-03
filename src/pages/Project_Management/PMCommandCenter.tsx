@@ -207,12 +207,12 @@ export default function PMCommandCenter() {
             {/* KANBAN / LIST */}
             {viewMode === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2">
+                    <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-4 xl:grid-cols-7">
                         {KANBAN_COLUMNS.map(col => {
                             const items = baseTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className="min-w-0 rounded-lg border border-border bg-card/50 flex flex-col">
+                                <div key={col.key} className="shrink-0 min-w-[240px] md:min-w-0 md:shrink rounded-lg border border-border bg-card/50 flex flex-col">
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
@@ -247,7 +247,7 @@ export default function PMCommandCenter() {
             ) : (
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                     <div className="overflow-x-auto">
-                        <div className="min-w-0">
+                        <div className="min-w-[720px]">
                             <table className="w-full table-fixed text-left">
                                 <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                                     <tr>

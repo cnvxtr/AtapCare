@@ -190,8 +190,8 @@ export default function MainLayout() {
       <div className={`flex-1 min-w-0 flex flex-col pt-16 ${collapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
         {/* Top bar */}
         <header className={`h-16 fixed top-0 right-0 z-30 border-b border-border bg-background ${collapsed ? 'lg:left-16' : 'lg:left-64'}`}>
-          <div className="h-full px-6 flex items-center gap-4">
-            <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 rounded hover:bg-accent transition lg:hidden">
+          <div className="h-full px-4 sm:px-6 flex items-center gap-4">
+            <button onClick={() => setIsSidebarOpen(true)} className="p-3 sm:p-2 -ml-2 rounded hover:bg-accent transition lg:hidden">
               <Menu className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
@@ -203,13 +203,13 @@ export default function MainLayout() {
             <button
               onClick={() => { const next = !isDark ? 'dark' : 'light'; setTheme(next); setIsDark(!isDark) }}
               title={isDark ? 'Mode terang' : 'Mode gelap'}
-              className="relative h-9 w-9 grid place-items-center rounded border border-border hover:bg-accent transition"
+              className="relative h-11 w-11 sm:h-9 sm:w-9 grid place-items-center rounded border border-border hover:bg-accent transition"
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="relative h-9 w-9 grid place-items-center rounded border border-border hover:bg-accent transition">
+                <button className="relative h-11 w-11 sm:h-9 sm:w-9 grid place-items-center rounded border border-border hover:bg-accent transition">
                   <Bell className="h-4 w-4" />
                   {notifCount > 0 && (
                     <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold grid place-items-center">
@@ -252,7 +252,7 @@ export default function MainLayout() {
         </header>
 
         {pathname === '/dashboard' && (
-        <div className="px-6 pt-8 pb-6 border-b border-border bg-gradient-to-b from-card to-background">
+        <div className="px-4 sm:px-6 pt-8 pb-6 border-b border-border bg-gradient-to-b from-card to-background">
           <div className="flex items-end justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-3xl font-display font-bold tracking-tight">{pageTitle}</h1>
@@ -266,7 +266,7 @@ export default function MainLayout() {
         </div>
         )}
 
-        <main className="p-6 flex-1 bg-background">
+        <main className="p-4 sm:p-6 flex-1 bg-background">
           <Outlet />
         </main>
       </div>

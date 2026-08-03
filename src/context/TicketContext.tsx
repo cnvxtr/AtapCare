@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
-import { compressImage } from '../lib/image'
 import { useAuth } from './AuthContext'
 import { STATUS_LABELS } from '../components/Badge'
 import { generateTicketCode } from '../services/ticketService'
 import { fetchSlaRemaining } from '../services/sla'
+import { uploadTicketPhoto } from '../services/photoService'
 
 export type TicketStatus = 'NEW' | 'OPEN' | 'UNASSIGNED' | 'SCHEDULED' | 'EN_ROUTE' | 'WORKING' | 'PENDING' | 'RESOLVED' | 'CLOSED' | 'VOID' | 'DUPLICATE' | 'REJECTED'
 export type Priority = 'P1' | 'P2' | 'P3'
@@ -191,11 +191,11 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
         if (data.photos?.length) {
             try {
-                const imgs = await Promise.all(data.photos.map(compressImage))
-                const photoBlock = `Foto keluhan (${imgs.length}):\n${imgs.join('\n')}`
+                const paths = await Promise.all(data.photos.map((f) => uploadTicketPhoto(f, code)))
+                const photoBlock = `Foto keluhan (${paths.length}):\n${paths.join('\n')}`
                 details = details ? `${details}\n${photoBlock}` : photoBlock
             } catch {
-                toast.error('Gagal memproses foto. Foto tidak tersimpan.')
+                toast.error('Gagal mengunggah foto. Foto tidak tersimpan.')
             }
         }
 

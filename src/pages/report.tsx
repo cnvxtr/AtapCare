@@ -192,7 +192,7 @@ export default function ReportPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-6">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6">
           <div className="grid md:grid-cols-2 gap-4">
             <Field label="Nama Pelapor" required>
               <input required value={reporterName} onChange={(e) => setReporterName(e.target.value)} className="input" placeholder="Nama lengkap" />

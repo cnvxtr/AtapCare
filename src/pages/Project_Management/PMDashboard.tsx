@@ -55,8 +55,6 @@ export default function PMDashboard() {
 
     const fieldCount = tickets.filter(t => t.status === 'WORKING').length
 
-    // ponytail: sla_time_left di DB masih NULL (backend SLA belum dibangun) → fallback 24 jam,
-    // kartu SLA Kritis tampil 0 sampai kalkulasi SLA dibuat (paket kerja Admin).
     const slaCritical = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft <= 4)
     const slaOverdue = slaCritical.filter(t => t.slaTimeLeft <= 0).length
     const slaWarning = slaCritical.length - slaOverdue

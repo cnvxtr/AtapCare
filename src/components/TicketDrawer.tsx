@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Image, X } from 'lucide-react'
 import { Badge } from './Badge'
+import { resolvePhotos } from '../services/photoService'
 
 export type DrawerTab = 'detail' | 'timeline' | 'activity'
 
@@ -87,19 +88,40 @@ function PhotoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
     )
 }
 
+// Data URL (portal & foto lama) atau path storage (ticket-photos/...).
+const PHOTO_TOKEN_RE = /(data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|ticket-photos\/[^\s"']+)/g
+
+export function isPhotoToken(s: string): boolean {
+    return s.startsWith('data:image') || s.startsWith('ticket-photos/')
+}
+
+// Resolusi satu batch nilai foto → URL tampil (data URL tetap; path jadi signed URL).
+function usePhotoResolver(tokens: string[]): Record<string, string> {
+    const [map, setMap] = useState<Record<string, string>>({})
+    const key = tokens.join('\u0000')
+    useEffect(() => {
+        let active = true
+        resolvePhotos(tokens).then((m) => { if (active) setMap(m) })
+        return () => { active = false }
+    }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+    return map
+}
+
 // Di Timeline & Activity, foto ditampilkan sebagai label yang bisa diklik (bukan <img> inline)
 // agar baris tetap ringan; foto penuh muncul lewat lightbox saat diklik.
 export function DetailsText({ text }: { text?: string }) {
     const [preview, setPreview] = useState<string | null>(null)
+    const parts = useMemo(() => text?.split(PHOTO_TOKEN_RE) ?? [], [text])
+    const tokens = parts.filter(isPhotoToken)
+    const resolved = usePhotoResolver(tokens)
     if (!text) return null
-    const parts = text.split(/(data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+)/g)
     let count = 0
     return (
         <>
             <span className="break-words">
                 {parts.map((p, i) =>
-                    p.startsWith('data:image')
-                        ? <button key={i} type="button" onClick={() => setPreview(p)} className="mt-1 mr-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition"><Image className="w-3 h-3" />Foto {++count}</button>
+                    isPhotoToken(p)
+                        ? <button key={i} type="button" onClick={() => { const u = resolved[p]; if (u) setPreview(u) }} className="mt-1 mr-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition"><Image className="w-3 h-3" />Foto {++count}</button>
                         : <span key={i}>{p}</span>
                 )}
             </span>
@@ -258,44 +280,46 @@ export function AssignmentCard({ items }: { items: { action: string; details?: s
     )
 }
 
-const PHOTO_RE = /data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/g
+const PHOTO_SRC_RE = /(?:data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|ticket-photos\/[^\s"']+)/g
 
 function extractPhotos(items: { timestamp: string; action: string; details?: string }[]): { src: string; when: string }[] {
     const photos: { src: string; when: string }[] = []
     for (const act of items) {
         if (!act.details) continue
-        for (const m of act.details.matchAll(PHOTO_RE)) {
+        for (const m of act.details.matchAll(PHOTO_SRC_RE)) {
             photos.push({ src: m[0], when: act.timestamp })
         }
     }
     return photos
 }
 
-// Semua foto (portal client, internal, teknisi) tersimpan sebagai data URL di detail aktivitas,
+// Foto (portal client = data URL, internal/teknisi = path storage) tersimpan di detail aktivitas,
 // jadi galeri cukup memindai aktivitas tiket sekali dan tampil untuk semua role.
 export function PhotoGallery({ items }: { items: { timestamp: string; action: string; details?: string }[] }) {
     const photos = extractPhotos(items)
+    const resolved = usePhotoResolver(photos.map((p) => p.src))
     const [preview, setPreview] = useState<string | null>(null)
 
     if (photos.length === 0) return null
+    const ready = photos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
 
     return (
         <>
             <div className="mt-5 bg-muted/60 border border-border rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                     <Image className="w-4 h-4 text-muted-foreground" />
-                    <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Dokumentasi ({photos.length})</h4>
+                    <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Dokumentasi ({ready.length})</h4>
                 </div>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {photos.map((p, i) => (
+                    {ready.map((p, i) => (
                         <button
                             key={i}
                             type="button"
-                            onClick={() => setPreview(p.src)}
+                            onClick={() => setPreview(p.url!)}
                             className="aspect-square rounded-lg overflow-hidden border border-border bg-background hover:opacity-90 transition"
                             aria-label={`Lihat foto ${i + 1}`}
                         >
-                            <img src={p.src} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                            <img src={p.url!} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
                         </button>
                     ))}
                 </div>

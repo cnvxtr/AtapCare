@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
-import { compressImage } from '../../lib/image'
+import { uploadTicketPhoto } from '../../services/photoService'
 
 type TabType = 'detail' | 'timeline' | 'activity'
 
@@ -126,13 +126,13 @@ export default function TugasTeknisi() {
         }
         setSubmitting(true)
         try {
-            const imgs = await Promise.all(photos.map(compressImage))
+            const paths = await Promise.all(photos.map((f) => uploadTicketPhoto(f, selectedTicket.code)))
             const parts = [`Selesai${completeNote ? ': ' + completeNote : ''}`]
             if (sparepart.trim()) parts.push(`Sparepart: ${sparepart.trim()}`)
-            if (imgs.length) parts.push(`Foto (${imgs.length}):\n${imgs.join('\n')}`)
+            if (paths.length) parts.push(`Foto (${paths.length}):\n${paths.join('\n')}`)
             await handleStatusUpdate(selectedTicket.id, 'RESOLVED', parts.join(' | '))
         } catch {
-            toast.error('Gagal memproses foto. Coba lagi.')
+            toast.error('Gagal mengunggah foto. Coba lagi.')
         } finally {
             setSubmitting(false)
             setCompleteNote('')
@@ -174,7 +174,7 @@ export default function TugasTeknisi() {
                         {act && (
                             <button onClick={(e) => { e.stopPropagation(); act.action(ticket) }}
                                 disabled={isLoading === ticket.id || isLoading === 'gps'}
-                                className={`px-3 py-1.5 rounded text-xs font-bold text-white transition-all ${act.color} disabled:opacity-50 disabled:cursor-wait`}>
+                                className={`px-3 py-1.5 min-h-[44px] rounded text-xs font-bold text-white transition-all ${act.color} disabled:opacity-50 disabled:cursor-wait`}>
                                 {isLoading === ticket.id ? 'Memproses...' : isLoading === 'gps' && act.label === 'Mulai Kerja' ? 'Mengambil GPS...' : act.label}
                             </button>
                         )}
