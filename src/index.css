@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+}
+
 /* ============================================
    DESIGN SYSTEM: Monochrome Industrial
    ============================================ */
@@ -20,7 +26,7 @@
         --muted: 0 0% 95.5%;
         --muted-foreground: 0 0% 48%;
         --accent: 0 0% 93%;
-        --border: 0 0% 90%;
+        --border: 0 0% 72%;
         --ring: 0 0% 14.5%;
         --radius: 0.75rem;
 
@@ -45,7 +51,7 @@
         --muted: 0 0% 13.3%;
         --muted-foreground: 0 0% 65%;
         --accent: 0 0% 16.9%;
-        --border: 0 0% 100% / 12%;
+        --border: 0 0% 100% / 30%;
         --ring: 0 0% 98.5%;
         --destructive: 22.216 19.1% 70.4%;
         --destructive-foreground: 0 0% 98.5%;
@@ -156,6 +162,36 @@
         }
     }
 
+    /* Drawer Slide-In */
+    .drawer-enter {
+        animation: drawer-in 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes drawer-in {
+        from {
+            transform: translateX(100%);
+        }
+
+        to {
+            transform: translateX(0);
+        }
+    }
+
+    /* Fade In */
+    .fade-in {
+        animation: fade-in 0.2s ease;
+    }
+
+    @keyframes fade-in {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
     /* Form Input */
     .input {
         width: 100%;
@@ -177,4 +213,24 @@
         border-color: hsl(var(--foreground) / 0.4);
         box-shadow: 0 0 0 2px hsl(var(--foreground) / 0.1);
     }
+}
+
+/* Scrollbar tak terlihat (kolom kanban) */
+.no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+    display: none;
+}
+
+/* Semua scrollbar transparan & tak terlihat */
+* {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+    display: none;
 }

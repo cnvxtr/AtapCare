@@ -220,7 +220,7 @@ export default function TrackPage() {
           width: 100%;
           padding: 0.625rem 0.75rem;
           border-radius: 0.5rem;
-          border: 1px solid var(--border);
+          border: 1.5px solid hsl(var(--foreground) / 15%);
           background: var(--background);
           font-size: 0.875rem;
           outline: none;
@@ -237,7 +237,7 @@ export default function TrackPage() {
 
 function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
+    <header className="border-b border-border bg-background">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between w-full">
         <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="Atap Care" className="h-9 w-9 rounded-xl object-contain" />

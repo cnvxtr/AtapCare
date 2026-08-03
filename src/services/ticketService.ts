@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase'
+import { compressImage } from '@/lib/image'
 
-function generateCode(): string {
+export function generateTicketCode(): string {
   const now = new Date()
   const y = now.getFullYear()
   const m = String(now.getMonth() + 1).padStart(2, '0')
@@ -18,64 +19,56 @@ export interface CreateTicketPayload {
   site: string
   unit: string
   description: string
+  photos?: File[]
 }
 
 export async function createTicket(data: CreateTicketPayload) {
-  const code = generateCode()
+  let photos: string[] = []
+  if (data.photos?.length) photos = await Promise.all(data.photos.map(compressImage))
 
-  const { error } = await supabase.from('tickets').insert({
-    code,
-    customer: data.reporterName,
-    company: data.site,
-    site: data.site,
-    unit: data.unit,
-    location: data.site,
-    category: data.unit,
-    description: `Jabatan: ${data.position}\nWA Pelapor: ${data.phone}\n\n${data.description}`,
-    status: 'NEW',
-    priority: 'P2',
-    created_by: null,
+  // RPC SECURITY DEFINER: validasi + insert dilakukan di sisi server (RLS anon
+  // tidak lagi mengizinkan insert langsung ke tickets/activities).
+  const { data: result, error } = await supabase.rpc("create_public_ticket", {
+    p_reporter_name: data.reporterName,
+    p_position: data.position,
+    p_phone: data.phone,
+    p_site: data.site,
+    p_unit: data.unit,
+    p_description: data.description,
+    p_photos: photos,
   })
 
   if (error) {
-    console.error('createTicket error:', error)
-    const isFK = error.code === '23503'
-    return {
-      error: isFK
-        ? 'Site atau Unit belum terdaftar di sistem. Silakan hubungi Helpdesk via WhatsApp Group.'
-        : 'Gagal mengirim tiket. Silakan coba lagi.',
-    }
+    console.error("createTicket error:", error)
+    return { error: 'Gagal mengirim tiket. Silakan coba lagi.' }
   }
 
-  return { code }
+  const res = result as { code?: string; error?: string }
+  if (res.error) return { error: res.error }
+  return { code: res.code }
 }
 
 export async function getTicketByCode(code: string) {
-  const { data, error } = await supabase
-    .from('tickets')
-    .select('status, site, unit, location, description, created_at, updated_at, assigned_to')
-    .eq('code', code)
-    .single()
-
+  const { data, error } = await supabase.rpc("get_ticket_for_tracking", { p_code: code })
   if (error || !data) return null
 
-  let technicianName: string | null = null
-  if (data.assigned_to) {
-    const { data: userData } = await supabase
-      .from('users')
-      .select('full_name')
-      .eq('id', data.assigned_to)
-      .single()
-    technicianName = userData?.full_name || null
+  const d = data as {
+    status?: string
+    site?: string
+    unit?: string
+    created_at?: string
+    updated_at?: string
+    technician_name?: string | null
   }
+  if (!d.status) return null
 
   return {
-    status: data.status,
-    site: data.site || '-',
-    unit: data.unit || '-',
-    createdAt: data.created_at,
-    updatedAt: data.updated_at,
-    technicianName,
+    status: d.status,
+    site: d.site || '-',
+    unit: d.unit || '-',
+    createdAt: d.created_at ?? '',
+    updatedAt: d.updated_at ?? '',
+    technicianName: d.technician_name ?? null,
   }
 }
 

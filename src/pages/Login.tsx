@@ -24,7 +24,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
-      <div className="bg-neutral-900 relative hidden flex-col border-r p-10 md:p-12 lg:flex min-h-full">
+      <div className="bg-neutral-900 relative hidden flex-col p-10 md:p-12 lg:flex min-h-full">
         <div className="absolute inset-0 noise-overlay pointer-events-none" />
         <div className="absolute inset-0 z-[1]">
           <FloatingPaths position={1} />
@@ -55,14 +55,14 @@ export default function Login() {
         </div>
       </div>
 
-      <div className="relative overflow-hidden bg-muted grid-bg flex items-center justify-center p-6 md:p-10">
+      <div className="relative overflow-hidden bg-neutral-900 grid-bg flex items-center justify-center p-6 md:p-10">
         <div className="absolute inset-0 noise-overlay pointer-events-none" />
         <div aria-hidden className="absolute inset-0 isolate contain-strict -z-10 opacity-60">
           <div className="bg-[radial-gradient(68.54%_68.72%_at_55.02%_31.46%,hsl(var(--foreground)/.06)_0,hsla(0, 0%, 55%, 0.07)_50%,hsl(var(--foreground)/.01)_80%)] absolute top-0 right-0 h-320 w-140 -translate-y-87.5 rounded-full" />
           <div className="bg-[radial-gradient(50%_50%_at_50%_50%,hsl(var(--foreground)/.04)_0,hsl(var(--foreground)/.01)_80%,transparent_100%)] absolute top-0 right-0 h-320 w-60 [translate:5%_-50%] rounded-full" />
           <div className="bg-[radial-gradient(50%_50%_at_50%_50%,hsl(var(--foreground)/.04)_0,hsl(var(--foreground)/.01)_80%,transparent_100%)] absolute top-0 right-0 h-320 w-60 -translate-y-87.5 rounded-full" />
         </div>
-        <div className="rounded-2xl border border-white/10 bg-neutral-900 p-6 md:p-7 w-full max-w-lg relative">
+        <div className="rounded-2xl border border-white/10 bg-black p-6 md:p-7 w-full max-w-lg relative">
           <div className="relative">
             <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-center mb-8 text-white">
               Welcome Back

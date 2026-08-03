@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { setAuditActor } from '../services/master-data'
 
 export interface UserProfile {
     id: string
@@ -50,6 +51,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const profile = await fetchUserProfile(session.user.id)
                 if (profile) {
                     setUser(profile)
+                    setAuditActor(profile.full_name)
                     setIsAuthenticated(true)
                     if (profile.last_login) {
                         const date = new Date(profile.last_login)
@@ -66,10 +68,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 const profile = await fetchUserProfile(session.user.id)
                 if (profile) {
                     setUser(profile)
+                    setAuditActor(profile.full_name)
                     setIsAuthenticated(true)
                 }
             } else {
                 setUser(null)
+                setAuditActor(null)
                 setIsAuthenticated(false)
                 setLastLoginTime(null)
             }
@@ -84,36 +88,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const login = async (username: string, password: string) => {
-        let { data: userData } = await supabase
-            .from('users')
-            .select('email')
-            .eq('username', username)
-            .maybeSingle()
+        // Lookup email by username lewat RPC SECURITY DEFINER (anon tak bisa
+        // baca kolom username setelah RLS 03).
+        const { data: loginEmail } = await supabase.rpc('resolve_login_email', {
+            p_username: username,
+        })
+        let userEmail = (loginEmail as string | null) || null
 
-        if (!userData) {
+        if (!userEmail) {
             const { data } = await supabase
                 .from('users')
                 .select('email')
                 .eq('email', username)
                 .maybeSingle()
-            userData = data
+            userEmail = data?.email || null
         }
 
-        if (!userData) {
-            const { data } = await supabase
-                .from('users')
-                .select('email')
-                .eq('full_name', username)
-                .maybeSingle()
-            userData = data
-        }
-
-        if (!userData) {
+        if (!userEmail) {
             return { error: 'Username tidak ditemukan' }
         }
 
         const { data, error } = await supabase.auth.signInWithPassword({
-            email: userData.email,
+            email: userEmail,
             password,
         })
 
@@ -126,7 +122,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', data.user.id)
 
             setLastLoginTime(timeString)
-            navigate('/dashboard')
+            const profile = await fetchUserProfile(data.user.id)
+            if (profile) setAuditActor(profile.full_name)
+            if (profile?.role === 'admin') navigate('/admin')
+            else if (profile?.role === 'teknisi') navigate('/tugas')
+            else navigate('/dashboard')
             return { error: null }
         }
         return { error: 'Login gagal' }
@@ -135,6 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const logout = async () => {
         await supabase.auth.signOut()
         setUser(null)
+        setAuditActor(null)
         setIsAuthenticated(false)
         setLastLoginTime(null)
         navigate('/login')

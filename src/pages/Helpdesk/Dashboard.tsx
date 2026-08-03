@@ -1,246 +1,200 @@
-import { useState } from 'react'
+import { useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
-import { useTickets } from '../../context/TicketContext'
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
-import { AlertTriangle, Clock, Inbox, ArrowUpRight, Users, Eye, Filter } from 'lucide-react'
+import { useTickets, type Ticket } from '../../context/TicketContext'
+import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { AlertTriangle, Inbox, ArrowUpRight, Wrench, Truck, X, Copy } from 'lucide-react'
 import { Badge } from '../../components/Badge'
+import { FIELD_STATUSES } from '../../lib/status'
+import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
+import FieldError from '../../components/FieldError'
 
 export default function Dashboard() {
     const navigate = useNavigate()
-    const { tickets, getTicketCount } = useTickets()
-    const [activeTimeFilter, setActiveTimeFilter] = useState('today')
+    const { tickets, getTicketCount, updateTicketStatus } = useTickets()
+    const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline' | 'activity'>('detail')
+    const [actionModal, setActionModal] = useState<null | { kind: 'void' | 'duplicate' }>(null)
+    const [actionInput, setActionInput] = useState('')
+    const [actionError, setActionError] = useState('')
 
-    // STATE UNTUK QUICK FILTER
-    const [qfStatus, setQfStatus] = useState('all')
-    const [qfPriority, setQfPriority] = useState('all')
-    const [qfSLA, setQfSLA] = useState('all')
+    // Rolling bulan kalender: otomatis geser ke bulan baru tiap tanggal 1, tanpa reset manual
+    const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
+    const periodLabel = monthStart.toLocaleString('id-ID', { month: 'long', year: 'numeric' })
 
-    // Logika Filter Waktu
-    const filteredByTime = tickets.filter(ticket => {
-        const ticketDate = new Date(ticket.createdAt)
-        const now = new Date()
-        const diffHours = (now.getTime() - ticketDate.getTime()) / (1000 * 60 * 60)
-
-        if (activeTimeFilter === 'today') return diffHours <= 24
-        if (activeTimeFilter === '7days') return diffHours <= 168
-        if (activeTimeFilter === 'month') return diffHours <= 720
-        return true
-    })
-
-    // Data untuk Pie Chart
+    // Distribusi status SAAT INI (real-time, semua tiket — bukan per periode)
     const statusData = [
-        { name: 'Baru', value: filteredByTime.filter(t => t.status === 'NEW').length, color: '#6b7280' },
-        { name: 'Diproses', value: filteredByTime.filter(t => ['OPEN', 'WORKING', 'PENDING'].includes(t.status)).length, color: '#fbbf24' },
-        { name: 'Menunggu PM', value: filteredByTime.filter(t => ['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE'].includes(t.status)).length, color: '#3b82f6' },
-        { name: 'Selesai', value: filteredByTime.filter(t => ['RESOLVED', 'CLOSED'].includes(t.status)).length, color: '#10b981' },
-    ].filter(item => item.value > 0)
-
-    // Data untuk Bar Chart
-    const priorityData = [
-        { name: 'P1', value: filteredByTime.filter(t => t.priority === 'P1' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)).length, fill: '#f87171' },
-        { name: 'P2', value: filteredByTime.filter(t => t.priority === 'P2' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)).length, fill: '#fbbf24' },
-        { name: 'P3', value: filteredByTime.filter(t => t.priority === 'P3' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)).length, fill: '#34d399' },
+        { name: 'Baru', value: tickets.filter(t => t.status === 'NEW').length, color: '#d4d4d4' },
+        { name: 'Diproses', value: tickets.filter(t => t.status === 'OPEN').length, color: '#a3a3a3' },
+        { name: 'Ditugaskan', value: tickets.filter(t => ['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE'].includes(t.status)).length, color: '#737373' },
+        { name: 'Dikerjakan', value: tickets.filter(t => t.status === 'WORKING').length, color: '#525252' },
+        { name: 'Dijeda', value: tickets.filter(t => t.status === 'PENDING').length, color: '#404040' },
+        { name: 'Selesai', value: tickets.filter(t => t.status === 'RESOLVED').length, color: '#262626' },
+        { name: 'Tutup', value: tickets.filter(t => t.status === 'CLOSED').length, color: '#171717' },
     ]
 
-    // TABEL UTAMA DENGAN QUICK FILTER
-    const displayTickets = filteredByTime
-        .filter(t => {
-            if (qfStatus !== 'all' && t.status !== qfStatus) return false
-            if (qfPriority !== 'all' && t.priority !== qfPriority) return false
-            // Logika SLA Sederhana (Warning < 8 jam, Overdue < 4 jam)
-            if (qfSLA === 'warning' && t.slaTimeLeft >= 8) return false
-            if (qfSLA === 'overdue' && t.slaTimeLeft >= 4) return false
-            return true
+    // Trend mingguan bulan berjalan: masuk (createdAt) vs selesai (closedAt) — historis, tidak hilang
+    const trendData = (() => {
+        const y = new Date().getFullYear(), m = new Date().getMonth()
+        const days = new Date(y, m + 1, 0).getDate()
+        const inWeek = (ts: string, start: number, end: number) => {
+            const d = new Date(ts)
+            return d.getFullYear() === y && d.getMonth() === m && d.getDate() >= start && d.getDate() <= end
+        }
+        return Array.from({ length: Math.ceil(days / 7) }, (_, i) => {
+            const start = i * 7 + 1
+            const end = Math.min((i + 1) * 7, days)
+            return {
+                name: `Minggu ${i + 1}`,
+                masuk: tickets.filter(t => inWeek(t.createdAt, start, end)).length,
+                selesai: tickets.filter(t => t.closedAt && inWeek(t.closedAt, start, end)).length,
+            }
         })
+    })()
+
+    // TABEL OPERASIONAL: tiket aktif (final: Tutup/Void/Digabung) semua periode, 10 terbaru — real-time
+    const displayTickets = tickets
+        .filter(t => !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 10) // Tampilkan 10 teratas
 
-    return (
-        <div className="space-y-6">
-            {/* 1. Time Filter */}
-            <div className="flex items-center gap-2 p-1 rounded-lg border border-border bg-card w-fit">
-                {[
-                    { id: 'today', label: 'Hari Ini' },
-                    { id: '7days', label: '7 Hari' },
-                    { id: 'month', label: 'Bulan Ini' }
-                ].map((period) => (
-                    <button
-                        key={period.id}
-                        onClick={() => setActiveTimeFilter(period.id)}
-                        className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition font-medium ${activeTimeFilter === period.id
-                                ? 'bg-foreground text-background'
-                                : 'text-muted-foreground hover:text-foreground'
-                            }`}
-                    >
-                        {period.label}
-                    </button>
-                ))}
-            </div>
+    const confirmAction = () => {
+        const val = actionInput.trim()
+        if (!val) { setActionError('Mohon isi ' + (actionModal?.kind === 'void' ? 'alasan pembatalan' : 'kode tiket utama')); return }
+        setActionError('')
+        if (actionModal?.kind === 'void') {
+            updateTicketStatus(selectedTicket!.id, 'VOID', val)
+        } else {
+            updateTicketStatus(selectedTicket!.id, 'DUPLICATE', `Duplikat dari ${val}`)
+        }
+        setActionModal(null); setActionInput(''); setSelectedTicket(null)
+    }
 
-            {/* 2. KPI Cards */}
+    return (
+        <>
+        <div className="space-y-6">
+            {/* 1. KPI Cards (state real-time, tidak difilter periode) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
                     <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Tiket Baru</p>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Baru (Perlu Validasi)</p>
                             <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('NEW')}</h3>
                         </div>
-                        <div className="p-2 bg-muted border border-border rounded-lg"><Inbox className="w-5 h-5 text-muted-foreground" /></div>
+                        <div className="p-2 bg-muted border border-border rounded-lg"><Inbox className="w-5 h-5 text-foreground" /></div>
                     </div>
                 </div>
                 <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
                     <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Diproses</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('OPEN') + getTicketCount('WORKING') + getTicketCount('PENDING')}</h3>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Sedang Diproses</p>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('OPEN')}</h3>
                         </div>
-                        <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg"><Clock className="w-5 h-5 text-amber-600" /></div>
+                        <div className="p-2 bg-muted border border-border rounded-lg"><Wrench className="w-5 h-5 text-foreground" /></div>
                     </div>
                 </div>
                 <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
                     <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Menunggu PM</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('UNASSIGNED') + getTicketCount('SCHEDULED') + getTicketCount('EN_ROUTE')}</h3>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Menunggu Lapangan</p>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{tickets.filter(t => FIELD_STATUSES.includes(t.status as typeof FIELD_STATUSES[number])).length}</h3>
                         </div>
-                        <div className="p-2 bg-blue-50 border border-blue-200 rounded-lg"><Users className="w-5 h-5 text-blue-600" /></div>
+                        <div className="p-2 bg-muted border border-border rounded-lg"><Truck className="w-5 h-5 text-foreground" /></div>
                     </div>
                 </div>
-                <div className="bg-red-50 border border-red-200 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-red-300">
-                    <div className="absolute right-2 top-2 opacity-20 group-hover:opacity-30 transition-opacity">
-                        <AlertTriangle className="w-12 h-12 text-red-600" />
-                    </div>
-                    <div className="relative z-10">
-                        <p className="text-[10px] font-black text-red-600 uppercase tracking-wider flex items-center gap-1">
-                            <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></span> SLA Overdue
-                        </p>
-                        <h3 className="text-4xl font-display font-black text-red-600 mt-2 tracking-tight">
-                            {tickets.filter(t => t.slaTimeLeft <= 4 && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)).length}
-                        </h3>
+                <div className="bg-red-600 border border-red-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-red-400">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="text-[10px] font-black text-white uppercase tracking-wider flex items-center gap-1">
+                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> Menunggu Validasi
+                            </p>
+                            <h3 className="text-4xl font-display font-black text-white mt-2 tracking-tight">
+                                {getTicketCount('RESOLVED')}
+                            </h3>
+                        </div>
+                        <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
                     </div>
                 </div>
             </div>
 
-            {/* 3. QUICK FILTER BAR */}
-            <div className="bg-card p-3 rounded-2xl border border-border flex flex-col lg:flex-row lg:items-center gap-4">
-                <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground whitespace-nowrap">
-                    <Filter className="w-4 h-4" /> Quick Filter:
-                </div>
-
-                {/* Filter Status */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
-                    <span className="text-xs text-muted-foreground mr-1 hidden sm:block">Status:</span>
-                    {['all', 'NEW', 'OPEN', 'UNASSIGNED'].map(s => (
-                        <button key={s} onClick={() => setQfStatus(s)} className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${qfStatus === s ? 'bg-foreground text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                            {s === 'all' ? 'Semua' : s}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Filter Prioritas */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
-                    <span className="text-xs text-muted-foreground mr-1 hidden sm:block">Prioritas:</span>
-                    {['all', 'P1', 'P2', 'P3'].map(p => (
-                        <button key={p} onClick={() => setQfPriority(p)} className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${qfPriority === p ? 'bg-foreground text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                            {p === 'all' ? 'Semua' : p}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Filter SLA */}
-                <div className="flex items-center gap-1 overflow-x-auto pb-1 lg:pb-0">
-                    <span className="text-xs text-muted-foreground mr-1 hidden sm:block">SLA:</span>
-                    {['all', 'warning', 'overdue'].map(s => (
-                        <button key={s} onClick={() => setQfSLA(s)} className={`px-3 py-1 rounded-md text-xs font-medium whitespace-nowrap transition-colors ${qfSLA === s ? 'bg-foreground text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent'}`}>
-                            {s === 'all' ? 'Semua' : s === 'warning' ? 'Warning' : 'Overdue'}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 4. Grafik (2 Kolom) */}
+            {/* 3. Grafik (2 Kolom) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 transition-all w-full">
-                    <h3 className="font-display font-bold text-foreground mb-4">Distribusi Status Tiket</h3>
-                    <div className="h-64 w-full relative">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                                <Pie data={statusData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
-                                    {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} stroke="none" />))}
-                                </Pie>
-                                <Tooltip contentStyle={{ backgroundColor: 'white', borderColor: '#d1d5db', borderRadius: '8px', fontSize: '12px' }} />
-                                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                            </PieChart>
-                        </ResponsiveContainer>
+                    <div className="flex items-start justify-between mb-6">
+                        <div>
+                            <h3 className="font-display font-bold text-foreground">Volume Tiket — Mingguan</h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">Periode: {periodLabel} · Masuk vs Selesai</p>
+                        </div>
+                        <div className="flex items-center gap-3 text-xs">
+                            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-foreground" /> Masuk</span>
+                            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-muted-foreground" /> Selesai</span>
+                        </div>
                     </div>
+                    <TrendChart data={trendData} />
                 </div>
 
                 <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 transition-all w-full">
-                    <h3 className="font-display font-bold text-foreground mb-4">Beban Prioritas Aktif</h3>
-                    <div className="h-64 w-full relative">
+                    <div>
+                        <h3 className="font-display font-bold text-foreground">Distribusi Status Tiket</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">Status terkini · real-time</p>
+                    </div>
+                    <div className="h-64 w-full relative mt-4">
                         <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={priorityData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} dy={10} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} />
+                            <BarChart data={statusData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} />
+                                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} width={85} />
                                 <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ backgroundColor: 'white', borderColor: '#d1d5db', borderRadius: '8px', fontSize: '12px' }} />
-                                <Bar dataKey="value" radius={[4, 4, 0, 0]} barSize={30} />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                                    {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                                </Bar>
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
             </div>
 
-            {/* 5. Tabel Operasional (Tier 2) */}
+            {/* Tabel Operasional (Tier 2) */}
             <div className="rounded-2xl border border-border bg-card overflow-hidden">
                 <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                    <h3 className="font-display font-bold text-foreground">Tiket Operasional (Top 10)</h3>
+                    <h3 className="font-display font-bold text-foreground">10 Tiket Aktif Terbaru</h3>
                     <button onClick={() => navigate('/inbox')} className="text-xs font-medium hover:underline inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition">
                         Lihat Semua di Inbox <ArrowUpRight className="w-3 h-3" />
                     </button>
                 </div>
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left min-w-[900px]">
+                <div className="min-w-0">
+                    <table className="w-full table-fixed text-left">
                         <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                             <tr>
-                                <th className="px-4 py-3 font-medium">Kode</th>
-                                <th className="px-4 py-3 font-medium">Pelanggan</th>
-                                <th className="px-4 py-3 font-medium">Site</th>
-                                <th className="px-4 py-3 font-medium">Unit</th>
-                                <th className="px-4 py-3 font-medium">Prioritas</th>
-                                <th className="px-4 py-3 font-medium">Status</th>
-                                <th className="px-4 py-3 font-medium">SLA</th>
-                                <th className="px-4 py-3 font-medium text-right">Aksi</th>
+                                <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
+                                <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">SLA</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {displayTickets.length === 0 ? (
-                                <tr><td colSpan={8} className="p-8 text-center text-xs text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                             ) : (
                                 displayTickets.map(ticket => (
-                                    <tr key={ticket.id} className="hover:bg-accent/40 transition group">
-                                        <td className="px-4 py-3 font-mono text-xs text-foreground font-medium whitespace-nowrap">{ticket.code}</td>
-                                        <td className="px-4 py-3 text-xs text-foreground truncate max-w-[120px]" title={ticket.customer}>{ticket.customer}</td>
-                                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{ticket.site || '-'}</td>
-                                        <td className="px-4 py-3 text-xs text-muted-foreground truncate max-w-[100px]" title={ticket.unit}>{ticket.unit || '-'}</td>
-                                        <td className="px-4 py-3">
+                                    <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
+                                        <td className="p-4 font-mono text-xs font-medium whitespace-nowrap">{ticket.code}</td>
+                                        <td className="p-4 text-xs">{ticket.customer}</td>
+                                        <td className="p-4 text-xs truncate" title={ticket.site}>{ticket.site || '-'}</td>
+                                        <td className="p-4 text-xs truncate" title={ticket.unit}>{ticket.unit || '-'}</td>
+                                        <td className="p-4">
                                             <Badge type="priority" value={ticket.priority || '-'} />
                                         </td>
-                                        <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">{ticket.status}</td>
-                                        <td className="px-4 py-3">
-                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${ticket.slaTimeLeft <= 4 ? 'bg-red-100 text-red-700' :
-                                                    ticket.slaTimeLeft <= 8 ? 'bg-amber-100 text-amber-700' :
+                                        <td className="p-4">
+                                            <Badge type="status" value={ticket.status} />
+                                        </td>
+                                        <td className="p-4">
+                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${ticket.slaTimeLeft <= 0 ? 'bg-red-100 text-red-700' :
+                                                    ticket.slaTimeLeft <= 4 ? 'bg-amber-100 text-amber-700' :
                                                         'bg-emerald-100 text-emerald-700'
                                                 }`}>
-                                                {ticket.slaTimeLeft}h
+                                                {ticket.slaTimeLeft <= 0 ? 'Overdue' : `Sisa ${Math.ceil(ticket.slaTimeLeft)} Jam`}
                                             </span>
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button onClick={() => navigate('/inbox')} className="inline-flex items-center gap-1 px-2 py-1 bg-muted text-muted-foreground hover:bg-accent rounded text-xs font-medium">
-                                                <Eye className="w-3 h-3" /> Detail
-                                            </button>
                                         </td>
                                     </tr>
                                 ))
@@ -249,6 +203,136 @@ export default function Dashboard() {
                     </table>
                 </div>
             </div>
+        </div>
+
+            {/* DRAWER DETAIL DASHBOARD */}
+            {selectedTicket && (
+                <TicketDrawer
+                    onClose={() => setSelectedTicket(null)}
+                    code={selectedTicket.code}
+                    status={selectedTicket.status}
+                    priority={selectedTicket.priority}
+                    createdAt={selectedTicket.createdAt}
+                    activeTab={activeDrawerTab}
+                    onTabChange={setActiveDrawerTab}
+                    activities={selectedTicket.activities}
+                    footer={
+                        <>
+                            {selectedTicket.status === 'NEW' && (
+                                <>
+                                    <button onClick={() => { updateTicketStatus(selectedTicket.id, 'OPEN'); setSelectedTicket(null); }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">Validasi</button>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button onClick={() => { setActionInput(''); setActionError(''); setActionModal({ kind: 'void' }) }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-md font-medium hover:bg-red-50/60 transition">Batal</button>
+                                        <button onClick={() => { setActionInput(''); setActionError(''); setActionModal({ kind: 'duplicate' }) }} className="py-2.5 bg-transparent text-amber-600 border border-border rounded-md font-medium hover:bg-amber-50/60 transition">Gabung</button>
+                                    </div>
+                                </>
+                            )}
+                            {(['OPEN', ...FIELD_STATUSES, 'RESOLVED', 'CLOSED', 'VOID', 'DUPLICATE'] as string[]).includes(selectedTicket.status) && (
+                                <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
+                            )}
+                        </>
+                    }
+                >
+                    {activeDrawerTab === 'detail' && (
+                        <div className="space-y-4">
+                            <AssignmentCard items={selectedTicket.activities} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Pelapor</p>
+                                    <p className="font-medium text-sm">{selectedTicket.customer}</p>
+                                </div>
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Site / Unit</p>
+                                    <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
+                                </div>
+                            </div>
+                            <TicketDescription description={selectedTicket.description} />
+                        </div>
+                    )}
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} />}
+                    {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
+                </TicketDrawer>
+            )}
+
+            {/* MODAL VOID / DUPLICATE */}
+            {actionModal && createPortal((
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in" onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }}>
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className={`text-lg font-bold flex items-center gap-2 ${actionModal.kind === 'void' ? 'text-red-600' : 'text-amber-600'}`}>
+                                {actionModal.kind === 'void' ? <AlertTriangle className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                                {actionModal.kind === 'void' ? 'Batalkan Tiket' : 'Tandai Duplikat'}
+                            </h3>
+                            <button onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <textarea value={actionInput} onChange={e => { setActionInput(e.target.value); setActionError('') }}
+                            rows={3} className={`w-full px-3 py-2 border-2 ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`}
+                            placeholder={actionModal.kind === 'void' ? 'Alasan pembatalan (wajib)...' : 'Kode tiket utama (contoh: ATC-20260724-X7K9)...'} />
+                        <FieldError msg={actionError} />
+                        <div className="flex gap-3 mt-4">
+                            <button onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }} className="flex-1 py-2 bg-muted rounded text-sm font-medium">Batal</button>
+                            <button onClick={confirmAction} className={`flex-1 py-2 text-white rounded text-sm font-bold ${actionModal.kind === 'void' ? 'bg-red-600' : 'bg-amber-500'}`}>
+                                {actionModal.kind === 'void' ? 'Ya, Batalkan' : 'Ya, Tandai Duplikat'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+    </>
+    )
+}
+
+function TrendChart({ data }: { data: { name: string; masuk: number; selesai: number }[] }) {
+    const [hover, setHover] = useState<number | null>(null)
+    const w = 600, h = 200, pad = 20
+    const max = Math.max(1, ...data.flatMap(d => [d.masuk, d.selesai]))
+    const x = (i: number) => pad + (i * (w - pad * 2)) / (data.length - 1)
+    const y = (v: number) => h - pad - (v / max) * (h - pad * 2)
+    const line = (key: 'masuk' | 'selesai') =>
+        data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[key])}`).join(' ')
+
+    const handleMove = (e: ReactMouseEvent<SVGSVGElement>) => {
+        const rect = e.currentTarget.getBoundingClientRect()
+        const px = ((e.clientX - rect.left) / rect.width) * w
+        const idx = Math.round((px - pad) / ((w - pad * 2) / (data.length - 1)))
+        setHover(Math.max(0, Math.min(data.length - 1, idx)))
+    }
+
+    return (
+        <div className="relative">
+            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56" onMouseMove={handleMove} onMouseLeave={() => setHover(null)}>
+                {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+                    <line key={f} x1={pad} x2={w - pad} y1={pad + f * (h - pad * 2)} y2={pad + f * (h - pad * 2)}
+                        stroke="currentColor" strokeOpacity="0.06" />
+                ))}
+                {hover !== null && (
+                    <line x1={x(hover)} x2={x(hover)} y1={pad} y2={h - pad} stroke="currentColor" strokeOpacity="0.15" />
+                )}
+                <path d={`${line('masuk')} L${x(data.length - 1)},${h - pad} L${x(0)},${h - pad} Z`}
+                    fill="currentColor" opacity="0.08" />
+                <path d={line('masuk')} fill="none" stroke="currentColor" strokeWidth="3" />
+                <path d={line('selesai')} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="4 3" opacity="0.5" />
+                {data.map((d, i) => (
+                    <g key={i}>
+                        <circle cx={x(i)} cy={y(d.masuk)} r={hover === i ? 5 : 4} fill="currentColor" />
+                        <text x={x(i)} y={h - 4} textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.5">{d.name}</text>
+                    </g>
+                ))}
+            </svg>
+            {hover !== null && (
+                <div
+                    className="absolute pointer-events-none bg-foreground text-background text-xs rounded px-2 py-1.5 shadow-lg z-10"
+                    style={{
+                        left: `${(x(hover) / w) * 100}%`,
+                        top: `${(y(Math.max(data[hover].masuk, data[hover].selesai)) / h) * 100}%`,
+                        transform: 'translate(-50%, -130%)',
+                    }}
+                >
+                    <p className="font-semibold">{data[hover].name}</p>
+                    <p>Masuk: <span className="font-bold">{data[hover].masuk}</span></p>
+                    <p>Selesai: <span className="font-bold">{data[hover].selesai}</span></p>
+                </div>
+            )}
         </div>
     )
 }

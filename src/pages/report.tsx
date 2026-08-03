@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Phone, Loader2, AlertTriangle, X } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createTicket, SITES, UNITS } from "@/services";
 import logo from '../assets/logo.png'
 
@@ -57,12 +58,17 @@ export default function ReportPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setPhotoError("");
+    setSubmitError("");
+    if (!site || !unit) {
+      setSubmitError("Site dan Unit/Perangkat wajib diisi.");
+      return;
+    }
     if (!photos.length) {
       setPhotoError("Foto pendukung wajib diunggah.");
       return;
     }
     setSubmitting(true);
-    setSubmitError("");
 
     const result = await createTicket({
       reporterName,
@@ -71,6 +77,7 @@ export default function ReportPage() {
       site,
       unit,
       description: desc,
+      photos,
     });
 
     if (result?.code) {
@@ -202,16 +209,24 @@ export default function ReportPage() {
 
           <div className="grid md:grid-cols-2 gap-4">
             <Field label="Site" required>
-              <select required value={site} onChange={(e) => setSite(e.target.value)} className="input">
-                <option value="">Pilih site…</option>
-                {SITES.map((s) => <option key={s}>{s}</option>)}
-              </select>
+              <Select required value={site} onValueChange={setSite}>
+                <SelectTrigger className="input">
+                  <SelectValue placeholder="Pilih site…" />
+                </SelectTrigger>
+                <SelectContent className="border-border bg-card text-foreground">
+                  {SITES.map((s) => <SelectItem key={s} value={s} className="focus:bg-foreground focus:text-background">{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </Field>
             <Field label="Unit / Perangkat" required>
-              <select required value={unit} onChange={(e) => setUnit(e.target.value)} className="input">
-                <option value="">Pilih unit…</option>
-                {UNITS.map((u) => <option key={u}>{u}</option>)}
-              </select>
+              <Select required value={unit} onValueChange={setUnit}>
+                <SelectTrigger className="input">
+                  <SelectValue placeholder="Pilih unit…" />
+                </SelectTrigger>
+                <SelectContent className="border-border bg-card text-foreground">
+                  {UNITS.map((u) => <SelectItem key={u} value={u} className="focus:bg-foreground focus:text-background">{u}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </Field>
           </div>
 
@@ -284,7 +299,7 @@ export default function ReportPage() {
           width: 100%;
           padding: 0.625rem 0.75rem;
           border-radius: 0.5rem;
-          border: 1px solid var(--border);
+          border: 1.5px solid hsl(var(--foreground) / 15%);
           background: var(--background);
           font-size: 0.875rem;
           outline: none;
@@ -301,7 +316,7 @@ export default function ReportPage() {
 
 function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
+    <header className="border-b border-border bg-background">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between w-full">
         <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="Atap Care" className="h-9 w-9 rounded-xl object-contain" />
