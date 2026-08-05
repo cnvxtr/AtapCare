@@ -9,7 +9,10 @@ import { cn } from "@/lib/utils";
 const Select = SelectPrimitive.Root;
 
 export const selectTriggerFilter =
-  "px-3 py-2 bg-card border border-border rounded text-sm text-foreground w-[160px] gap-1";
+  "px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground w-[120px] gap-1";
+
+export const selectTriggerFilterSm =
+  "px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground w-[80px] gap-1";
 
 const SelectGroup = SelectPrimitive.Group;
 

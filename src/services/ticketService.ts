@@ -72,5 +72,13 @@ export async function getTicketByCode(code: string) {
   }
 }
 
-export const SITES = ['Merak', 'Bakauheni', 'Balongan', 'Sungai Ambawang']
-export const UNITS = ['VMS Display Panel', 'VMS Controller', 'Sensor Loop', 'TC 200', 'TC 300']
+export interface SiteReport {
+  customer_name: string
+  site_name: string
+  units: string[]
+}
+
+export async function getSitesForReport(): Promise<SiteReport[]> {
+  const { data } = await supabase.rpc("get_sites_for_report")
+  return (data ?? []) as SiteReport[]
+}

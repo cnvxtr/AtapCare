@@ -186,7 +186,8 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         const code = generateTicketCode()
 
         const initialStatus = data.initialStatus || 'NEW'
-        const initialPriority = data.priority || 'P2'
+        // Prioritas NULL saat dibuat; diisi helpdesk saat validasi (status DIPROSES).
+        const initialPriority = data.priority
 
         let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
         if (data.photos?.length) {
@@ -207,10 +208,10 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             p_unit: data.unit,
             p_status: initialStatus,
             p_priority: initialPriority,
-            p_category: data.category,
-            p_location: data.location,
+            p_category: data.category ?? null,
+            p_location: data.location ?? null,
             p_description: data.description,
-            p_photo_url: data.photoUrl,
+            p_photo_url: data.photoUrl ?? null,
             p_activity_action: `Tiket dibuat dengan status ${STATUS_LABELS[initialStatus] || initialStatus}`,
             p_activity_details: details,
         })

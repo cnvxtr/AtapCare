@@ -1,15 +1,15 @@
-import { useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
-import { AlertTriangle, Inbox, ArrowUpRight, Wrench, Truck, X, Copy } from 'lucide-react'
+import { AlertTriangle, Inbox, ArrowUpRight, Wrench, ClipboardCheck, X, Copy } from 'lucide-react'
 import { Badge } from '../../components/Badge'
-import { FIELD_STATUSES } from '../../lib/status'
+import { FINAL_STATUSES, FIELD_STATUSES } from '../../lib/status'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
 import FieldError from '../../components/FieldError'
 
-export default function Dashboard() {
+export default function HPDashboard() {
     const navigate = useNavigate()
     const { tickets, getTicketCount, updateTicketStatus } = useTickets()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
@@ -58,6 +58,8 @@ export default function Dashboard() {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 10) // Tampilkan 10 teratas
 
+    const slaOverdue = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft <= 0).length
+
     const confirmAction = () => {
         const val = actionInput.trim()
         if (!val) { setActionError('Mohon isi ' + (actionModal?.kind === 'void' ? 'alasan pembatalan' : 'kode tiket utama')); return }
@@ -99,20 +101,20 @@ export default function Dashboard() {
                     <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Menunggu Lapangan</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{tickets.filter(t => FIELD_STATUSES.includes(t.status as typeof FIELD_STATUSES[number])).length}</h3>
+                            <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Menunggu Validasi</p>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('RESOLVED')}</h3>
                         </div>
-                        <div className="p-2 bg-muted border border-border rounded-lg"><Truck className="w-5 h-5 text-foreground" /></div>
+                        <div className="p-2 bg-muted border border-border rounded-lg"><ClipboardCheck className="w-5 h-5 text-foreground" /></div>
                     </div>
                 </div>
                 <div className="bg-red-600 border border-red-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-red-400">
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] font-black text-white uppercase tracking-wider flex items-center gap-1">
-                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> Menunggu Validasi
+                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> SLA Overdue
                             </p>
                             <h3 className="text-4xl font-display font-black text-white mt-2 tracking-tight">
-                                {getTicketCount('RESOLVED')}
+                                {slaOverdue}
                             </h3>
                         </div>
                         <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
@@ -212,6 +214,7 @@ export default function Dashboard() {
                     code={selectedTicket.code}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
+                    slaTimeLeft={selectedTicket.slaTimeLeft}
                     createdAt={selectedTicket.createdAt}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
@@ -256,7 +259,7 @@ export default function Dashboard() {
 
             {/* MODAL VOID / DUPLICATE */}
             {actionModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in" onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }}>
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }}>
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className={`text-lg font-bold flex items-center gap-2 ${actionModal.kind === 'void' ? 'text-red-600' : 'text-amber-600'}`}>
@@ -284,55 +287,71 @@ export default function Dashboard() {
 
 function TrendChart({ data }: { data: { name: string; masuk: number; selesai: number }[] }) {
     const [hover, setHover] = useState<number | null>(null)
-    const w = 600, h = 200, pad = 20
+    const [tipPos, setTipPos] = useState<{ x: number; y: number; below: boolean } | null>(null)
+    const wrapRef = useRef<HTMLDivElement>(null)
+    const w = 600, h = 200, pad = 20, padB = 32
     const max = Math.max(1, ...data.flatMap(d => [d.masuk, d.selesai]))
     const x = (i: number) => pad + (i * (w - pad * 2)) / (data.length - 1)
-    const y = (v: number) => h - pad - (v / max) * (h - pad * 2)
+    const y = (v: number) => h - padB - (v / max) * (h - pad - padB)
     const line = (key: 'masuk' | 'selesai') =>
         data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[key])}`).join(' ')
 
     const handleMove = (e: ReactMouseEvent<SVGSVGElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect()
+        const svg = e.currentTarget
+        const ctm = svg.getScreenCTM()
+        const wrap = wrapRef.current
+        if (!ctm || !wrap) return
+        const rect = svg.getBoundingClientRect()
         const px = ((e.clientX - rect.left) / rect.width) * w
-        const idx = Math.round((px - pad) / ((w - pad * 2) / (data.length - 1)))
-        setHover(Math.max(0, Math.min(data.length - 1, idx)))
+        const idx = Math.max(0, Math.min(data.length - 1, Math.round((px - pad) / ((w - pad * 2) / (data.length - 1)))))
+        const pt = svg.createSVGPoint()
+        pt.x = x(idx)
+        pt.y = y(Math.max(data[idx].masuk, data[idx].selesai))
+        const p = pt.matrixTransform(ctm)
+        const wr = wrap.getBoundingClientRect()
+        const below = p.y <= wr.top + 0.35 * wr.height
+        setHover(idx)
+        setTipPos({ x: p.x, y: p.y, below })
     }
 
+    const isFirst = hover === 0
+    const isLast = hover === data.length - 1
+
     return (
-        <div className="relative">
-            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56" onMouseMove={handleMove} onMouseLeave={() => setHover(null)}>
+        <div className="relative" ref={wrapRef}>
+            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56" onMouseMove={handleMove} onMouseLeave={() => { setHover(null); setTipPos(null) }}>
                 {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-                    <line key={f} x1={pad} x2={w - pad} y1={pad + f * (h - pad * 2)} y2={pad + f * (h - pad * 2)}
+                    <line key={f} x1={pad} x2={w - pad} y1={pad + f * (h - pad - padB)} y2={pad + f * (h - pad - padB)}
                         stroke="currentColor" strokeOpacity="0.06" />
                 ))}
                 {hover !== null && (
-                    <line x1={x(hover)} x2={x(hover)} y1={pad} y2={h - pad} stroke="currentColor" strokeOpacity="0.15" />
+                    <line x1={x(hover)} x2={x(hover)} y1={pad} y2={h - padB} stroke="currentColor" strokeOpacity="0.15" />
                 )}
-                <path d={`${line('masuk')} L${x(data.length - 1)},${h - pad} L${x(0)},${h - pad} Z`}
+                <path d={`${line('masuk')} L${x(data.length - 1)},${h - padB} L${x(0)},${h - padB} Z`}
                     fill="currentColor" opacity="0.08" />
                 <path d={line('masuk')} fill="none" stroke="currentColor" strokeWidth="3" />
                 <path d={line('selesai')} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="4 3" opacity="0.5" />
                 {data.map((d, i) => (
                     <g key={i}>
                         <circle cx={x(i)} cy={y(d.masuk)} r={hover === i ? 5 : 4} fill="currentColor" />
-                        <text x={x(i)} y={h - 4} textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.5">{d.name}</text>
+                        <text x={x(i)} y={h - 6} textAnchor="middle" fontSize="14" fill="currentColor" opacity="0.5">M{i + 1}</text>
                     </g>
                 ))}
             </svg>
-            {hover !== null && (
+            {hover !== null && tipPos && createPortal((
                 <div
-                    className="absolute pointer-events-none bg-foreground text-background text-xs rounded px-2 py-1.5 shadow-lg z-10"
+                    className="fixed pointer-events-none bg-foreground text-background text-xs rounded px-2 py-1.5 shadow-lg z-50"
                     style={{
-                        left: `${(x(hover) / w) * 100}%`,
-                        top: `${(y(Math.max(data[hover].masuk, data[hover].selesai)) / h) * 100}%`,
-                        transform: 'translate(-50%, -130%)',
+                        left: tipPos.x,
+                        top: tipPos.y,
+                        transform: `${isFirst ? 'translateX(0)' : isLast ? 'translateX(-100%)' : 'translateX(-50%)'} ${tipPos.below ? 'translateY(8px)' : 'translateY(calc(-100% - 8px))'}`,
                     }}
                 >
-                    <p className="font-semibold">{data[hover].name}</p>
+                    <p className="font-semibold">M{hover + 1}</p>
                     <p>Masuk: <span className="font-bold">{data[hover].masuk}</span></p>
                     <p>Selesai: <span className="font-bold">{data[hover].selesai}</span></p>
                 </div>
-            )}
+            ), document.body)}
         </div>
     )
 }

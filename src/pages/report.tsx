@@ -1,8 +1,8 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Phone, Loader2, AlertTriangle, X } from "lucide-react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createTicket, SITES, UNITS } from "@/services";
+import { Combobox } from "@/components/ui/combobox";
+import { createTicket, getSitesForReport, type SiteReport } from "@/services";
 import logo from '../assets/logo.png'
 
 const WA_NUMBER = "6281242141414";
@@ -15,6 +15,7 @@ export default function ReportPage() {
   const [reporterName, setReporterName] = useState("");
   const [position, setPosition] = useState("");
   const [phone, setPhone] = useState("");
+  const [company, setCompany] = useState("");
   const [site, setSite] = useState("");
   const [unit, setUnit] = useState("");
   const [desc, setDesc] = useState("");
@@ -26,6 +27,25 @@ export default function ReportPage() {
   const [countdown, setCountdown] = useState(5);
   const [submitError, setSubmitError] = useState("");
   const [photoError, setPhotoError] = useState("");
+  const [sites, setSites] = useState<SiteReport[]>([]);
+  const [mdLoading, setMdLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    getSitesForReport().then((data) => {
+      if (!alive) return;
+      setSites(data);
+      setMdLoading(false);
+    });
+    return () => { alive = false; };
+  }, []);
+
+  const NO_COMPANY = "(Tanpa Perusahaan)";
+  const companyOptions = Array.from(new Set(sites.map((s) => s.customer_name || NO_COMPANY))).map((n) => ({ value: n, label: n }));
+  const siteOptions = sites
+    .filter((s) => (s.customer_name || NO_COMPANY) === company)
+    .map((s) => ({ value: s.site_name, label: s.site_name }));
+  const unitOptions = (sites.find((s) => s.site_name === site)?.units || []).map((u) => ({ value: u, label: u }));
 
   useEffect(() => {
     if (!submitted) return;
@@ -40,16 +60,20 @@ export default function ReportPage() {
   function handlePhotosChange(e: React.ChangeEvent<HTMLInputElement>) {
     setPhotoError("");
     const files = Array.from(e.target.files || []);
-    if (files.length > MAX_PHOTOS) {
-      setPhotoError(`Maksimal ${MAX_PHOTOS} foto.`);
-      return;
-    }
-    const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-    if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
-      setPhotoError(`Total ukuran foto maks ${MAX_TOTAL_SIZE_MB} MB.`);
-      return;
-    }
-    setPhotos(files);
+    e.target.value = "";
+    setPhotos(prev => {
+      const merged = [...prev, ...files];
+      if (merged.length > MAX_PHOTOS) {
+        setPhotoError(`Maksimal ${MAX_PHOTOS} foto. Saat ini ${prev.length} foto sudah dipilih.`);
+        return prev;
+      }
+      const totalSize = merged.reduce((sum, f) => sum + f.size, 0);
+      if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) {
+        setPhotoError(`Total ukuran foto maks ${MAX_TOTAL_SIZE_MB} MB.`);
+        return prev;
+      }
+      return merged;
+    });
   }
 
   function removePhoto(idx: number) {
@@ -194,43 +218,58 @@ export default function ReportPage() {
 
         <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6">
           <div className="grid md:grid-cols-2 gap-4">
-            <Field label="Nama Pelapor" required>
+            <Field label="Nama Pelapor">
               <input required value={reporterName} onChange={(e) => setReporterName(e.target.value)} className="input" placeholder="Nama lengkap" />
             </Field>
-            <Field label="Jabatan" required>
+            <Field label="Jabatan">
               <input required value={position} onChange={(e) => setPosition(e.target.value)} className="input" placeholder="Contoh: Teknisi, Supervisor" />
             </Field>
-            <Field label="Nomor WhatsApp" required>
-              <input required value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="0812xxxx xxxx" />
+            <Field label="Nomor WhatsApp">
+              <input required value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="" />
             </Field>
           </div>
 
           <div className="h-px bg-border" />
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <Field label="Site" required>
-              <Select required value={site} onValueChange={setSite}>
-                <SelectTrigger className="input">
-                  <SelectValue placeholder="Pilih site…" />
-                </SelectTrigger>
-                <SelectContent className="border-border bg-card text-foreground">
-                  {SITES.map((s) => <SelectItem key={s} value={s} className="focus:bg-foreground focus:text-background">{s}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          <div className="grid md:grid-cols-3 gap-4">
+            <Field label="Perusahaan">
+              <Combobox
+                options={companyOptions}
+                value={company}
+                onChange={(v) => { setCompany(v); setSite(""); setUnit(""); }}
+                placeholder="Pilih perusahaan…"
+                disabled={mdLoading || sites.length === 0}
+              />
             </Field>
-            <Field label="Unit / Perangkat" required>
-              <Select required value={unit} onValueChange={setUnit}>
-                <SelectTrigger className="input">
-                  <SelectValue placeholder="Pilih unit…" />
-                </SelectTrigger>
-                <SelectContent className="border-border bg-card text-foreground">
-                  {UNITS.map((u) => <SelectItem key={u} value={u} className="focus:bg-foreground focus:text-background">{u}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <Field label="Site">
+              <Combobox
+                options={siteOptions}
+                value={site}
+                onChange={(v) => { setSite(v); setUnit(""); }}
+                placeholder="Pilih site…"
+                disabled={!company}
+              />
+            </Field>
+            <Field label="Unit / Perangkat">
+              <Combobox
+                options={unitOptions}
+                value={unit}
+                onChange={setUnit}
+                placeholder="Pilih unit…"
+                disabled={!site}
+                emptyText="Belum ada unit di site ini"
+              />
             </Field>
           </div>
 
-          <Field label={`Deskripsi Kendala (${desc.length}/500)`} required>
+          {!mdLoading && sites.length === 0 && (
+            <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+              <AlertTriangle className="h-4 w-4 shrink-0" />
+              <span>Belum ada Site terdaftar. Silakan hubungi Helpdesk via WhatsApp Group.</span>
+            </div>
+          )}
+
+          <Field label={`Deskripsi Kendala (${desc.length}/500)`}>
             <textarea
               required maxLength={500} rows={4}
               value={desc} onChange={(e) => setDesc(e.target.value)}
@@ -239,7 +278,7 @@ export default function ReportPage() {
             />
           </Field>
 
-          <Field label={`Foto Pendukung (${photos.length}/${MAX_PHOTOS})`} required>
+          <Field label={`Foto Pendukung (${photos.length}/${MAX_PHOTOS})`}>
             <label className="flex items-center gap-3 p-4 border border-dashed border-border rounded-lg cursor-pointer hover:bg-accent/40 transition">
               <Upload className="h-5 w-5 text-muted-foreground" />
               <div className="flex-1">
@@ -316,7 +355,7 @@ export default function ReportPage() {
 
 function SiteHeader() {
   return (
-    <header className="border-b border-border bg-background">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between w-full">
         <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="Atap Care" className="h-9 w-9 rounded-xl object-contain" />
@@ -387,11 +426,11 @@ function SiteFooter() {
   );
 }
 
-function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
       <span className="text-xs font-medium mb-1.5 block">
-        {label} {required && <span className="text-destructive">*</span>}
+        {label}
       </span>
       {children}
     </label>

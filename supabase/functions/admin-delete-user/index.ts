@@ -1,5 +1,5 @@
-// Edge Function: reset password user oleh Admin.
-// Deploy: supabase functions deploy admin-reset-password
+// Edge Function: hapus user secara permanen oleh Admin.
+// Deploy: supabase functions deploy admin-delete-user
 // service_role hanya hidup di server, tidak pernah diekspos ke frontend anon.
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -22,6 +22,16 @@ function json(data: unknown, status = 200) {
   return Response.json(data, { status, headers: corsHeaders });
 }
 
+const ACTIVE_STATUSES = [
+  "NEW",
+  "OPEN",
+  "UNASSIGNED",
+  "SCHEDULED",
+  "EN_ROUTE",
+  "WORKING",
+  "PENDING",
+];
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
@@ -40,32 +50,64 @@ Deno.serve(async (req) => {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("role")
+    .select("role, name")
     .eq("id", user.id)
     .single();
   if (!profile || profile.role !== "admin") {
     return json({ error: "Akses ditolak: hanya Admin" }, 403);
   }
 
-  let body: { userId?: string; newPassword?: string };
+  let body: { userId?: string };
   try {
     body = await req.json();
   } catch {
     body = {};
   }
-  const { userId, newPassword } = body;
+  const { userId } = body;
 
-  if (!userId || typeof newPassword !== "string" || newPassword.length < 6) {
-    return json({ error: "Password minimal 6 karakter" }, 400);
+  if (!userId || typeof userId !== "string") {
+    return json({ error: "userId wajib diisi" }, 400);
+  }
+  if (userId === user.id) {
+    return json({ error: "Tidak bisa menghapus akun sendiri" }, 400);
   }
 
-  const { error } = await supabase.auth.admin.updateUserById(userId, {
-    password: newPassword,
-  });
-  if (error) return json({ error: error.message }, 500);
+  // Blokir jika user masih memegang tiket aktif.
+  const { data: active } = await supabase
+    .from("tickets")
+    .select("id")
+    .in("status", ACTIVE_STATUSES)
+    .eq("assigned_to", userId)
+    .limit(1);
+  if (active && active.length > 0) {
+    return json({ error: "User masih memiliki tiket aktif." }, 400);
+  }
 
-  // tandai wajib ganti password (update via service client, RLS di-bypass).
-  await supabase.from("users").update({ must_change_password: true }).eq("id", userId);
+  // Lepas tiket lama (menghindari FK RESTRICT yang belum terdokumentasi di repo).
+  await supabase.from("tickets").update({ assigned_to: null }).eq("assigned_to", userId);
+
+  const { error: deleteProfileError } = await supabase
+    .from("users")
+    .delete()
+    .eq("id", userId);
+  if (deleteProfileError) {
+    return json({ error: deleteProfileError.message }, 500);
+  }
+
+  // Hapus akun auth agar hilang dari tab Authentication.
+  const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(userId);
+  if (deleteAuthError) {
+    // Profil sudah terhapus; retry oleh admin akan menyelesaikan penghapusan akun.
+    return json({ error: deleteAuthError.message }, 500);
+  }
+
+  await supabase.from("audit_logs").insert({
+    actor_name: profile.name || "Admin",
+    action: "delete_user",
+    entity_type: "users",
+    entity_id: userId,
+    metadata: { deleted_by: user.id },
+  });
 
   return json({ ok: true });
 });

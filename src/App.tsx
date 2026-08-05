@@ -3,18 +3,16 @@ import { useAuth } from './context/AuthContext'
 
 import Login from './pages/Login'
 import MainLayout from './components/layout/MainLayout'
-import Dashboard from './pages/Helpdesk/Dashboard'
-import Inbox from './pages/Helpdesk/Inbox'
-import Archive from './pages/Helpdesk/Archive'
+import HPDashboard from './pages/Helpdesk/HPDashboard'
+import HPInbox from './pages/Helpdesk/HPInbox'
+import HPReport from './pages/Helpdesk/HPReport'
 import TugasTeknisi from './pages/Teknisi/Tugas'
 import PMCommandCenter from './pages/Project_Management/PMCommandCenter'
 import PMDashboard from './pages/Project_Management/PMDashboard'
 import { AdminDashboard } from './pages/Admin/AdminDashboard'
 import { AdminUsers } from './pages/Admin/AdminUsers'
 import { AdminMasterData } from './pages/Admin/AdminMasterData'
-import { AdminArchive } from './pages/Admin/AdminArchive'
 import { AdminSlaConfig } from './pages/Admin/AdminSlaConfig'
-import { AdminNotifications } from './pages/Admin/AdminNotifications'
 import { AdminReports } from './pages/Admin/AdminReports'
 
 import Landing from './pages/indexclient'
@@ -45,13 +43,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function RoleGate({ roles, children }: { roles: string[]; children: React.ReactNode }) {
   const { user } = useAuth()
   if (user && roles.includes(user.role)) return <>{children}</>
+  if (user?.role === 'admin') return <Navigate to="/admin" replace />
   if (user?.role === 'teknisi') return <Navigate to="/tugas" replace />
   return <Navigate to="/dashboard" replace />
 }
 
 function RoleDashboard() {
   const { user } = useAuth()
-  return user?.role === 'pm' ? <PMDashboard /> : <Dashboard />
+  return user?.role === 'pm' ? <PMDashboard /> : <HPDashboard />
 }
 
 function AppRoutes() {
@@ -77,7 +76,7 @@ function AppRoutes() {
       {/* GERBANG 2: Login Karyawan */}
       <Route
         path="/login"
-        element={isAuthenticated ? <Navigate to={user?.role === 'teknisi' ? '/tugas' : '/dashboard'} replace /> : <Login />}
+        element={isAuthenticated ? <Navigate to={user?.role === 'admin' ? '/admin' : user?.role === 'teknisi' ? '/tugas' : '/dashboard'} replace /> : <Login />}
       />
 
       {/* GERBANG 2: Halaman Terproteksi */}
@@ -88,18 +87,16 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route path="/dashboard" element={<RoleGate roles={['helpdesk', 'pm', 'admin']}><RoleDashboard /></RoleGate>} />
-        <Route path="/inbox" element={<RoleGate roles={['helpdesk']}><Inbox /></RoleGate>} />
-        <Route path="/archive" element={<RoleGate roles={['helpdesk']}><Archive /></RoleGate>} />
+        <Route path="/dashboard" element={<RoleGate roles={['helpdesk', 'pm']}><RoleDashboard /></RoleGate>} />
+        <Route path="/inbox" element={<RoleGate roles={['helpdesk']}><HPInbox /></RoleGate>} />
+        <Route path="/reports" element={<RoleGate roles={['helpdesk']}><HPReport /></RoleGate>} />
         <Route path="/tugas" element={<RoleGate roles={['teknisi']}><TugasTeknisi /></RoleGate>} />
         <Route path="/command-center" element={<RoleGate roles={['pm']}><PMCommandCenter /></RoleGate>} />
 
         <Route path="/admin" element={<RoleGate roles={['admin']}><AdminDashboard /></RoleGate>} />
         <Route path="/admin/users" element={<RoleGate roles={['admin']}><AdminUsers /></RoleGate>} />
         <Route path="/admin/master-data" element={<RoleGate roles={['admin']}><AdminMasterData /></RoleGate>} />
-        <Route path="/admin/archive" element={<RoleGate roles={['admin']}><AdminArchive /></RoleGate>} />
         <Route path="/admin/sla" element={<RoleGate roles={['admin']}><AdminSlaConfig /></RoleGate>} />
-        <Route path="/admin/notifications" element={<RoleGate roles={['admin']}><AdminNotifications /></RoleGate>} />
         <Route path="/admin/reports" element={<RoleGate roles={['admin']}><AdminReports /></RoleGate>} />
       </Route>
 

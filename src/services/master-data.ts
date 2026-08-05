@@ -3,6 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 export interface Customer {
   id: string;
   name: string;
+  code?: string | null;
+  pic_name?: string | null;
+  pic_phone?: string | null;
   address?: string | null;
   phone?: string | null;
   is_deleted: boolean;
@@ -66,7 +69,14 @@ export async function getUnits(includeDeleted = false): Promise<UnitRow[]> {
   return (data || []) as UnitRow[];
 }
 
-type NewCustomer = { name: string; address?: string; phone?: string };
+type NewCustomer = {
+  name: string;
+  code?: string;
+  pic_name?: string;
+  pic_phone?: string;
+  address?: string;
+  phone?: string;
+};
 type NewSite = {
   name: string;
   address?: string;

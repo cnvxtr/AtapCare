@@ -19,7 +19,7 @@ const SEGMENTS = [
     { key: 'diproses', label: 'Diproses', role: 'HP', statuses: ['OPEN'] },
     { key: 'ditugaskan', label: 'Ditugaskan', role: 'PM', statuses: ['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE'] },
     { key: 'dikerjakan', label: 'Dikerjakan', role: 'TEK', statuses: ['WORKING'] },
-    { key: 'dijeda', label: 'Dijeda', role: '', statuses: ['PENDING'] },
+    { key: 'dijeda', label: 'Dijeda', role: 'PM', statuses: ['PENDING'] },
     { key: 'selesai', label: 'Selesai', role: 'HP', statuses: ['RESOLVED'] },
     { key: 'tutup', label: 'Tutup', role: '', statuses: ['CLOSED'] },
 ]
@@ -131,14 +131,10 @@ export default function PMCommandCenter() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 flex flex-col h-[calc(100vh-7rem)]">
             {/* HEADER */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-                <div>
-                    <h2 className="text-3xl font-display font-bold tracking-tight text-foreground">Command Center</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Orkestrasi lapangan, penugasan, dan monitoring progres.</p>
-                </div>
-                <div className="flex flex-col gap-2">
+            <div className="flex justify-end gap-4">
+                <div className="flex gap-2">
                     <span className="px-3 py-1.5 rounded-sm text-sm font-medium border flex items-center gap-2" style={{ backgroundColor: cAssign.bg, color: cAssign.text, borderColor: cAssign.bg }}>
                         <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                         {needAssign} Ditugaskan
@@ -206,8 +202,8 @@ export default function PMCommandCenter() {
 
             {/* KANBAN / LIST */}
             {viewMode === 'kanban' ? (
-                <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-4 xl:grid-cols-7">
+                <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
+                    <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-4 xl:grid-cols-7 flex-1 min-h-0">
                         {KANBAN_COLUMNS.map(col => {
                             const items = baseTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
@@ -220,9 +216,9 @@ export default function PMCommandCenter() {
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
-                                    <div className="p-1.5 space-y-1.5 min-h-[100px] max-h-[360px] overflow-y-auto no-scrollbar">
+                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto no-scrollbar">
                                         {items.map(t => {
-                                            const isUrgent = t.priority === 'P1' || t.slaTimeLeft <= 4
+                                            const isUrgent = t.priority === 'P1'
                                             return (
                                                 <div key={t.id} className={`rounded border border-border bg-card p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                     <div className="flex items-center justify-between gap-1 mb-1">
@@ -298,6 +294,7 @@ export default function PMCommandCenter() {
                     code={selectedTicket.code}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
+                    slaTimeLeft={selectedTicket.slaTimeLeft}
                     createdAt={selectedTicket.createdAt}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
@@ -352,7 +349,7 @@ export default function PMCommandCenter() {
 
             {/* 1. MODAL TUGASKAN */}
             {showAssignModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5" /> Tugaskan Teknisi</h3>
@@ -435,7 +432,7 @@ export default function PMCommandCenter() {
 
             {/* 1b. MODAL KONFIRMASI PENUGASAN */}
             {confirmAssign && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2"><Check className="w-5 h-5" /> Konfirmasi Penugasan</h3>
@@ -472,7 +469,7 @@ export default function PMCommandCenter() {
 
             {/* 2. MODAL GANTI TEKNISI */}
             {showReassignModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2 text-neutral-700"><AlertTriangle className="w-5 h-5" /> Ganti Teknisi</h3>
@@ -480,7 +477,7 @@ export default function PMCommandCenter() {
                         </div>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Pilih Teknisi Baru *</label>
+                                <label className="text-xs font-semibold text-muted-foreground">Pilih Teknisi Baru</label>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <button type="button" className={`w-full mt-1 px-3 py-2 border-2 ${reassignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
@@ -503,7 +500,7 @@ export default function PMCommandCenter() {
                                 <FieldError msg={reassignErrors.tech} />
                             </div>
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Alasan Ganti Teknisi (Wajib) *</label>
+                                <label className="text-xs font-semibold text-muted-foreground">Alasan Ganti Teknisi (Wajib)</label>
                                 <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setReassignErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border-2 ${reassignErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Teknisi sakit, alat tidak lengkap, dll"></textarea>
                                 <FieldError msg={reassignErrors.reason} />
                             </div>
@@ -518,13 +515,13 @@ export default function PMCommandCenter() {
             
             {/* 3. MODAL VETO PENDING */}
             {showVetoModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-700"><Ban className="w-5 h-5" /> Veto Status Pending</h3>
                         <p className="text-sm text-muted-foreground mb-4">Tindakan ini akan membatalkan status Pending dan mengembalikan tiket ke WORKING. SLA akan dilanjutkan.</p>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Alasan Veto (Wajib) *</label>
+                                <label className="text-xs font-semibold text-muted-foreground">Alasan Veto (Wajib)</label>
                                 <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setVetoErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border-2 ${vetoErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Alasan pending tidak valid, segera lanjutkan pekerjaan"></textarea>
                                 <FieldError msg={vetoErrors.reason} />
                             </div>

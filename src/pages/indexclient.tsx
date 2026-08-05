@@ -7,7 +7,7 @@ const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent("Halo Atap
 
 export default function Landing() {
   return (
-    <div className="min-h-screen bg-background text-foreground relative overflow-hidden flex flex-col">
+    <div className="min-h-screen bg-background text-foreground relative overflow-x-clip flex flex-col">
       <div className="absolute inset-0 grid-bg pointer-events-none opacity-80" />
 
       <SiteHeader />
@@ -48,7 +48,7 @@ export default function Landing() {
 
 function SiteHeader() {
   return (
-    <header className="border-b border-border bg-background">
+    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between w-full">
         <Link to="/" className="flex items-center gap-2">
           <img src={logo} alt="Atap Care" className="h-9 w-9 rounded-xl object-contain" />

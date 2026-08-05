@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { Image, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Image, X } from 'lucide-react'
 import { Badge } from './Badge'
 import { resolvePhotos } from '../services/photoService'
 
@@ -17,6 +17,7 @@ interface TicketDrawerProps {
     code: string
     status: string
     priority?: string
+    slaTimeLeft?: number
     createdAt: string
     activeTab: DrawerTab
     onTabChange: (t: DrawerTab) => void
@@ -25,9 +26,12 @@ interface TicketDrawerProps {
     children: ReactNode
 }
 
-export default function TicketDrawer({ onClose, code, status, priority, createdAt, activeTab, onTabChange, activities, footer, children }: TicketDrawerProps) {
+export default function TicketDrawer({ onClose, code, status, priority, slaTimeLeft, createdAt, activeTab, onTabChange, activities, footer, children }: TicketDrawerProps) {
+    const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
+        ? [...(activities ?? [])].reverse().find(a => a.action === 'Tugas diselesaikan')?.timestamp
+        : undefined
     return createPortal(
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex justify-end animate-[fade-in_0.2s_ease]" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/80 z-[100] flex justify-end animate-[fade-in_0.2s_ease]" onClick={onClose}>
             <div className="w-full max-w-2xl h-full bg-card/95 backdrop-blur-xl border-l border-border shadow-2xl flex flex-col drawer-enter" onClick={(e) => e.stopPropagation()}>
                 <div className="sticky top-0 z-10 bg-card/80 backdrop-blur-xl border-b border-border px-5 py-4">
                     <div className="flex items-start justify-between gap-4">
@@ -37,8 +41,13 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
                                 <h3 className="text-xl font-bold text-foreground font-mono tracking-tight">{code}</h3>
                                 {priority && <Badge type="priority" value={priority} />}
                                 <Badge type="status" value={status} />
+                                {slaTimeLeft !== undefined && slaTimeLeft <= 0 && (
+                                    <span className="px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-bold whitespace-nowrap">Overdue</span>
+                                )}
                             </div>
-                            <p className="mt-2 font-mono text-xs text-muted-foreground">{formatWIB(createdAt)}</p>
+                            <p className="mt-2 font-mono text-xs text-muted-foreground">
+                                {resolvedAt ? `${formatWIB(createdAt)} - ${formatWIB(resolvedAt)}` : formatWIB(createdAt)}
+                            </p>
                         </div>
                         <button onClick={onClose} className="p-2 rounded-md bg-foreground text-primary-foreground hover:opacity-90 transition" aria-label="Tutup">
                             <X className="w-5 h-5" />
@@ -60,7 +69,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
 
                 <div className="flex-1 overflow-y-auto p-5">
                     {children}
-                    {activeTab === 'detail' && activities && <PhotoGallery items={activities} />}
+                    {activeTab === 'detail' && activities && <PhotoGallery items={activities} status={status} />}
                 </div>
 
                 {footer && <div className="sticky bottom-0 z-10 bg-card/80 backdrop-blur-xl border-t border-border p-5 space-y-3">{footer}</div>}
@@ -70,19 +79,43 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
     )
 }
 
-function PhotoLightbox({ src, onClose }: { src: string; onClose: () => void }) {
+function PhotoLightbox({ images, index, onClose }: { images: string[]; index: number; onClose: () => void }) {
+    const [current, setCurrent] = useState(index)
+    const hasPrev = current > 0
+    const hasNext = current < images.length - 1
+    const multiple = images.length > 1
+
     useEffect(() => {
-        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose()
+            if (multiple && e.key === 'ArrowLeft' && hasPrev) setCurrent(i => i - 1)
+            if (multiple && e.key === 'ArrowRight' && hasNext) setCurrent(i => i + 1)
+        }
         window.addEventListener('keydown', onKey)
         return () => window.removeEventListener('keydown', onKey)
-    }, [onClose])
+    }, [onClose, multiple, hasPrev, hasNext])
 
     return createPortal(
-        <div className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-[fade-in_0.2s_ease]" onClick={onClose}>
-            <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-lg bg-foreground text-primary-foreground hover:opacity-80 transition" aria-label="Tutup">
+        <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4 animate-[fade-in_0.2s_ease]" onClick={onClose}>
+            <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-lg bg-foreground text-primary-foreground hover:opacity-80 transition z-10" aria-label="Tutup">
                 <X className="w-5 h-5" />
             </button>
-            <img src={src} alt="Preview foto" className="max-w-full max-h-full rounded-lg shadow-2xl border border-border" onClick={(e) => e.stopPropagation()} />
+            {multiple && hasPrev && (
+                <button onClick={(e) => { e.stopPropagation(); setCurrent(i => i - 1) }} className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-foreground/80 text-primary-foreground hover:bg-foreground transition z-10" aria-label="Foto sebelumnya">
+                    <ChevronLeft className="w-5 h-5" />
+                </button>
+            )}
+            {multiple && hasNext && (
+                <button onClick={(e) => { e.stopPropagation(); setCurrent(i => i + 1) }} className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-foreground/80 text-primary-foreground hover:bg-foreground transition z-10" aria-label="Foto berikutnya">
+                    <ChevronRight className="w-5 h-5" />
+                </button>
+            )}
+            <img src={images[current]} alt={`Preview foto ${current + 1}`} className="max-w-full max-h-[85vh] rounded-lg shadow-2xl border border-border select-none" onClick={(e) => e.stopPropagation()} />
+            {multiple && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-foreground/80 text-primary-foreground font-mono text-xs">
+                    {current + 1} / {images.length}
+                </div>
+            )}
         </div>,
         document.body
     )
@@ -110,22 +143,23 @@ function usePhotoResolver(tokens: string[]): Record<string, string> {
 // Di Timeline & Activity, foto ditampilkan sebagai label yang bisa diklik (bukan <img> inline)
 // agar baris tetap ringan; foto penuh muncul lewat lightbox saat diklik.
 export function DetailsText({ text }: { text?: string }) {
-    const [preview, setPreview] = useState<string | null>(null)
+    const [preview, setPreview] = useState<{ images: string[]; index: number } | null>(null)
     const parts = useMemo(() => text?.split(PHOTO_TOKEN_RE) ?? [], [text])
     const tokens = parts.filter(isPhotoToken)
     const resolved = usePhotoResolver(tokens)
     if (!text) return null
+    const allUrls = tokens.map(t => resolved[t]).filter(Boolean) as string[]
     let count = 0
     return (
         <>
             <span className="break-words">
                 {parts.map((p, i) =>
                     isPhotoToken(p)
-                        ? <button key={i} type="button" onClick={() => { const u = resolved[p]; if (u) setPreview(u) }} className="mt-1 mr-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition"><Image className="w-3 h-3" />Foto {++count}</button>
+                        ? <button key={i} type="button" onClick={() => { const u = resolved[p]; if (u) setPreview({ images: allUrls, index: allUrls.indexOf(u) }) }} className="mt-1 mr-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition"><Image className="w-3 h-3" />Foto {++count}</button>
                         : <span key={i}>{p}</span>
                 )}
             </span>
-            {preview && <PhotoLightbox src={preview} onClose={() => setPreview(null)} />}
+            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} />}
         </>
     )
 }
@@ -295,36 +329,51 @@ function extractPhotos(items: { timestamp: string; action: string; details?: str
 
 // Foto (portal client = data URL, internal/teknisi = path storage) tersimpan di detail aktivitas,
 // jadi galeri cukup memindai aktivitas tiket sekali dan tampil untuk semua role.
-export function PhotoGallery({ items }: { items: { timestamp: string; action: string; details?: string }[] }) {
+export function PhotoGallery({ items, status }: { items: { timestamp: string; action: string; details?: string }[]; status?: string }) {
     const photos = extractPhotos(items)
     const resolved = usePhotoResolver(photos.map((p) => p.src))
-    const [preview, setPreview] = useState<string | null>(null)
+    const [preview, setPreview] = useState<{ images: string[]; index: number } | null>(null)
 
-    if (photos.length === 0) return null
+    const isClosed = status === 'RESOLVED' || status === 'CLOSED'
+    const completionAct = isClosed ? items.find(a => a.details?.startsWith('Selesai')) : null
+    const completionParts = completionAct?.details?.split('|').map(s => s.trim()).filter(Boolean) ?? []
+    const catatan = completionParts[0]?.replace(/^Selesai:\s*/, '').replace(/^Selesai$/, '')
+    const sparepart = completionParts.find(p => p.startsWith('Sparepart:'))?.replace('Sparepart:', '').trim()
+
+    if (photos.length === 0 && (!isClosed || completionParts.length === 0)) return null
     const ready = photos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
 
     return (
         <>
-            <div className="mt-5 bg-muted/60 border border-border rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                    <Image className="w-4 h-4 text-muted-foreground" />
-                    <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Dokumentasi ({ready.length})</h4>
+            {ready.length > 0 && (
+                <div className="mt-5 bg-muted/60 border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Image className="w-4 h-4 text-muted-foreground" />
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Foto ({ready.length})</h4>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                        {ready.map((p, i) => (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => setPreview({ images: ready.map(r => r.url!), index: i })}
+                                className="aspect-square rounded-lg overflow-hidden border border-border bg-background hover:opacity-90 transition"
+                                aria-label={`Lihat foto ${i + 1}`}
+                            >
+                                <img src={p.url!} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                            </button>
+                        ))}
+                    </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                    {ready.map((p, i) => (
-                        <button
-                            key={i}
-                            type="button"
-                            onClick={() => setPreview(p.url!)}
-                            className="aspect-square rounded-lg overflow-hidden border border-border bg-background hover:opacity-90 transition"
-                            aria-label={`Lihat foto ${i + 1}`}
-                        >
-                            <img src={p.url!} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                        </button>
-                    ))}
+            )}
+            {isClosed && (catatan || sparepart) && (
+                <div className="mt-3 bg-emerald-50/60 border border-emerald-200 rounded-lg p-4">
+                    <h4 className="text-[10px] font-mono uppercase tracking-widest text-emerald-700 mb-2">Dokumentasi</h4>
+                    {catatan && <p className="text-sm text-emerald-900 mb-1">{catatan}</p>}
+                    {sparepart && <p className="text-xs text-emerald-800/80">Sparepart: {sparepart}</p>}
                 </div>
-            </div>
-            {preview && <PhotoLightbox src={preview} onClose={() => setPreview(null)} />}
+            )}
+            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} />}
         </>
     )
 }

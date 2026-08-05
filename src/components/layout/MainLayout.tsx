@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
 import logo from '../../assets/logo.png'
 import {
-  LayoutDashboard, Inbox, Archive, ClipboardList, LayoutGrid,
+  LayoutDashboard, Inbox, ClipboardList, LayoutGrid,
   ChevronRight, Bell, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
-  Users, Building2, FileBarChart2, Settings2, Timer, Sun, Moon
+  Users, Building2, FileBarChart2, Timer, Sun, Moon, Check
 } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../../components/ui/tooltip'
 import {
@@ -18,6 +19,17 @@ import {
   type NotificationRow
 } from '../../services/notifications'
 import { getStoredTheme, setTheme } from '../../lib/theme'
+import ErrorBoundary from '../ErrorBoundary'
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: 'Administrator',
+  helpdesk: 'Helpdesk',
+  pm: 'Project Manager',
+  teknisi: 'Teknisi Lapangan',
+}
+
+const roleHome = (role?: string) =>
+  role === 'admin' ? '/admin' : role === 'teknisi' ? '/tugas' : '/dashboard'
 
 const menuItems = (role?: string) =>
   role === 'teknisi'
@@ -32,26 +44,25 @@ const menuItems = (role?: string) =>
         { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
         { icon: Users, label: 'Manajemen Pengguna', path: '/admin/users' },
         { icon: Building2, label: 'Master Data', path: '/admin/master-data' },
-        { icon: Archive, label: 'Arsip Lanjutan', path: '/admin/archive' },
         { icon: FileBarChart2, label: 'Laporan', path: '/admin/reports' },
         { icon: Timer, label: 'Konfigurasi SLA', path: '/admin/sla' },
-        { icon: Settings2, label: 'Notifikasi', path: '/admin/notifications' },
       ]
       : [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
         { icon: Inbox, label: 'Tiket', path: '/inbox' },
-        { icon: Archive, label: 'Arsip', path: '/archive' },
+        { icon: FileBarChart2, label: 'Laporan', path: '/reports' },
       ]
 
 export default function MainLayout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, logout } = useAuth()
+  const { user, logout, switchRole } = useAuth()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(false)
   const [hoverLogo, setHoverLogo] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [switchingRole, setSwitchingRole] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
@@ -89,13 +100,30 @@ export default function MainLayout() {
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
 
+  const roleList = (user?.roles || user?.role || '').split(',').filter(Boolean)
+  const canSwitchRole = roleList.length > 1
+
+  const handleSwitchRole = async (r: string) => {
+    if (!user || r === user.role || switchingRole) return
+    setSwitchingRole(true)
+    const res = await switchRole(r)
+    setSwitchingRole(false)
+    if (res?.error) {
+      toast.error(res.error)
+      return
+    }
+    setShowDropdown(false)
+    toast.success(`Role berubah menjadi ${ROLE_LABELS[r] || r}`)
+    navigate(roleHome(r))
+  }
+
   return (
     <div className="max-w-full min-h-screen bg-background text-foreground flex">
       {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 flex ${collapsed ? 'w-16' : 'w-64'} shrink-0 flex-col border-r border-border bg-card transition-all duration-200 overflow-hidden lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo */}
         <div className={`h-16 flex items-center gap-2 px-5 border-b border-border ${collapsed ? 'justify-center px-0' : ''}`}>
-          <div className={`relative shrink-0 cursor-pointer`} onClick={collapsed ? () => setCollapsed(false) : () => navigate('/dashboard')} onMouseEnter={() => setHoverLogo(true)} onMouseLeave={() => setHoverLogo(false)} role={collapsed ? 'button' : undefined} tabIndex={collapsed ? 0 : undefined}>
+          <div className={`relative shrink-0 cursor-pointer`} onClick={collapsed ? () => setCollapsed(false) : () => navigate(user?.role === 'admin' ? '/admin' : '/dashboard')} onMouseEnter={() => setHoverLogo(true)} onMouseLeave={() => setHoverLogo(false)} role={collapsed ? 'button' : undefined} tabIndex={collapsed ? 0 : undefined}>
             {collapsed && hoverLogo ? (
               <PanelLeftOpen className="h-5 w-5 text-foreground" />
             ) : (
@@ -103,7 +131,7 @@ export default function MainLayout() {
             )}
           </div>
           {!collapsed && (
-            <div className="flex flex-col leading-tight min-w-0 cursor-pointer" onClick={() => navigate('/dashboard')}>
+            <div className="flex flex-col leading-tight min-w-0 cursor-pointer" onClick={() => navigate(user?.role === 'admin' ? '/admin' : '/dashboard')}>
               <span className="font-display font-bold tracking-tight truncate">Atap Care</span>
               <span className="text-[9px] text-muted-foreground uppercase tracking-tight truncate">PT Atap Teknologi Indonesia</span>
             </div>
@@ -174,10 +202,35 @@ export default function MainLayout() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowDropdown(false)} />
               <div className="absolute bottom-full left-2 right-2 mb-2 z-50 bg-card border border-border rounded-lg shadow-xl overflow-hidden">
-                <button onClick={() => setShowDropdown(false)} className="w-full px-3 py-2.5 text-sm text-foreground hover:bg-foreground hover:text-background transition-colors text-left">
-                  Ganti Akun
-                </button>
-                <button onClick={() => { setShowDropdown(false); setShowLogoutConfirm(true) }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-white bg-red-600 hover:bg-red-700 transition-colors text-left font-semibold">
+                {canSwitchRole && (
+                  <>
+                    <div className="px-3 pt-2.5 pb-1 text-[10px] uppercase tracking-widest text-muted-foreground">
+                      Ganti Role
+                    </div>
+                    <div className="px-1.5 py-1.5 space-y-0.5">
+                      {roleList.map((r) => {
+                        const active = r === user?.role
+                        return (
+                          <button
+                            key={r}
+                            onClick={() => handleSwitchRole(r)}
+                            disabled={active || switchingRole}
+                            className={`w-full flex items-center justify-between px-3 py-2 text-sm rounded transition-colors text-left disabled:opacity-100 ${
+                              active
+                                ? 'bg-foreground text-background font-semibold'
+                                : 'text-foreground hover:bg-foreground hover:text-background'
+                            }`}
+                          >
+                            <span>{ROLE_LABELS[r] || r}</span>
+                            {active && <Check className="h-3.5 w-3.5" />}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <div className="border-t border-border" />
+                  </>
+                )}
+                <button onClick={() => { setShowDropdown(false); setShowLogoutConfirm(true) }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500 hover:bg-red-100 hover:text-red-500 transition-colors text-left font-semibold">
                   <LogOut className="h-4 w-4" /> Keluar
                 </button>
               </div>
@@ -195,7 +248,6 @@ export default function MainLayout() {
               <Menu className="h-5 w-5" />
             </button>
             <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
-              <span className="font-mono text-[10px] uppercase tracking-widest hidden sm:inline">/ Atap Care</span>
               <ChevronRight className="h-3 w-3 hidden sm:inline" />
               <span className="text-foreground font-medium truncate">{pageTitle}</span>
             </div>
@@ -251,23 +303,12 @@ export default function MainLayout() {
           </div>
         </header>
 
-        {pathname === '/dashboard' && (
-        <div className="px-4 sm:px-6 pt-8 pb-6 border-b border-border bg-gradient-to-b from-card to-background">
-          <div className="flex items-end justify-between gap-4 flex-wrap">
-            <div>
-              <h1 className="text-3xl font-display font-bold tracking-tight">{pageTitle}</h1>
-              {user?.full_name && (
-                <p className="text-sm text-muted-foreground mt-1.5">
-                  Selamat datang, <span className="font-semibold text-foreground">{user.full_name}</span>
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-        )}
-
         <main className="p-4 sm:p-6 flex-1 bg-background">
-          <Outlet />
+          {/* ponytail: ErrorBoundary = jaring diagnostik render-crash (bukan solusi per-route); */}
+          {/* kalau crash terulang, pesan error muncul di layar sehingga bisa dilacak. */}
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
 

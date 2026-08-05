@@ -1,15 +1,20 @@
 import { useState, useEffect } from "react";
-import { Clock, Calendar, Loader2, Plus, Trash2, Save, Snowflake } from "lucide-react";
+import { Clock, CalendarDays, Loader2, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
-import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
+import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar-rac";
 import {
   getSlaConfig,
   saveSlaTarget,
   getHolidays,
-  addHoliday,
-  deleteHoliday,
-  toggleHoliday,
+  syncHolidays,
   PRIORITY_DEFAULTS,
   type HolidayRow,
 } from "@/services";
@@ -21,18 +26,18 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
-  P1: "bg-red-100 text-red-700 border-red-200",
-  P2: "bg-yellow-100 text-yellow-700 border-yellow-200",
-  P3: "bg-muted text-muted-foreground border-border",
+  P1: "border-red-600 bg-red-600/10",
+  P2: "border-amber-500 bg-amber-500/10",
+  P3: "border-blue-500 bg-blue-500/10",
 };
 
 export function AdminSlaConfig() {
-  const [holidays, setHolidays] = useState<HolidayRow[]>([]);
+  const [holidayCount, setHolidayCount] = useState(0);
+  const [holidayRows, setHolidayRows] = useState<HolidayRow[]>([]);
+  const [calendarOpen, setCalendarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  const [newHolidayName, setNewHolidayName] = useState("");
-  const [newHolidayDate, setNewHolidayDate] = useState("");
+  const [syncing, setSyncing] = useState(false);
 
   const [editHours, setEditHours] = useState<Record<string, number>>({});
   const [savedHours, setSavedHours] = useState<Record<string, number>>({});
@@ -41,6 +46,12 @@ export function AdminSlaConfig() {
     loadData();
   }, []);
 
+  const year = new Date().getFullYear();
+  const todayWib = today(getLocalTimeZone()).toString();
+  // Hitungan real-time: hari libur aktif dari hari ini sampai akhir tahun.
+  const countRemaining = (rows: HolidayRow[]) =>
+    rows.filter((h) => h.is_active && h.date.startsWith(String(year)) && h.date >= todayWib).length;
+
   async function loadData() {
     setLoading(true);
     const [presetRows, holidayRows] = await Promise.all([getSlaConfig(), getHolidays()]);
@@ -48,9 +59,38 @@ export function AdminSlaConfig() {
     for (const p of presetRows) hours[p.priority] = p.target_hours;
     setEditHours(hours);
     setSavedHours(hours);
-    setHolidays(holidayRows);
+    setHolidayCount(countRemaining(holidayRows));
     setLoading(false);
+    handleSync(true);
   }
+
+  async function handleSync(silent = false) {
+    setSyncing(true);
+    const res = await syncHolidays();
+    if (res.added > 0) {
+      const rows = await getHolidays();
+      setHolidayCount(countRemaining(rows));
+    }
+    setSyncing(false);
+    if (silent) return;
+    if (res.error) {
+      toast.error(`Gagal sinkronisasi hari libur: ${res.error}`);
+    } else {
+      toast.success(
+        res.added > 0 ? `${res.added} hari libur baru ditambahkan` : "Hari libur sudah mutakhir",
+      );
+    }
+  }
+
+  async function openHolidayCalendar() {
+    setCalendarOpen(true);
+    const rows = await getHolidays();
+    setHolidayRows(rows);
+  }
+
+  const remaining = holidayRows
+    .filter((h) => h.is_active && h.date.startsWith(String(year)) && h.date >= todayWib)
+    .sort((a, b) => a.date.localeCompare(b.date));
 
   async function handleSavePreset(priority: string) {
     const hours = editHours[priority];
@@ -69,45 +109,6 @@ export function AdminSlaConfig() {
     setSavedHours((prev) => ({ ...prev, [priority]: hours }));
   }
 
-  async function handleAddHoliday() {
-    if (!newHolidayName.trim() || !newHolidayDate) return;
-    setSaving(true);
-    const res = await addHoliday(newHolidayName, newHolidayDate);
-    setSaving(false);
-    if (!res.ok) {
-      toast.error(res.error || "Gagal menambahkan hari libur");
-      return;
-    }
-    setNewHolidayName("");
-    setNewHolidayDate("");
-    toast.success("Hari libur berhasil ditambahkan");
-    loadData();
-  }
-
-  async function handleDeleteHoliday(id: string) {
-    const ok = await deleteHoliday(id);
-    if (ok) {
-      toast.success("Hari libur berhasil dihapus");
-      loadData();
-    }
-  }
-
-  async function handleToggleHoliday(h: HolidayRow, checked: boolean) {
-    const ok = await toggleHoliday(h.id, checked);
-    if (ok) {
-      toast.success(checked ? `${h.name} diaktifkan (SLA freeze)` : `${h.name} dinonaktifkan`);
-      setHolidays((prev) => prev.map((x) => (x.id === h.id ? { ...x, is_active: checked } : x)));
-    }
-  }
-
-  const activeHolidayCount = holidays.filter((h) => h.is_active).length;
-  // Bandingkan dengan tanggal WIB (UTC+7), bukan UTC — blueprint memakai WIB utk semua timer.
-  const wib = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const todayWib = `${wib.getUTCFullYear()}-${String(wib.getUTCMonth() + 1).padStart(2, "0")}-${String(wib.getUTCDate()).padStart(2, "0")}`;
-  const isTodayHoliday = holidays.some(
-    (h) => h.is_active && h.date === todayWib,
-  );
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -117,141 +118,111 @@ export function AdminSlaConfig() {
   }
 
   return (
-    <div className="grid md:grid-cols-2 gap-6">
-      <div className="rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <Clock className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold text-foreground">Target SLA</h3>
-        </div>
-        <p className="text-xs text-muted-foreground mb-5">
-          Batas waktu penyelesaian tiket per prioritas (jam). Libur aktif membekukan SLA secara
-          global.
-        </p>
+    <div className="rounded-lg border border-border bg-card p-6">
+      <div className="flex items-center gap-2 mb-1">
+        <Clock className="h-4 w-4 text-muted-foreground" />
+        <h3 className="text-sm font-semibold text-foreground">Target SLA</h3>
+      </div>
+      <p className="text-xs text-muted-foreground mb-3">
+        Batas waktu penyelesaian tiket per prioritas (jam). Hari libur (nasional, cuti bersama,
+        Sabtu/Minggu) otomatis membekukan SLA.
+      </p>
 
-        <div className="space-y-4">
-          {(["P1", "P2", "P3"] as const).map((priority) => {
-            const dirty = editHours[priority] !== savedHours[priority];
-            return (
-              <div key={priority} className={`rounded-lg border p-4 ${PRIORITY_COLORS[priority]}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold">{PRIORITY_LABELS[priority]}</span>
-                  <span className="text-[10px] font-mono text-muted-foreground">
-                    Default: {PRIORITY_DEFAULTS[priority]} jam
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    value={editHours[priority] ?? PRIORITY_DEFAULTS[priority]}
-                    onChange={(e) =>
-                      setEditHours((prev) => ({ ...prev, [priority]: Number(e.target.value) }))
-                    }
-                    className="w-24 h-9 px-3 rounded-lg border border-border bg-card text-sm text-center font-mono text-foreground outline-none focus:border-ring"
-                    min={1}
-                  />
-                  <span className="text-xs text-muted-foreground">jam</span>
-                  <button
-                    onClick={() => handleSavePreset(priority)}
-                    disabled={saving || !dirty}
-                    className="ml-auto h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition disabled:opacity-40 inline-flex items-center gap-1.5"
-                  >
-                    <Save className="h-3.5 w-3.5" /> Simpan
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      <div className="flex items-center gap-3 mb-5">
+        <button
+          onClick={() => handleSync()}
+          disabled={syncing}
+          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border text-xs text-muted-foreground hover:bg-muted transition disabled:opacity-50"
+        >
+          <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
+          Sinkronkan libur
+        </button>
+        <button
+          onClick={openHolidayCalendar}
+          title="Lihat kalender hari libur"
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition"
+        >
+          <CalendarDays className="h-3.5 w-3.5" />
+          {holidayCount} hari libur tersisa
+        </button>
       </div>
 
-      <div className="rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <Calendar className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold text-foreground">Kalender Libur</h3>
-        </div>
-        <div className="flex items-center gap-2 mb-5">
-          <p className="text-xs text-muted-foreground">Tanggal merah aktif membekukan SLA secara global.</p>
-          <div className="ml-auto flex items-center gap-1.5">
-            <Badge
-              variant={isTodayHoliday ? "default" : "secondary"}
-              className={`text-[10px] ${isTodayHoliday ? "bg-blue-600" : ""}`}
-            >
-              <Snowflake className="h-3 w-3 mr-1" />
-              {isTodayHoliday ? "SLA BEKU HARI INI" : "SLA Normal"}
-            </Badge>
-            <Badge variant="outline" className="text-[10px]">
-              {activeHolidayCount} libur aktif
-            </Badge>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 mb-4">
-          <input
-            value={newHolidayName}
-            onChange={(e) => setNewHolidayName(e.target.value)}
-            placeholder="Nama libur"
-            className="flex-1 h-9 px-3 rounded-lg border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
-          />
-          <input
-            type="date"
-            value={newHolidayDate}
-            onChange={(e) => setNewHolidayDate(e.target.value)}
-            className="h-9 px-3 rounded-lg border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
-          />
-          <button
-            onClick={handleAddHoliday}
-            disabled={!newHolidayName.trim() || !newHolidayDate || saving}
-            className="h-9 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-1"
-          >
-            <Plus className="h-3.5 w-3.5" /> Tambah
-          </button>
-        </div>
-
-        {holidays.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <Calendar className="h-10 w-10 mb-2" />
-            <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>
-            <p className="text-xs mt-1">Gunakan form di atas untuk mendaftarkan hari libur</p>
-          </div>
-        ) : (
-          <div className="space-y-2 max-h-[400px] overflow-y-auto">
-            {holidays.map((h) => (
-              <div
-                key={h.id}
-                className={`flex items-center gap-3 p-3 rounded-lg border transition ${h.is_active ? "border-blue-100 bg-blue-50/40" : "border-border bg-muted opacity-60"}`}
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium text-foreground truncate">{h.name}</p>
-                    {h.is_active && (
-                      <Badge className="text-[9px] bg-blue-600 px-1.5 py-0">FREEZE</Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {new Date(h.date).toLocaleDateString("id-ID", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })}
-                  </p>
-                </div>
-                <Switch
-                  checked={h.is_active}
-                  onCheckedChange={(checked) => handleToggleHoliday(h, checked)}
-                  aria-label={`Aktifkan libur ${h.name}`}
+      <div className="space-y-4">
+        {(["P1", "P2", "P3"] as const).map((priority) => {
+          const dirty = editHours[priority] !== savedHours[priority];
+          return (
+            <div key={priority} className={`rounded-lg border p-4 ${PRIORITY_COLORS[priority]}`}>
+              <h4 className="text-sm font-semibold mb-3">{PRIORITY_LABELS[priority]}</h4>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={editHours[priority] ?? PRIORITY_DEFAULTS[priority]}
+                  onChange={(e) =>
+                    setEditHours((prev) => ({ ...prev, [priority]: Number(e.target.value) }))
+                  }
+                  className="w-24 h-9 px-3 rounded-lg border border-border bg-card text-sm text-center font-mono text-foreground outline-none focus:border-ring"
+                  min={1}
                 />
+                <span className="text-xs text-muted-foreground">jam</span>
                 <button
-                  onClick={() => handleDeleteHoliday(h.id)}
-                  className="p-1.5 rounded hover:bg-red-50 transition text-red-500"
+                  onClick={() => handleSavePreset(priority)}
+                  disabled={saving || !dirty}
+                  className="ml-auto h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition disabled:opacity-40 inline-flex items-center gap-1.5"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Save className="h-3.5 w-3.5" /> Simpan
                 </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Hari Libur dan Cuti {year}</DialogTitle>
+            <DialogDescription>
+              {remaining.length} hari libur tersisa (hari ini s.d. akhir tahun).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-center pt-2">
+            <Calendar
+              holidayDates={new Set(remaining.map((h) => h.date))}
+              minValue={today(getLocalTimeZone())}
+              maxValue={new CalendarDate(year, 12, 31)}
+              isReadOnly
+            />
+          </div>
+          <p className="text-center text-[10px] text-muted-foreground">
+            Tanggal merah = hari libur (nasional &amp; cuti bersama)
+          </p>
+          <div className="max-h-64 overflow-y-auto space-y-1.5 border-t border-border pt-3">
+            {remaining.map((h) => (
+              <div key={h.id} className="flex items-center justify-between gap-3 text-xs">
+                <span className="flex items-center gap-2 min-w-0">
+                  <span className="text-foreground truncate">{h.name}</span>
+                  <span
+                    className={`text-[9px] px-1.5 py-px rounded border shrink-0 ${
+                      h.kind === "leave"
+                        ? "bg-amber-500/15 text-amber-600 border-amber-500/40"
+                        : "bg-blue-600/15 text-blue-600 border-blue-600/40"
+                    }`}
+                  >
+                    {h.kind === "leave" ? "Cuti" : "Nasional"}
+                  </span>
+                </span>
+                <span className="font-mono text-muted-foreground whitespace-nowrap">
+                  {new Date(`${h.date}T00:00:00`).toLocaleDateString("id-ID", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                  })}
+                </span>
               </div>
             ))}
           </div>
-        )}
-      </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

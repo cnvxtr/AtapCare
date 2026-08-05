@@ -4,17 +4,16 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket, type Priority, type TicketStatus } from '../../context/TicketContext'
 import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, ImagePlus, MapPin, FileText, Info } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, parseDescription } from '../../components/TicketDrawer'
+import { waMeLink } from '../../services/wa'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, selectTriggerFilter } from '../../components/ui/select'
+import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
+import { getCustomers, getSites, getUnits, type Customer, type SiteRow, type UnitRow } from '../../services/master-data'
 
-// MOCK MASTER DATA (Simulasi Database Master Data)
-const MASTER_DATA = [
-    { name: 'Merak', pic: 'Budi Santoso', wa_pic: '081234567890', units: ['VMS Gate 1', 'VMS Gate 2', 'CCTV Lobby'] },
-    { name: 'Bakauheni', pic: 'Siti Aminah', wa_pic: '081234567891', units: ['NVR Utama', 'Server Ruang IT', 'Access Control'] },
-    { name: 'Balongan', pic: 'Joko Anwar', wa_pic: '081234567892', units: ['CCTV Ruang Server', 'CCTV Lobby', 'Fire Alarm'] },
-]
+const MAX_PHOTOS = 5;
+const MAX_TOTAL_SIZE_MB = 10;
 
 // SEGMEN STATUS FLOW TIKET
 const SEGMENTS = [
@@ -23,7 +22,7 @@ const SEGMENTS = [
     { key: 'diproses', label: 'Diproses', role: 'HP', statuses: ['OPEN'] },
     { key: 'ditugaskan', label: 'Ditugaskan', role: 'PM', statuses: ['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE'] },
     { key: 'dikerjakan', label: 'Dikerjakan', role: 'TEK', statuses: ['WORKING'] },
-    { key: 'dijeda', label: 'Dijeda', role: '', statuses: ['PENDING'] },
+    { key: 'dijeda', label: 'Dijeda', role: 'PM', statuses: ['PENDING'] },
     { key: 'selesai', label: 'Selesai', role: 'HP', statuses: ['RESOLVED'] },
     { key: 'tutup', label: 'Tutup', role: '', statuses: ['CLOSED'] },
 ]
@@ -35,7 +34,7 @@ const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 const inputCls = 'input disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed'
 const readOnlyInputCls = 'input read-only:bg-muted read-only:text-muted-foreground read-only:cursor-not-allowed'
 
-export default function Inbox() {
+export default function HPInbox() {
     const { tickets, updateTicketStatus, getTicketCount, addTicket } = useTickets()
     const [activeSegment, setActiveSegment] = useState('semua')
     const [view, setView] = useState<'list' | 'kanban'>('kanban')
@@ -70,18 +69,32 @@ export default function Inbox() {
     // State Form Internal
     const [formData, setFormData] = useState({
         sumberLaporan: 'Internal', reporterName: '', jabatan: '', noWaPelapor: '',
-        site: '', unit: '', picName: '', picWa: '',
-        priority: 'P2' as Priority, description: '',
+        company: '', site: '', unit: '', picName: '', picWa: '',
+        priority: '' as Priority | '', description: '',
         catatanInternal: ''
     })
     const [photos, setPhotos] = useState<File[]>([])
+    const addPhotos = (incoming: File[]) => {
+        setPhotos(prev => {
+            const merged = [...prev, ...incoming];
+            if (merged.length > MAX_PHOTOS) { toast.error(`Maksimal ${MAX_PHOTOS} foto.`); return prev; }
+            const totalSize = merged.reduce((s, f) => s + f.size, 0);
+            if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) { toast.error(`Total ukuran foto maks ${MAX_TOTAL_SIZE_MB} MB.`); return prev; }
+            return merged;
+        });
+    }
+    // State Master Data (real, dari Supabase)
+    const [mdCustomers, setMdCustomers] = useState<Customer[]>([])
+    const [mdSites, setMdSites] = useState<SiteRow[]>([])
+    const [mdUnits, setMdUnits] = useState<UnitRow[]>([])
+    const [mdLoading, setMdLoading] = useState(true)
 
     // State Alur Buat Tiket Internal
     const [createStep, setCreateStep] = useState<'form' | 'review' | 'remote' | 'path' | 'void'>('form')
     const [submitting, setSubmitting] = useState(false)
     const [newVoidReason, setNewVoidReason] = useState('')
     const [newTicketId, setNewTicketId] = useState<string | null>(null)
-    const [formErrors, setFormErrors] = useState<{ reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string }>({})
+    const [formErrors, setFormErrors] = useState<{ reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string; priority?: string }>({})
     const [remoteCreateErrors, setRemoteCreateErrors] = useState<{ result?: string; duration?: string }>({})
     const [voidCreateError, setVoidCreateError] = useState('')
 
@@ -90,6 +103,18 @@ export default function Inbox() {
         audio.volume = 0.5
         if (getTicketCount('NEW') > 0) audio.play().catch(() => { })
     }, [tickets, getTicketCount])
+
+    useEffect(() => {
+        let alive = true
+        Promise.all([getCustomers(), getSites(), getUnits()]).then(([c, s, u]) => {
+            if (!alive) return
+            setMdCustomers(c)
+            setMdSites(s)
+            setMdUnits(u)
+            setMdLoading(false)
+        })
+        return () => { alive = false }
+    }, [])
 
     // FILTER & SORT LOGIC
     const activeSegmentStatuses = SEGMENTS.find(s => s.key === activeSegment)?.statuses || null
@@ -104,6 +129,7 @@ export default function Inbox() {
         .filter(t => isActive(t) && (!activeSegmentStatuses || activeSegmentStatuses.includes(t.status)) && matchesPrioritySearch(t))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     const kanbanTickets = tickets.filter(t => isActive(t) && matchesPrioritySearch(t))
+    const liveTicket = selectedTicket ? (tickets.find(t => t.id === selectedTicket.id) ?? selectedTicket) : null
 
     // ---- HANDLER BUAT TIKET INTERNAL (Alur: Form → Review → Remote/Path/Void) ----
     const doAddTicket = async (initialStatus: TicketStatus, extraDetail?: string) => {
@@ -112,8 +138,9 @@ export default function Inbox() {
         const catatan = [extraDetail, formData.catatanInternal].filter(Boolean).join('\n') || undefined
         const created = await addTicket({
             reporterName: formData.reporterName, company: 'Internal', site: formData.site, unit: formData.unit,
-            priority: formData.priority,
-            description: formData.description, photoUrl: undefined, initialStatus,
+            priority: (formData.priority || undefined) as Priority | undefined,
+            description: `Jabatan: ${formData.jabatan}\nWA Pelapor: ${formData.noWaPelapor}\n\n${formData.description}`,
+            photoUrl: undefined, initialStatus,
             catatanInternal: catatan,
             photos
         })
@@ -124,12 +151,30 @@ export default function Inbox() {
     const validateForm = (): boolean => {
         const errs: { reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string } = {}
         if (!formData.reporterName.trim()) errs.reporterName = 'Mohon isi Nama Pelapor'
-        if (!/^(\+62|62|0)8\d{7,12}$/.test(formData.noWaPelapor.replace(/\s/g, ''))) errs.noWaPelapor = 'No WhatsApp tidak valid. Contoh: 0812xxxxxxx.'
+        if (!/^(\+62|62|0)8\d{7,12}$/.test(formData.noWaPelapor.replace(/\s/g, ''))) errs.noWaPelapor = 'No WhatsApp tidak valid.'
         if (!formData.site) errs.site = 'Mohon pilih Site'
         if (!formData.unit) errs.unit = 'Mohon pilih Unit / Perangkat'
         if (!formData.description.trim()) errs.description = 'Mohon isi Deskripsi Kendala'
         setFormErrors(errs)
         return Object.keys(errs).length === 0
+    }
+
+    const requirePriority = () => {
+        if (formData.priority) return true
+        setFormErrors(prev => ({ ...prev, priority: 'Pilih prioritas untuk melanjutkan.' }))
+        setCreateStep('form')
+        return false
+    }
+
+    const handleValidateOpen = () => {
+        if (!selectedTicket) return
+        const wa = parseDescription(selectedTicket.description).waPelapor
+        if (wa) {
+            window.open(waMeLink(wa, `Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`), '_blank')
+        } else {
+            toast.info('Nomor WA pelapor tidak tersedia.')
+        }
+        updateTicketStatus(selectedTicket.id, 'OPEN', 'Tiket divalidasi, konfirmasi via WA ke pelapor')
     }
 
     const closeCreateModal = () => {
@@ -145,7 +190,7 @@ export default function Inbox() {
     }
 
     const handleEskalasiClick = () => {
-        if (!validateForm()) return
+        if (!validateForm() || !requirePriority()) return
         setCreateStep('review')
     }
 
@@ -154,7 +199,7 @@ export default function Inbox() {
     }
 
     const handleRemoteClick = () => {
-        if (!validateForm()) return
+        if (!validateForm() || !requirePriority()) return
         setRemoteMedia('WA'); setRemoteNotes(''); setRemoteDuration(''); setRemoteResult('')
         setCreateStep('remote')
     }
@@ -185,7 +230,7 @@ export default function Inbox() {
     }
 
     const handleVoidClick = () => {
-        if (!validateForm()) return
+        if (!validateForm() || !requirePriority()) return
         setNewVoidReason('')
         setCreateStep('void')
     }
@@ -199,23 +244,35 @@ export default function Inbox() {
     const resetForm = () => {
         setFormData({
             sumberLaporan: 'Internal', reporterName: '', jabatan: '', noWaPelapor: '',
-            site: '', unit: '', picName: '', picWa: '',
-            priority: 'P2', description: '',
+            company: '', site: '', unit: '', picName: '', picWa: '',
+            priority: '', description: '',
             catatanInternal: ''
         })
         setPhotos([])
     }
 
+    const handleCompanyChange = (customerId: string) => {
+        setFormData({ ...formData, company: customerId, site: '', unit: '', picName: '', picWa: '' })
+    }
+
     const handleSiteChange = (siteName: string) => {
-        const siteData = MASTER_DATA.find(s => s.name === siteName)
+        const site = mdSites.find(s => s.name === siteName)
         setFormData({
             ...formData,
             site: siteName,
             unit: '',
-            picName: siteData ? siteData.pic : '',
-            picWa: siteData ? siteData.wa_pic : ''
+            picName: site?.pic_name || '',
+            picWa: site?.pic_phone || ''
         })
     }
+
+    const selectedCompany = mdCustomers.find(c => c.id === formData.company)
+    const customerSites = selectedCompany ? mdSites.filter(s => s.customer_id === selectedCompany.id) : []
+    const selectedSite = mdSites.find(s => s.name === formData.site)
+    const siteUnits = selectedSite ? mdUnits.filter(u => u.site_id === selectedSite.id) : []
+    const companyOptions = mdCustomers.map(c => ({ value: c.id, label: c.name }))
+    const siteOptions = customerSites.map(s => ({ value: s.name, label: s.name }))
+    const unitOptions = siteUnits.map(u => ({ value: u.name, label: u.name }))
 
     const handleVoid = () => {
         if (!voidReason.trim()) { setVoidError('Mohon isi alasan pembatalan'); return }
@@ -273,13 +330,9 @@ export default function Inbox() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 flex flex-col h-[calc(100vh-7rem)]">
             {/* HEADER */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-border">
-                <div>
-                    <h2 className="text-3xl font-display font-bold tracking-tight text-foreground">Tiket</h2>
-                    <p className="text-sm text-muted-foreground mt-1">Pusat pengelolaan tiket keluhan</p>
-                </div>
+            <div className="flex justify-end">
                 <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
                     <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                     {getTicketCount('NEW') + getTicketCount('RESOLVED')} Perlu Tindakan
@@ -345,8 +398,8 @@ export default function Inbox() {
 
             {/* KANBAN / LIST */}
             {view === 'kanban' ? (
-                <div className="rounded-xl border border-border bg-card p-4">
-                    <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-4 xl:grid-cols-7">
+                <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
+                    <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-4 xl:grid-cols-7 flex-1 min-h-0">
                         {KANBAN_COLUMNS.map(col => {
                             const items = kanbanTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
@@ -359,9 +412,9 @@ export default function Inbox() {
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
-                                    <div className="p-1.5 space-y-1.5 min-h-[100px] max-h-[360px] overflow-y-auto no-scrollbar">
+                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto no-scrollbar">
                                         {items.map(t => {
-                                            const isUrgent = t.priority === 'P1' || t.slaTimeLeft <= 4
+                                            const isUrgent = t.priority === 'P1'
                                             return (
                                                 <div key={t.id} className={`rounded border border-border bg-card p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                 <div className="flex items-center justify-between gap-1 mb-1">
@@ -429,40 +482,51 @@ export default function Inbox() {
             )}
 
             {/* DRAWER DETAIL */}
-            {selectedTicket && (
+            {liveTicket && (
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}
-                    code={selectedTicket.code}
-                    status={selectedTicket.status}
-                    priority={selectedTicket.priority}
-                    createdAt={selectedTicket.createdAt}
+                    code={liveTicket.code}
+                    status={liveTicket.status}
+                    priority={liveTicket.priority}
+                    slaTimeLeft={liveTicket.slaTimeLeft}
+                    createdAt={liveTicket.createdAt}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
-                    activities={selectedTicket.activities}
+                    activities={liveTicket.activities}
                     footer={
                         <>
-                            {selectedTicket.status === 'NEW' && (
+                            {liveTicket.status === 'NEW' && (
                                 <>
-                                    <button onClick={() => { updateTicketStatus(selectedTicket.id, 'OPEN'); setSelectedTicket(null); }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">Validasi</button>
+                                    <button onClick={handleValidateOpen} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">Validasi & Kirim WA</button>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => { setVoidTicketId(selectedTicket.id); setVoidError(''); setShowVoidModal(true); }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-md font-medium hover:bg-red-50/60 transition">Batal</button>
+                                        <button onClick={() => { setVoidTicketId(liveTicket.id); setVoidError(''); setShowVoidModal(true); }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-md font-medium hover:bg-red-50/60 transition">Batal</button>
                                         <button onClick={() => { setDupError(''); setShowDuplicateModal(true); }} className="py-2.5 bg-transparent text-amber-600 border border-border rounded-md font-medium hover:bg-amber-50/60 transition">Gabung</button>
                                     </div>
                                 </>
                             )}
-                            {selectedTicket.status === 'OPEN' && (
+                            {liveTicket.status === 'OPEN' && !liveTicket.priority && (
+                                <div className="space-y-2">
+                                    <p className="text-xs font-semibold text-muted-foreground">Pilih prioritas untuk melanjutkan:</p>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {(['P1', 'P2', 'P3'] as const).map(p => (
+                                            <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-md border font-bold transition ${p === 'P1' ? 'bg-red-600 text-white border-red-600' : p === 'P2' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600'}`}>{p}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                            {liveTicket.status === 'OPEN' && liveTicket.priority && (
                                 <>
                                     <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">Remote Support</button>
-                                    <button onClick={() => { updateTicketStatus(selectedTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} className="w-full py-2.5 bg-transparent text-foreground border border-border rounded-md font-medium hover:bg-muted transition">Eskalasi ke PM</button>
+                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} className="w-full py-2.5 bg-transparent text-foreground border border-border rounded-md font-medium hover:bg-muted transition">Eskalasi ke PM</button>
                                 </>
                             )}
-                            {selectedTicket.status === 'RESOLVED' && (
+                            {liveTicket.status === 'RESOLVED' && (
                                 <>
-                                    <button onClick={() => { updateTicketStatus(selectedTicket.id, 'CLOSED', 'Tiket divalidasi dan ditutup oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 transition">Validasi & Tutup</button>
+                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'CLOSED', 'Tiket divalidasi dan ditutup oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 transition">Validasi & Tutup</button>
                                     <button onClick={() => { setValidationAction('rework'); setReworkReason(''); setReworkError(''); setShowValidationModal(true); }} className="w-full py-2.5 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition">Kembalikan / Rework</button>
                                 </>
                             )}
-                            {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'CLOSED', 'VOID', 'DUPLICATE'] as string[]).includes(selectedTicket.status) && (
+                            {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'CLOSED', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
                                 <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
                             )}
                         </>
@@ -470,52 +534,42 @@ export default function Inbox() {
                 >
                     {activeDrawerTab === 'detail' && (
                         <div className="space-y-4">
-                            <AssignmentCard items={selectedTicket.activities} />
+                            <AssignmentCard items={liveTicket.activities} />
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
                                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Pelapor</p>
-                                    <p className="font-medium text-sm">{selectedTicket.customer}</p>
+                                    <p className="font-medium text-sm">{liveTicket.customer}</p>
                                 </div>
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
                                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Site / Unit</p>
-                                    <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
+                                    <p className="font-medium text-sm">{liveTicket.site} - {liveTicket.unit}</p>
                                 </div>
                             </div>
-                            <TicketDescription description={selectedTicket.description} />
-                            {selectedTicket.rejectionReason && (
+                            <TicketDescription description={liveTicket.description} />
+                            {liveTicket.rejectionReason && (
                                 <div className="bg-red-50/60 p-4 rounded-lg border border-red-200">
                                     <p className="text-[10px] font-mono uppercase tracking-widest text-red-600 mb-1">Alasan Penolakan / VOID</p>
-                                    <p className="text-sm text-red-800">{selectedTicket.rejectionReason}</p>
+                                    <p className="text-sm text-red-800">{liveTicket.rejectionReason}</p>
                                 </div>
                             )}
-                            <div className="bg-muted/60 p-4 rounded-lg border border-border">
-                                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Galeri Foto</p>
-                                {selectedTicket.photoUrl ? (
-                                    <img src={selectedTicket.photoUrl} alt="Foto dokumentasi tiket" className="rounded-md border border-border w-full object-cover max-h-48" />
-                                ) : (
-                                    <p className="text-xs text-muted-foreground italic">Belum ada foto dokumentasi.</p>
-                                )}
-                            </div>
-                            <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-200">
-                                <p className="text-[10px] font-mono uppercase tracking-widest text-amber-700 mb-2">Catatan Internal</p>
-                                {selectedTicket.activities.filter(a => a.details?.startsWith('Catatan Internal')).length === 0 ? (
-                                    <p className="text-xs text-amber-700/70 italic">Belum ada catatan internal.</p>
-                                ) : (
-                                    selectedTicket.activities.filter(a => a.details?.startsWith('Catatan Internal')).map((a, i) => (
+                            {liveTicket.activities.filter(a => a.details?.startsWith('Catatan Internal')).length > 0 && (
+                                <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-200">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-amber-700 mb-2">Catatan Internal</p>
+                                    {liveTicket.activities.filter(a => a.details?.startsWith('Catatan Internal')).map((a, i) => (
                                         <p key={i} className="text-sm text-amber-900 mb-1">{a.details}</p>
-                                    ))
-                                )}
-                            </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     )}
-                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} />}
-                    {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={liveTicket.activities} />}
+                    {activeDrawerTab === 'activity' && <TicketActivityLog items={liveTicket.activities} />}
                 </TicketDrawer>
             )}
 
             {/* MODAL VOID, DUPLICATE, REMOTE, VALIDASI (Sama seperti sebelumnya) */}
             {showVoidModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4 text-red-600">VOID Tiket (Permanen)</h3>
                         <textarea value={voidReason} onChange={e => { setVoidReason(e.target.value); setVoidError('') }} placeholder="Alasan wajib..." rows={3} className={`w-full px-3 py-2 border-2 ${voidError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea>
@@ -528,7 +582,7 @@ export default function Inbox() {
                 </div>
             ), document.body)}
             {showDuplicateModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4 text-amber-600">Tandai Duplikat</h3>
                         <Select value={duplicateTargetId} onValueChange={(v) => { setDuplicateTargetId(v); setDupError('') }}>
@@ -548,7 +602,7 @@ export default function Inbox() {
                 </div>
             ), document.body)}
             {showRemoteModal && !showConfirmPath && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4">Remote Support</h3>
                         <div className="space-y-4">
@@ -562,7 +616,7 @@ export default function Inbox() {
                 </div>
             ), document.body)}
             {showConfirmPath && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-2">Remote Berhasil! Pilih Jalur:</h3>
                         <div className="space-y-3 mt-4">
@@ -574,12 +628,12 @@ export default function Inbox() {
                 </div>
             ), document.body)}
             {showValidationModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4">Validasi Penyelesaian</h3>
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-2"><button onClick={() => setValidationAction('close')} className={`py-3 rounded border font-medium ${validationAction === 'close' ? 'bg-emerald-100 border-emerald-500 text-emerald-700' : 'bg-card border-border'}`}>Close Ticket</button><button onClick={() => setValidationAction('rework')} className={`py-3 rounded border font-medium ${validationAction === 'rework' ? 'bg-amber-100 border-amber-500 text-amber-700' : 'bg-card border-border'}`}>Return Rework</button></div>
-                            {validationAction === 'rework' && <div><label className="text-xs font-semibold text-muted-foreground">Alasan Rework *</label><textarea value={reworkReason} onChange={e => { setReworkReason(e.target.value); setReworkError('') }} rows={2} className={`w-full mt-1 px-3 py-2 border-2 ${reworkError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea><FieldError msg={reworkError} /></div>}
+                            {validationAction === 'rework' && <div><label className="text-xs font-semibold text-muted-foreground">Alasan Rework</label><textarea value={reworkReason} onChange={e => { setReworkReason(e.target.value); setReworkError('') }} rows={2} className={`w-full mt-1 px-3 py-2 border-2 ${reworkError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea><FieldError msg={reworkError} /></div>}
                             <div className="flex gap-3 pt-2"><button onClick={() => { setShowValidationModal(false); setReworkError('') }} className="flex-1 py-2 bg-muted rounded">Batal</button><button onClick={handleValidationSubmit} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Proses</button></div>
                         </div>
                     </div>
@@ -590,7 +644,7 @@ export default function Inbox() {
             {/* MODAL BUAT TIKET INTERNAL (ALUR 5 LANGKAH) */}
             {/* ========================================== */}
             {isModalOpen && createPortal((
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm fade-in" onClick={closeCreateModal}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 fade-in" onClick={closeCreateModal}>
                     <div className="relative bg-card w-full max-w-2xl rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh] overflow-hidden fade-in" onClick={(e) => e.stopPropagation()}>
                         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/40 to-transparent" />
                         <div className="pointer-events-none absolute -top-20 -right-20 w-56 h-56 rounded-full bg-blue-500/10 blur-3xl" />
@@ -620,7 +674,7 @@ export default function Inbox() {
                                         <h4 className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase tracking-widest text-muted-foreground"><User className="w-3.5 h-3.5" /> Pelapor</h4>
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
-                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Sumber Laporan *</label>
+                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Sumber Laporan</label>
                                                 <Select value={formData.sumberLaporan} onValueChange={v => setFormData({ ...formData, sumberLaporan: v })}>
                                                     <SelectTrigger className={inputCls}><SelectValue /></SelectTrigger>
                                                     <SelectContent className="z-[130] border-border bg-card text-foreground">
@@ -629,7 +683,7 @@ export default function Inbox() {
                                                 </Select>
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nama Pelapor *</label>
+                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nama Pelapor</label>
                                                 <input type="text" value={formData.reporterName} onChange={e => { setFormData({ ...formData, reporterName: e.target.value }); setFormErrors(prev => ({ ...prev, reporterName: undefined })) }} className={`${inputCls} ${formErrors.reporterName ? 'border-red-500' : ''}`} />
                                                 <FieldError msg={formErrors.reporterName} />
                                             </div>
@@ -639,32 +693,53 @@ export default function Inbox() {
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">No WhatsApp Pelapor *</label>
-                                            <input type="text" value={formData.noWaPelapor} onChange={e => { setFormData({ ...formData, noWaPelapor: e.target.value }); setFormErrors(prev => ({ ...prev, noWaPelapor: undefined })) }} className={`${inputCls} ${formErrors.noWaPelapor ? 'border-red-500' : ''}`} placeholder="0812xxxxxxx" />
+                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">No WhatsApp Pelapor</label>
+                                            <input type="text" value={formData.noWaPelapor} onChange={e => { setFormData({ ...formData, noWaPelapor: e.target.value }); setFormErrors(prev => ({ ...prev, noWaPelapor: undefined })) }} className={`${inputCls} ${formErrors.noWaPelapor ? 'border-red-500' : ''}`} placeholder="" />
                                             <FieldError msg={formErrors.noWaPelapor} />
                                         </div>
                                     </section>
                                     <section className="rounded-xl border border-border bg-muted/40 p-4 space-y-4">
                                         <h4 className="flex items-center gap-2 text-[10px] font-mono font-semibold uppercase tracking-widest text-muted-foreground"><MapPin className="w-3.5 h-3.5" /> Lokasi Kerja</h4>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {!mdLoading && mdSites.length === 0 && (
+                                            <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                                <AlertTriangle className="h-4 w-4 shrink-0" />
+                                                <span>Belum ada Site terdaftar. Lengkapi Master Data (Admin) terlebih dahulu.</span>
+                                            </div>
+                                        )}
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                             <div>
-                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Site *</label>
-                                                <Select value={formData.site} onValueChange={(v) => { handleSiteChange(v); setFormErrors(prev => ({ ...prev, site: undefined, unit: undefined })) }}>
-                                                    <SelectTrigger className={`${inputCls} ${formErrors.site ? 'border-red-500' : ''}`}><SelectValue placeholder="Pilih Site..." /></SelectTrigger>
-                                                    <SelectContent className="z-[130] border-border bg-card text-foreground">
-                                                        {MASTER_DATA.map(s => <SelectItem key={s.name} value={s.name} className="focus:bg-foreground focus:text-background">{s.name}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
+                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Perusahaan</label>
+                                                <Combobox
+                                                    options={companyOptions}
+                                                    value={formData.company}
+                                                    onChange={(v) => { handleCompanyChange(v); setFormErrors(prev => ({ ...prev, site: undefined, unit: undefined })) }}
+                                                    placeholder="Pilih Perusahaan..."
+                                                    disabled={mdLoading || mdCustomers.length === 0}
+                                                    emptyText="Belum ada Perusahaan terdaftar"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Site</label>
+                                                <Combobox
+                                                    options={siteOptions}
+                                                    value={formData.site}
+                                                    onChange={(v) => { handleSiteChange(v); setFormErrors(prev => ({ ...prev, site: undefined, unit: undefined })) }}
+                                                    placeholder="Pilih Site..."
+                                                    disabled={mdLoading || mdSites.length === 0 || !formData.company}
+                                                    emptyText="Belum ada Site untuk perusahaan ini"
+                                                />
                                                 <FieldError msg={formErrors.site} />
                                             </div>
                                             <div>
-                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unit / Perangkat *</label>
-                                                <Select value={formData.unit} onValueChange={u => { setFormData({ ...formData, unit: u }); setFormErrors(prev => ({ ...prev, unit: undefined })) }} disabled={!formData.site}>
-                                                    <SelectTrigger className={`${inputCls} ${formErrors.unit ? 'border-red-500' : ''}`}><SelectValue placeholder="Pilih Unit..." /></SelectTrigger>
-                                                    <SelectContent className="z-[130] border-border bg-card text-foreground">
-                                                        {MASTER_DATA.find(s => s.name === formData.site)?.units.map(u => <SelectItem key={u} value={u} className="focus:bg-foreground focus:text-background">{u}</SelectItem>)}
-                                                    </SelectContent>
-                                                </Select>
+                                                <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Unit / Perangkat</label>
+                                                <Combobox
+                                                    options={unitOptions}
+                                                    value={formData.unit}
+                                                    onChange={u => { setFormData({ ...formData, unit: u }); setFormErrors(prev => ({ ...prev, unit: undefined })) }}
+                                                    placeholder="Pilih Unit..."
+                                                    disabled={!formData.site}
+                                                    emptyText="Belum ada unit di site ini"
+                                                />
                                                 <FieldError msg={formErrors.unit} />
                                             </div>
                                         </div>
@@ -692,7 +767,7 @@ export default function Inbox() {
                                                     ['P3', 'Low', 'bg-blue-600 border-blue-600', 'bg-blue-600']] as const).map(([v, sub, active, dot]) => {
                                                     const on = formData.priority === v
                                                     return (
-                                                        <button key={v} onClick={() => setFormData({ ...formData, priority: v })}
+                                                        <button key={v} onClick={() => { setFormData({ ...formData, priority: v }); setFormErrors(prev => ({ ...prev, priority: undefined })) }}
                                                             className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-semibold transition ${on ? `text-white shadow-sm ${active}` : 'bg-card border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'}`}>
                                                             <span className={`w-1.5 h-1.5 rounded-full ${on ? 'bg-white' : dot}`} />
                                                             {v} · {sub}
@@ -700,18 +775,23 @@ export default function Inbox() {
                                                     )
                                                 })}
                                             </div>
+                                            {formErrors.priority ? (
+                                                <FieldError msg={formErrors.priority} />
+                                            ) : (
+                                                <p className="text-[10px] text-muted-foreground mt-1">Wajib dipilih jika akan Eskalasi / Remote / Void. Simpan sebagai NEW dapat tanpa prioritas.</p>
+                                            )}
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Upload Foto</label>
+                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Upload Foto ({photos.length}/{MAX_PHOTOS})</label>
                                             <label
                                                 htmlFor="upload-photo-input"
                                                 onDragOver={(e) => e.preventDefault()}
-                                                onDrop={(e) => { e.preventDefault(); setPhotos([...photos, ...Array.from(e.dataTransfer.files)]) }}
+                                                onDrop={(e) => { e.preventDefault(); addPhotos(Array.from(e.dataTransfer.files)) }}
                                                 className="group flex flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground hover:border-foreground/50 hover:bg-muted/40 hover:text-foreground transition cursor-pointer"
                                             >
                                                 <span className="inline-flex p-2.5 rounded-full bg-muted group-hover:bg-accent transition"><ImagePlus className="w-5 h-5" /></span>
                                                 <span>Tarik & lepas foto di sini, atau klik untuk memilih</span>
-                                                <input id="upload-photo-input" type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { setPhotos([...photos, ...Array.from(e.target.files || [])]); e.target.value = '' }} />
+                                                <input id="upload-photo-input" type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
                                             </label>
                                             {photos.length > 0 && (
                                                 <div className="mt-2.5 flex flex-wrap gap-2">
@@ -725,7 +805,7 @@ export default function Inbox() {
                                             )}
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Deskripsi Kendala *</label>
+                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Deskripsi Kendala</label>
                                             <textarea value={formData.description} onChange={e => { setFormData({ ...formData, description: e.target.value }); setFormErrors(prev => ({ ...prev, description: undefined })) }} maxLength={2000} rows={3} className={`input resize-none ${formErrors.description ? 'border-red-500' : ''}`}></textarea>
                                             <FieldError msg={formErrors.description} />
                                             <p className="mt-1.5 text-right"><span className="inline-flex px-1.5 py-0.5 rounded-md bg-muted text-[10px] font-mono text-muted-foreground">{formData.description.length}/2000</span></p>
@@ -769,6 +849,7 @@ export default function Inbox() {
                                     {[
                                         ['Pelapor', formData.reporterName],
                                         ['No WhatsApp', formData.noWaPelapor],
+                                        ['Perusahaan', selectedCompany?.name || formData.company || '—'],
                                         ['Site / Unit', `${formData.site} - ${formData.unit}`],
                                         ['Prioritas', formData.priority],
                                         ['Deskripsi', formData.description],
@@ -799,7 +880,7 @@ export default function Inbox() {
                                         <div className="flex gap-2">{['WA', 'Telepon', 'VC'].map(m => (<button key={m} onClick={() => setRemoteMedia(m)} className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition ${remoteMedia === m ? 'bg-foreground text-primary-foreground border-foreground' : 'bg-card border-border hover:border-foreground/50'}`}>{m}</button>))}</div>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Durasi (Menit) *</label>
+                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Durasi (Menit)</label>
                                         <input type="number" min="1" value={remoteDuration} onChange={e => { setRemoteDuration(e.target.value); setRemoteCreateErrors(prev => ({ ...prev, duration: undefined })) }} className={`${inputCls} ${remoteCreateErrors.duration ? 'border-red-500' : ''}`} />
                                         <FieldError msg={remoteCreateErrors.duration} />
                                     </div>
@@ -808,7 +889,7 @@ export default function Inbox() {
                                         <textarea value={remoteNotes} onChange={e => setRemoteNotes(e.target.value)} rows={3} className="input resize-none"></textarea>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hasil *</label>
+                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hasil</label>
                                         <div className="grid grid-cols-2 gap-2">
                                             <button onClick={() => { setRemoteResult('success'); setRemoteCreateErrors(prev => ({ ...prev, result: undefined })) }} className={`py-2.5 rounded-lg border text-sm font-semibold transition ${remoteResult === 'success' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-card border-border hover:border-emerald-400'}`}>Berhasil</button>
                                             <button onClick={() => { setRemoteResult('fail'); setRemoteCreateErrors(prev => ({ ...prev, result: undefined })) }} className={`py-2.5 rounded-lg border text-sm font-semibold transition ${remoteResult === 'fail' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-card border-border hover:border-red-400'}`}>Gagal</button>
@@ -850,7 +931,7 @@ export default function Inbox() {
                                         <span>Tiket akan dibatalkan (VOID) dan menjadi final permanen. Tidak dapat diubah kembali.</span>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Alasan Pembatalan *</label>
+                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Alasan Pembatalan</label>
                                         <textarea value={newVoidReason} onChange={e => { setNewVoidReason(e.target.value); setVoidCreateError('') }} rows={3} className={`w-full px-3 py-2.5 bg-background border rounded-lg text-sm outline-none transition focus:ring-2 resize-none ${voidCreateError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-red-300 focus:border-red-500 focus:ring-red-500/10'}`} placeholder="Contoh: Pelapor mengirim laporan ganda..." />
                                         <FieldError msg={voidCreateError} />
                                     </div>

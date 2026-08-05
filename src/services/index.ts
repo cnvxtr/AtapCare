@@ -6,4 +6,10 @@ export * from "./dashboard";
 export * from "./reports";
 export * from "./users";
 export * from "./ticketService";
-export { exportCsv, exportXlsx, todayStamp, type ExportCell } from "@/lib/export";
+export {
+  exportCsv,
+  exportXlsx,
+  exportStyledXlsx,
+  todayStamp,
+  type ExportCell,
+} from "@/lib/export";

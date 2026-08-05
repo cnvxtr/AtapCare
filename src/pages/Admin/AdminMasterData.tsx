@@ -1,4 +1,4 @@
-import React, { Fragment, useRef, useState, useEffect } from "react";
+import React, { Fragment, useState, useEffect } from "react";
 import {
   Building2,
   MapPin,
@@ -6,10 +6,9 @@ import {
   Plus,
   Pencil,
   Trash2,
-  Upload,
-  Download,
   Loader2,
   Search,
+  MoreHorizontal,
   ChevronRight,
   ChevronDown,
   Database,
@@ -20,8 +19,14 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import {
   countActiveTicketsFor,
   createCustomer,
@@ -39,9 +44,7 @@ import {
   type Customer,
   type SiteRow,
   type UnitRow,
-  type Region,
 } from "@/services";
-import { exportCsv, todayStamp, type ExportCell } from "@/lib/export";
 
 type FormMode = "customer" | "site" | "unit";
 type ActionVariant = "green" | "neutral" | "red" | "brand";
@@ -55,20 +58,6 @@ const WIZARD_STEPS: Array<{ n: WizardStep; label: string }> = [
 ];
 
 const ITEMS_PER_PAGE = 20;
-
-const EXPORT_HEADERS = [
-  "Tipe",
-  "Nama",
-  "Customer",
-  "Site",
-  "Region",
-  "Serial Number",
-  "Tipe Unit",
-  "Nama PIC",
-  "No WA PIC",
-  "Alamat",
-  "No Telepon",
-];
 
 const VARIANT_CLASS: Record<ActionVariant, string> = {
   green: "border-emerald-100 text-emerald-700 hover:bg-emerald-50",
@@ -109,75 +98,98 @@ function ActionButton({
   );
 }
 
-function parseCsv(text: string): string[][] {
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cur = "";
-  let inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          cur += '"';
-          i++;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        cur += ch;
-      }
-    } else if (ch === '"') {
-      inQuotes = true;
-    } else if (ch === ",") {
-      row.push(cur);
-      cur = "";
-    } else if (ch === "\n" || ch === "\r") {
-      if (ch === "\r" && text[i + 1] === "\n") i++;
-      row.push(cur);
-      cur = "";
-      if (row.some((c) => c.trim() !== "")) rows.push(row);
-      row = [];
-    } else {
-      cur += ch;
-    }
-  }
-  row.push(cur);
-  if (row.some((c) => c.trim() !== "")) rows.push(row);
-  return rows;
+function RowActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-label="Aksi"
+          className="h-8 w-8 grid place-items-center rounded-lg bg-black text-white hover:bg-neutral-800 transition"
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="end"
+        className="min-w-[140px] bg-card border-border text-card-foreground"
+      >
+        <DropdownMenuItem
+          onClick={onEdit}
+          className="cursor-pointer focus:bg-black focus:text-white"
+        >
+          <Pencil className="h-3.5 w-3.5" /> Edit
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={onDelete}
+          className="cursor-pointer text-red-500 focus:bg-red-100 focus:text-red-500"
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Hapus
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
-function normalizeKey(s: string): string {
-  return (s || "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
+function MenuSelect({
+  value,
+  options,
+  onSelect,
+  disabled,
+}: {
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onSelect: (v: string) => void;
+  disabled?: boolean;
+}) {
+  const current = options.find((o) => o.value === value);
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          disabled={disabled}
+          className={`${FIELD_CLASS} flex items-center justify-between gap-2 cursor-pointer disabled:opacity-50`}
+        >
+          <span className="truncate text-left">{current ? current.label : "—"}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="min-w-[var(--radix-dropdown-menu-trigger-width)] bg-card border-border text-card-foreground"
+      >
+        {options.map((o) => (
+          <DropdownMenuItem
+            key={o.value}
+            onClick={() => onSelect(o.value)}
+            className="cursor-pointer focus:bg-black focus:text-white"
+          >
+            {o.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 export function AdminMasterData() {
   const [customers, setCustomers] = useState<Customer[]>([]);
-  const [regions, setRegions] = useState<Region[]>([]);
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [units, setUnits] = useState<UnitRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQ, setSearchQ] = useState("");
-  const [showDeleted, setShowDeleted] = useState(false);
+  const showDeleted = false;
   const [expandedTop, setExpandedTop] = useState<Set<string>>(new Set());
   const [expandedSites, setExpandedSites] = useState<Set<string>>(new Set());
   const [page, setPage] = useState(1);
-  const [importing, setImporting] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
-
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [formMode, setFormMode] = useState<FormMode>("customer");
-  const [formParentCustomerId, setFormParentCustomerId] = useState<string | null>(null);
-  const [formParentSiteId, setFormParentSiteId] = useState<string | null>(null);
+  const [formParentCustomerId] = useState<string | null>(null);
+  const [formParentSiteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [formName, setFormName] = useState("");
   const [formAddress, setFormAddress] = useState("");
-  const [formRegionId, setFormRegionId] = useState("");
   const [formCustomerId, setFormCustomerId] = useState("");
   const [formPicName, setFormPicName] = useState("");
   const [formPicPhone, setFormPicPhone] = useState("");
@@ -186,12 +198,13 @@ export function AdminMasterData() {
 
   // Wizard Customer → Site → Unit
   const [wizStep, setWizStep] = useState<WizardStep>(1);
+  const [wizEditLabel, setWizEditLabel] = useState<"customer" | "site" | "unit">("customer");
   const [wizCustomerName, setWizCustomerName] = useState("");
-  const [wizCustomerAddress, setWizCustomerAddress] = useState("");
-  const [wizCustomerPhone, setWizCustomerPhone] = useState("");
+  const [wizCustomerCode, setWizCustomerCode] = useState("");
+  const [wizCustomerPicName, setWizCustomerPicName] = useState("");
+  const [wizCustomerPicPhone, setWizCustomerPicPhone] = useState("");
   const [wizSiteName, setWizSiteName] = useState("");
   const [wizSiteAddress, setWizSiteAddress] = useState("");
-  const [wizSiteRegionId, setWizSiteRegionId] = useState("");
   const [wizPicName, setWizPicName] = useState("");
   const [wizPicPhone, setWizPicPhone] = useState("");
   const [wizUnitName, setWizUnitName] = useState("");
@@ -207,14 +220,12 @@ export function AdminMasterData() {
 
   async function loadAll() {
     setLoading(true);
-    const [cData, rData, sData, uData] = await Promise.all([
+    const [cData, sData, uData] = await Promise.all([
       supabase.from("customers").select("*").order("name"),
-      supabase.from("regions").select("id, customer_id, name, is_deleted").order("name"),
       supabase.from("sites").select("*").order("name"),
       supabase.from("units").select("*").order("name"),
     ]);
     if (cData.data) setCustomers(cData.data as Customer[]);
-    if (rData.data) setRegions(rData.data as Region[]);
     if (sData.data) setSites(sData.data as SiteRow[]);
     if (uData.data) setUnits(uData.data as UnitRow[]);
     setLoading(false);
@@ -223,15 +234,12 @@ export function AdminMasterData() {
   function resetForm() {
     setFormName("");
     setFormAddress("");
-    setFormRegionId("");
     setFormCustomerId("");
     setFormPicName("");
     setFormPicPhone("");
     setFormSerialNumber("");
     setFormType("");
     setEditingId(null);
-    setFormParentCustomerId(null);
-    setFormParentSiteId(null);
   }
 
   // ─── Wizard Customer → Site → Unit ──────────────────────────
@@ -239,7 +247,6 @@ export function AdminMasterData() {
   function clearSiteFields() {
     setWizSiteName("");
     setWizSiteAddress("");
-    setWizSiteRegionId("");
     setWizPicName("");
     setWizPicPhone("");
   }
@@ -252,9 +259,11 @@ export function AdminMasterData() {
 
   function resetWizard() {
     setWizStep(1);
+    setWizEditLabel("customer");
     setWizCustomerName("");
-    setWizCustomerAddress("");
-    setWizCustomerPhone("");
+    setWizCustomerCode("");
+    setWizCustomerPicName("");
+    setWizCustomerPicPhone("");
     clearSiteFields();
     clearUnitFields();
     setWizSiteTarget(NEW_ID);
@@ -265,7 +274,6 @@ export function AdminMasterData() {
   function prefillSite(s: SiteRow) {
     setWizSiteName(s.name);
     setWizSiteAddress(s.address || "");
-    setWizSiteRegionId(s.region_id || "");
     setWizPicName(s.pic_name);
     setWizPicPhone(s.pic_phone);
   }
@@ -283,8 +291,9 @@ export function AdminMasterData() {
     if (mode === "edit" && c) {
       setEditingId(c.id);
       setWizCustomerName(c.name);
-      setWizCustomerAddress(c.address || "");
-      setWizCustomerPhone(c.phone || "");
+      setWizCustomerCode(c.code || "");
+      setWizCustomerPicName(c.pic_name || "");
+      setWizCustomerPicPhone(c.pic_phone || "");
       const cSites = sites.filter((s) => s.customer_id === c.id && !s.is_deleted);
       if (cSites.length > 0) {
         setWizSiteTarget(cSites[0].id);
@@ -348,47 +357,37 @@ export function AdminMasterData() {
     openCustomerWizard("add");
   }
 
-  function openAddSite(parentCustomerId: string | null) {
-    resetForm();
-    setFormMode("site");
-    setFormParentCustomerId(parentCustomerId);
-    if (parentCustomerId) setFormCustomerId(parentCustomerId);
-    setDrawerOpen(true);
-  }
-
-  function openAddUnit(siteId: string) {
-    resetForm();
-    setFormMode("unit");
-    setFormParentSiteId(siteId);
-    setDrawerOpen(true);
-  }
-
   function startEditCustomer(c: Customer) {
     openCustomerWizard("edit", c);
   }
 
   function startEditSite(s: SiteRow) {
-    resetForm();
-    setFormMode("site");
-    setFormName(s.name);
-    setFormAddress(s.address || "");
-    setFormRegionId(s.region_id || "");
-    setFormCustomerId(s.customer_id || "");
-    setFormPicName(s.pic_name);
-    setFormPicPhone(s.pic_phone);
-    setEditingId(s.id);
-    setDrawerOpen(true);
+    const cust = customers.find((c) => c.id === s.customer_id);
+    if (!cust) {
+      toast.error("Data customer dari site ini tidak ditemukan");
+      return;
+    }
+    openCustomerWizard("edit", cust);
+    setWizEditLabel("site");
+    setWizSiteTarget(s.id);
+    prefillSite(s);
+    setWizStep(2);
   }
 
   function startEditUnit(u: UnitRow) {
-    resetForm();
-    setFormMode("unit");
-    setFormName(u.name);
-    setFormSerialNumber(u.serial_number || "");
-    setFormType(u.type || "");
-    setFormParentSiteId(u.site_id);
-    setEditingId(u.id);
-    setDrawerOpen(true);
+    const site = sites.find((x) => x.id === u.site_id);
+    const cust = site ? customers.find((c) => c.id === site.customer_id) : undefined;
+    if (!site || !cust) {
+      toast.error("Data site/customer dari unit ini tidak ditemukan");
+      return;
+    }
+    openCustomerWizard("edit", cust);
+    setWizEditLabel("unit");
+    setWizSiteTarget(site.id);
+    prefillSite(site);
+    setWizUnitTarget(u.id);
+    prefillUnit(u);
+    setWizStep(3);
   }
 
   async function handleSave() {
@@ -413,7 +412,6 @@ export function AdminMasterData() {
         pic_name: formPicName,
         pic_phone: formPicPhone,
         customer_id: customerId,
-        region_id: formRegionId || null,
       };
       const ok = editingId ? await updateSite(editingId, input) : await createSite(input);
       if (!ok) {
@@ -449,6 +447,10 @@ export function AdminMasterData() {
 
   async function handleWizardSave() {
     if (!wizCustomerName.trim()) return;
+    if (!wizCustomerPicName.trim() || !wizCustomerPicPhone.trim()) {
+      toast.error("Customer wajib memiliki PIC dan No WA PIC");
+      return;
+    }
     if (!wizSiteStepValid()) {
       toast.error("Site wajib memiliki PIC dan No WA PIC");
       return;
@@ -465,8 +467,9 @@ export function AdminMasterData() {
     if (isEdit) {
       const ok = await updateCustomer(editingId, {
         name: wizCustomerName,
-        address: wizCustomerAddress,
-        phone: wizCustomerPhone,
+        code: wizCustomerCode || undefined,
+        pic_name: wizCustomerPicName,
+        pic_phone: wizCustomerPicPhone,
       });
       if (!ok) {
         setSaving(false);
@@ -476,8 +479,9 @@ export function AdminMasterData() {
     } else {
       const newId = await createCustomer({
         name: wizCustomerName,
-        address: wizCustomerAddress,
-        phone: wizCustomerPhone,
+        code: wizCustomerCode || undefined,
+        pic_name: wizCustomerPicName,
+        pic_phone: wizCustomerPicPhone,
       });
       if (!newId) {
         setSaving(false);
@@ -502,7 +506,6 @@ export function AdminMasterData() {
         pic_name: wizPicName,
         pic_phone: wizPicPhone,
         customer_id: custId,
-        region_id: wizSiteRegionId || null,
       };
       if (isEdit && wizSiteTarget !== NEW_ID) {
         const orig = sites.find((s) => s.id === wizSiteTarget);
@@ -511,8 +514,7 @@ export function AdminMasterData() {
           orig.name !== wizSiteName ||
           orig.address !== wizSiteAddress ||
           orig.pic_name !== wizPicName ||
-          orig.pic_phone !== wizPicPhone ||
-          (orig.region_id ?? null) !== (wizSiteRegionId || null);
+          orig.pic_phone !== wizPicPhone;
         if (changed) {
           const ok = await updateSite(wizSiteTarget, siteInput);
           if (!ok) {
@@ -636,214 +638,7 @@ export function AdminMasterData() {
     });
   }
 
-  // ─── CSV Export ─────────────────────────────────────────────
-
-  function handleExportCsv() {
-    const customerName = new Map(customers.map((c) => [c.id, c.name]));
-    const regionNameMap = new Map(regions.filter((r) => !r.is_deleted).map((r) => [r.id, r.name]));
-    const rows: ExportCell[][] = [];
-    for (const c of customers) {
-      rows.push([
-        "Customer",
-        c.name,
-        c.name,
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        c.address || "",
-        c.phone || "",
-      ]);
-    }
-    for (const s of sites) {
-      rows.push([
-        "Site",
-        s.name,
-        customerName.get(s.customer_id || "") || "",
-        s.name,
-        regionNameMap.get(s.region_id || "") || "",
-        "",
-        "",
-        s.pic_name || "",
-        s.pic_phone || "",
-        s.address || "",
-        "",
-      ]);
-    }
-    for (const u of units) {
-      const site = sites.find((x) => x.id === u.site_id);
-      rows.push([
-        "Unit",
-        u.name,
-        site ? customerName.get(site.customer_id || "") || "" : "",
-        site?.name || "",
-        "",
-        u.serial_number || "",
-        u.type || "",
-        "",
-        "",
-        "",
-        "",
-      ]);
-    }
-    exportCsv([EXPORT_HEADERS, ...rows], `atapcare-master-data-${todayStamp()}`);
-    toast.success(`${rows.length} baris diekspor ke CSV`);
-  }
-
-  // ─── CSV Import ─────────────────────────────────────────────
-
-  async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setImporting(true);
-    try {
-      const text = await file.text();
-      await importCsv(text);
-    } catch {
-      toast.error("Gagal membaca file CSV");
-    } finally {
-      setImporting(false);
-    }
-  }
-
-  async function importCsv(text: string) {
-    const raw = parseCsv(text);
-    if (raw.length < 2) {
-      toast.error("File CSV tidak valid atau kosong");
-      return;
-    }
-    const headers = raw[0].map(normalizeKey);
-    const col = (k: string) => headers.indexOf(normalizeKey(k));
-    const cell = (row: Record<string, string>, k: string) => {
-      const i = col(k);
-      return i >= 0 ? row[headers[i]] || "" : "";
-    };
-    const data = raw.slice(1).map((row) => {
-      const obj: Record<string, string> = {};
-      headers.forEach((h, i) => {
-        obj[h] = (row[i] || "").trim();
-      });
-      return obj;
-    });
-
-    let createdCustomers = 0;
-    let createdSites = 0;
-    let createdUnits = 0;
-    let skipped = 0;
-
-    const { data: existingCust } = await supabase.from("customers").select("id, name");
-    const knownCust = new Map(
-      (existingCust || []).map((c: { id: string; name: string }) => [normalizeKey(c.name), c.id]),
-    );
-    for (const row of data) {
-      if (normalizeKey(cell(row, "tipe")) !== "customer") continue;
-      const name = cell(row, "nama");
-      if (!name || knownCust.has(normalizeKey(name))) {
-        skipped++;
-        continue;
-      }
-      const ok = await createCustomer({
-        name,
-        address: cell(row, "alamat") || undefined,
-        phone: cell(row, "no telepon") || undefined,
-      });
-      if (ok) {
-        createdCustomers++;
-        knownCust.set(normalizeKey(name), name);
-      } else skipped++;
-    }
-
-    const { data: freshCust } = await supabase.from("customers").select("id, name");
-    const custId = new Map(
-      (freshCust || []).map((c: { id: string; name: string }) => [normalizeKey(c.name), c.id]),
-    );
-    const custNameById = new Map(
-      (freshCust || []).map((c: { id: string; name: string }) => [c.id, c.name]),
-    );
-    const { data: existingSites } = await supabase.from("sites").select("id, name, customer_id");
-    const knownSite = new Set(
-      (existingSites || []).map(
-        (s: { name: string; customer_id: string | null }) =>
-          `${normalizeKey(custNameById.get(s.customer_id || "") || "")}::${normalizeKey(s.name)}`,
-      ),
-    );
-    for (const row of data) {
-      if (normalizeKey(cell(row, "tipe")) !== "site") continue;
-      const custName = cell(row, "customer");
-      const cid = custName ? custId.get(normalizeKey(custName)) : undefined;
-      const name = cell(row, "nama");
-      if (!cid || !name) {
-        skipped++;
-        continue;
-      }
-      if (knownSite.has(`${normalizeKey(custName)}::${normalizeKey(name)}`)) {
-        skipped++;
-        continue;
-      }
-      const ok = await createSite({
-        name,
-        address: cell(row, "alamat"),
-        pic_name: cell(row, "nama pic") || "-",
-        pic_phone: cell(row, "no wa pic") || "-",
-        customer_id: cid,
-      });
-      if (ok) {
-        createdSites++;
-        knownSite.add(`${normalizeKey(custName)}::${normalizeKey(name)}`);
-      } else skipped++;
-    }
-
-    const { data: existingSites2 } = await supabase.from("sites").select("id, name, customer_id");
-    const siteId = new Map(
-      (existingSites2 || []).map((s: { id: string; name: string; customer_id: string | null }) => [
-        `${normalizeKey(custNameById.get(s.customer_id || "") || "")}::${normalizeKey(s.name)}`,
-        s.id,
-      ]),
-    );
-    const { data: existingUnits } = await supabase.from("units").select("id, site_id, name");
-    const knownUnit = new Set(
-      (existingUnits || []).map(
-        (u: { site_id: string; name: string }) => `${u.site_id}::${normalizeKey(u.name)}`,
-      ),
-    );
-    for (const row of data) {
-      if (normalizeKey(cell(row, "tipe")) !== "unit") continue;
-      const custName = cell(row, "customer");
-      const siteName = cell(row, "site");
-      const sid = siteId.get(`${normalizeKey(custName)}::${normalizeKey(siteName)}`);
-      const name = cell(row, "nama");
-      if (!sid || !name) {
-        skipped++;
-        continue;
-      }
-      if (knownUnit.has(`${sid}::${normalizeKey(name)}`)) {
-        skipped++;
-        continue;
-      }
-      const ok = await createUnit({
-        name,
-        serial_number: cell(row, "serial number") || undefined,
-        type: cell(row, "tipe unit") || undefined,
-        site_id: sid,
-      });
-      if (ok) {
-        createdUnits++;
-        knownUnit.add(`${sid}::${normalizeKey(name)}`);
-      } else skipped++;
-    }
-
-    toast.success(
-      `Import selesai: +${createdCustomers} customer, +${createdSites} site, +${createdUnits} unit${skipped ? `, ${skipped} dilewati (duplikat/tanpa induk)` : ""}`,
-    );
-    loadAll();
-  }
-
   // ─── Derived ────────────────────────────────────────────────
-
-  const regionName = new Map(regions.filter((r) => !r.is_deleted).map((r) => [r.id, r.name]));
 
   const hasWizardSite =
     formMode === "customer"
@@ -883,9 +678,9 @@ export function AdminMasterData() {
 
   return (
     <div className="space-y-4">
-      {/* ─── Header: search + toggle + import/export/add ───────── */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2 flex-wrap">
+      {/* ─── Header: search + add ─────────────────────────────── */}
+      <div className="bg-card p-4 rounded-xl border border-border">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div className="relative">
             <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -898,53 +693,6 @@ export function AdminMasterData() {
               className="pl-9 pr-4 h-9 rounded-lg border border-border bg-card text-sm outline-none focus:border-ring transition w-72 text-foreground"
             />
           </div>
-          <button
-            onClick={() => {
-              setShowDeleted(false);
-              setPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${!showDeleted ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-accent"}`}
-          >
-            Aktif
-          </button>
-          <button
-            onClick={() => {
-              setShowDeleted(true);
-              setPage(1);
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${showDeleted ? "bg-primary text-primary-foreground" : "border border-border text-muted-foreground hover:bg-accent"}`}
-          >
-            Data Dihapus
-          </button>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <input
-            ref={fileRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={handleImportFile}
-          />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={importing}
-            className="h-9 px-3.5 rounded-lg border border-border bg-card text-xs font-medium text-foreground hover:bg-accent transition inline-flex items-center gap-1.5 disabled:opacity-50"
-          >
-            {importing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Upload className="h-3.5 w-3.5" />
-            )}
-            Import CSV
-          </button>
-          <button
-            onClick={handleExportCsv}
-            disabled={customers.length === 0 && sites.length === 0 && units.length === 0}
-            className="h-9 px-3.5 rounded-lg border border-border bg-card text-xs font-medium text-foreground hover:bg-accent transition inline-flex items-center gap-1.5 disabled:opacity-50"
-          >
-            <Download className="h-3.5 w-3.5" />
-            Export CSV
-          </button>
           <button
             onClick={openAddCustomer}
             className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
@@ -1008,17 +756,23 @@ export function AdminMasterData() {
                               <Building2 className="h-3.5 w-3.5" />
                             </span>
                             <div className="min-w-0">
-                              <p className="text-[13px] font-semibold text-foreground truncate">
+                              <button
+                                onClick={() => startEditCustomer(c)}
+                                className="block max-w-full text-left text-[13px] font-semibold text-foreground truncate hover:text-primary transition"
+                                title={`Edit ${c.name}`}
+                              >
                                 {c.name}
-                              </p>
+                              </button>
                               <p className="text-[11px] text-muted-foreground truncate">
                                 {c.address || c.phone || `${cSites.length} site`}
                               </p>
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
-                        <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
+                        <td className="px-4 py-3 text-xs text-foreground">{c.pic_name || "—"}</td>
+                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground">
+                          {c.pic_phone || "—"}
+                        </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
                         <td className="px-4 py-3 text-right">
                           {c.is_deleted ? (
@@ -1028,21 +782,14 @@ export function AdminMasterData() {
                               variant="green"
                               onClick={() => handleRestore("customer", c.id, c.name)}
                             />
-                          ) : (
-                            <div className="flex items-center gap-1.5 justify-end">
-                              <ActionButton
-                                icon={Plus}
-                                label="Tambah Site"
-                                variant="green"
-                                onClick={() => openAddSite(c.id)}
-                              />
-                              <ActionButton
-                                icon={Pencil}
-                                label="Edit"
-                                onClick={() => startEditCustomer(c)}
+                          ) : !showDeleted ? (
+                            <div className="flex justify-end">
+                              <RowActionMenu
+                                onEdit={() => startEditCustomer(c)}
+                                onDelete={() => handleSoftDelete("customer", c.id, c.name)}
                               />
                             </div>
-                          )}
+                          ) : null}
                         </td>
                       </tr>
 
@@ -1068,11 +815,15 @@ export function AdminMasterData() {
                                       <MapPin className="h-3 w-3" />
                                     </span>
                                     <div className="min-w-0">
-                                      <p className="text-[13px] font-medium text-foreground truncate">
+                                      <button
+                                        onClick={() => startEditSite(site)}
+                                        className="block max-w-full text-left text-[13px] font-medium text-foreground truncate hover:text-primary transition"
+                                        title={`Edit ${site.name}`}
+                                      >
                                         {site.name}
-                                      </p>
+                                      </button>
                                       <p className="text-[11px] text-muted-foreground truncate">
-                                        Region: {regionName.get(site.region_id || "") || "—"}
+                                        Lokasi: {site.address || "—"}
                                       </p>
                                     </div>
                                   </div>
@@ -1092,27 +843,16 @@ export function AdminMasterData() {
                                       variant="green"
                                       onClick={() => handleRestore("site", site.id, site.name)}
                                     />
-                                  ) : (
-                                    <div className="flex items-center gap-1.5 justify-end">
-                                      <ActionButton
-                                        icon={Plus}
-                                        label="Tambah Unit"
-                                        variant="green"
-                                        onClick={() => openAddUnit(site.id)}
-                                      />
-                                      <ActionButton
-                                        icon={Pencil}
-                                        label="Edit"
-                                        onClick={() => startEditSite(site)}
-                                      />
-                                      <ActionButton
-                                        icon={Trash2}
-                                        label="Hapus"
-                                        variant="red"
-                                        onClick={() => handleSoftDelete("site", site.id, site.name)}
+                                  ) : !showDeleted ? (
+                                    <div className="flex justify-end">
+                                      <RowActionMenu
+                                        onEdit={() => startEditSite(site)}
+                                        onDelete={() =>
+                                          handleSoftDelete("site", site.id, site.name)
+                                        }
                                       />
                                     </div>
-                                  )}
+                                  ) : null}
                                 </td>
                               </tr>
 
@@ -1130,21 +870,27 @@ export function AdminMasterData() {
                                           <Cpu className="h-3 w-3" />
                                         </span>
                                         <div className="min-w-0">
-                                          <p className="text-[13px] font-medium text-foreground truncate">
+                                          <button
+                                            onClick={() => startEditUnit(unit)}
+                                            className="block max-w-full text-left text-[13px] font-medium text-foreground truncate hover:text-primary transition"
+                                            title={`Edit ${unit.name}`}
+                                          >
                                             {unit.name}
-                                          </p>
-                                          {unit.type && (
-                                            <p className="text-[11px] text-muted-foreground truncate">
-                                              {unit.type}
-                                            </p>
-                                          )}
+                                          </button>
                                         </div>
                                       </div>
                                     </td>
                                     <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
                                     <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
-                                    <td className="px-4 py-3 text-xs font-mono text-muted-foreground">
-                                      {unit.serial_number || "—"}
+                                    <td className="px-4 py-3 text-xs">
+                                      <span className="font-mono text-muted-foreground">
+                                        {unit.serial_number || "—"}
+                                      </span>
+                                      {unit.type && (
+                                        <span className="block text-[11px] text-muted-foreground mt-0.5">
+                                          {unit.type}
+                                        </span>
+                                      )}
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                       {unit.is_deleted ? (
@@ -1154,23 +900,16 @@ export function AdminMasterData() {
                                           variant="green"
                                           onClick={() => handleRestore("unit", unit.id, unit.name)}
                                         />
-                                      ) : (
-                                        <div className="flex items-center gap-1.5 justify-end">
-                                          <ActionButton
-                                            icon={Pencil}
-                                            label="Edit"
-                                            onClick={() => startEditUnit(unit)}
-                                          />
-                                          <ActionButton
-                                            icon={Trash2}
-                                            label="Hapus"
-                                            variant="red"
-                                            onClick={() =>
+                                      ) : !showDeleted ? (
+                                        <div className="flex justify-end">
+                                          <RowActionMenu
+                                            onEdit={() => startEditUnit(unit)}
+                                            onDelete={() =>
                                               handleSoftDelete("unit", unit.id, unit.name)
                                             }
                                           />
                                         </div>
-                                      )}
+                                      ) : null}
                                     </td>
                                   </tr>
                                 ))}
@@ -1222,19 +961,19 @@ export function AdminMasterData() {
         </div>
       )}
 
-      {/* ─── Slide-out Drawer (add/edit) ───────────────────────── */}
-      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <SheetContent className="w-full sm:max-w-lg bg-card">
-          <SheetHeader className="mb-6">
-            <SheetTitle className="text-foreground">
+      {/* ─── Centered Modal (add/edit) ─────────────────────────── */}
+      <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DialogContent className="sm:max-w-md bg-card p-5 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-foreground">
               {formMode === "customer"
-                ? editingId
-                  ? "Edit Customer"
-                  : "Tambah Customer"
+                ? `${editingId ? "Edit" : "Tambah"} ${
+                    wizEditLabel === "site" ? "Site" : wizEditLabel === "unit" ? "Unit" : "Customer"
+                  }`
                 : `${editingId ? "Edit" : "Tambah"} ${formMode === "site" ? "Site" : "Unit"}`}
-            </SheetTitle>
+            </DialogTitle>
             {formMode === "customer" && (
-              <div className="flex items-center gap-2 pt-2">
+              <div className="flex items-center justify-center gap-2 pt-2">
                 {WIZARD_STEPS.map(({ n, label }, i) => (
                   <Fragment key={label}>
                     <div className="flex items-center gap-1.5">
@@ -1260,109 +999,97 @@ export function AdminMasterData() {
                 ))}
               </div>
             )}
-          </SheetHeader>
+          </DialogHeader>
 
           {formMode === "customer" ? (
             <>
               {wizStep === 1 && (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div>
-                    <label className={LABEL_CLASS}>Nama *</label>
+                    <label className={LABEL_CLASS}>Nama Perusahaan</label>
                     <input
                       value={wizCustomerName}
                       onChange={(e) => setWizCustomerName(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Nama customer"
+                      placeholder="cth. PT PAMA"
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>Alamat</label>
+                    <label className={LABEL_CLASS}>Kode / Singkatan</label>
                     <input
-                      value={wizCustomerAddress}
-                      onChange={(e) => setWizCustomerAddress(e.target.value)}
+                      value={wizCustomerCode}
+                      onChange={(e) => setWizCustomerCode(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Alamat customer"
+                      placeholder="cth. PAMA"
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>No Telepon</label>
+                    <label className={LABEL_CLASS}>Nama PIC Perusahaan</label>
                     <input
-                      value={wizCustomerPhone}
-                      onChange={(e) => setWizCustomerPhone(e.target.value)}
+                      value={wizCustomerPicName}
+                      onChange={(e) => setWizCustomerPicName(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Nomor telepon customer"
+                      placeholder="cth. Budi - GM IT"
+                    />
+                  </div>
+                  <div>
+                    <label className={LABEL_CLASS}>No. WA PIC Perusahaan</label>
+                    <input
+                      value={wizCustomerPicPhone}
+                      onChange={(e) => setWizCustomerPicPhone(e.target.value)}
+                      className={FIELD_CLASS}
+                      placeholder="08xxxxxxxxxx"
                     />
                   </div>
                 </div>
               )}
 
               {wizStep === 2 && (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {editingId && (
                     <div>
                       <label className={LABEL_CLASS}>Site yang dikelola</label>
-                      <select
+                      <MenuSelect
                         value={wizSiteTarget}
-                        onChange={(e) => handleSiteTargetChange(e.target.value)}
-                        className={FIELD_CLASS}
-                      >
-                        {sites
-                          .filter((s) => s.customer_id === editingId && !s.is_deleted)
-                          .map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        <option value={NEW_ID}>＋ Site Baru</option>
-                      </select>
+                        onSelect={handleSiteTargetChange}
+                        options={[
+                          ...sites
+                            .filter((s) => s.customer_id === editingId && !s.is_deleted)
+                            .map((s) => ({ value: s.id, label: s.name })),
+                          { value: NEW_ID, label: "＋ Site Baru" },
+                        ]}
+                      />
                     </div>
                   )}
                   <div>
-                    <label className={LABEL_CLASS}>Nama Site</label>
+                    <label className={LABEL_CLASS}>Nama Site & Layanan</label>
                     <input
                       value={wizSiteName}
                       onChange={(e) => setWizSiteName(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Nama site / lokasi"
+                      placeholder="cth. SMMS Site Sangatta"
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>Region</label>
-                    <select
-                      value={wizSiteRegionId}
-                      onChange={(e) => setWizSiteRegionId(e.target.value)}
-                      className={FIELD_CLASS}
-                    >
-                      <option value="">— Tanpa Region —</option>
-                      {regions
-                        .filter((r) => !r.is_deleted)
-                        .map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className={LABEL_CLASS}>Alamat Site</label>
+                    <label className={LABEL_CLASS}>Detail Area Lokasi</label>
                     <input
                       value={wizSiteAddress}
                       onChange={(e) => setWizSiteAddress(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Alamat lokasi site"
+                      placeholder="cth. Pos Tambang Utara"
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>Nama PIC *</label>
+                    <label className={LABEL_CLASS}>Nama Koordinator Site</label>
                     <input
                       value={wizPicName}
                       onChange={(e) => setWizPicName(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Nama penanggung jawab site"
+                      placeholder="cth. Joko - KTT"
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>No WA PIC *</label>
+                    <label className={LABEL_CLASS}>No. WA Koordinator Site</label>
                     <input
                       value={wizPicPhone}
                       onChange={(e) => setWizPicPhone(e.target.value)}
@@ -1379,39 +1106,35 @@ export function AdminMasterData() {
               )}
 
               {wizStep === 3 && (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {hasWizardSite ? (
                     <>
                       {editingId && wizSiteTarget !== NEW_ID && (
                         <div>
                           <label className={LABEL_CLASS}>Unit yang dikelola</label>
-                          <select
+                          <MenuSelect
                             value={wizUnitTarget}
-                            onChange={(e) => handleUnitTargetChange(e.target.value)}
-                            className={FIELD_CLASS}
-                          >
-                            {units
-                              .filter((u) => u.site_id === wizSiteTarget && !u.is_deleted)
-                              .map((u) => (
-                                <option key={u.id} value={u.id}>
-                                  {u.name}
-                                </option>
-                              ))}
-                            <option value={NEW_ID}>＋ Unit Baru</option>
-                          </select>
+                            onSelect={handleUnitTargetChange}
+                            options={[
+                              ...units
+                                .filter((u) => u.site_id === wizSiteTarget && !u.is_deleted)
+                                .map((u) => ({ value: u.id, label: u.name })),
+                              { value: NEW_ID, label: "＋ Unit Baru" },
+                            ]}
+                          />
                         </div>
                       )}
                       <div>
-                        <label className={LABEL_CLASS}>Nama Unit</label>
+                        <label className={LABEL_CLASS}>Nama / Kode Unit</label>
                         <input
                           value={wizUnitName}
                           onChange={(e) => setWizUnitName(e.target.value)}
                           className={FIELD_CLASS}
-                          placeholder="Nama unit"
+                          placeholder="cth. SMMS MTS-1"
                         />
                       </div>
                       <div>
-                        <label className={LABEL_CLASS}>Serial Number</label>
+                        <label className={LABEL_CLASS}>Serial Number (SN)</label>
                         <input
                           value={wizUnitSerial}
                           onChange={(e) => setWizUnitSerial(e.target.value)}
@@ -1420,12 +1143,12 @@ export function AdminMasterData() {
                         />
                       </div>
                       <div>
-                        <label className={LABEL_CLASS}>Tipe Unit</label>
+                        <label className={LABEL_CLASS}>Merek & Tipe</label>
                         <input
                           value={wizUnitType}
                           onChange={(e) => setWizUnitType(e.target.value)}
                           className={FIELD_CLASS}
-                          placeholder="cth. AC Split 1PK, Genset, dll."
+                          placeholder="cth. Sensor Level"
                         />
                       </div>
                     </>
@@ -1442,79 +1165,60 @@ export function AdminMasterData() {
               )}
             </>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <div>
-                <label className={LABEL_CLASS}>Nama *</label>
+                <label className={LABEL_CLASS}>
+                  {formMode === "site" ? "Nama Site & Layanan" : "Nama / Kode Unit"}
+                </label>
                 <input
                   value={formName}
                   onChange={(e) => setFormName(e.target.value)}
                   className={FIELD_CLASS}
-                  placeholder={formMode === "site" ? "Nama site / lokasi" : "Nama unit"}
+                  placeholder={
+                    formMode === "site" ? "cth. SMMS Site Sangatta" : "cth. SMMS MTS-1"
+                  }
                 />
               </div>
 
               {formMode === "site" && (
                 <>
                   <div>
-                    <label className={LABEL_CLASS}>Region</label>
-                    <select
-                      value={formRegionId}
-                      onChange={(e) => setFormRegionId(e.target.value)}
-                      className={FIELD_CLASS}
-                    >
-                      <option value="">— Tanpa Region —</option>
-                      {regions
-                        .filter((r) => !r.is_deleted)
-                        .map((r) => (
-                          <option key={r.id} value={r.id}>
-                            {r.name}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div>
                     <label className={LABEL_CLASS}>Customer</label>
-                    <select
+                    <MenuSelect
                       value={formCustomerId || formParentCustomerId || ""}
-                      onChange={(e) => setFormCustomerId(e.target.value)}
+                      onSelect={setFormCustomerId}
                       disabled={!!formParentCustomerId}
-                      className={`${FIELD_CLASS} disabled:opacity-50`}
-                    >
-                      {formParentCustomerId && (
-                        <option value={formParentCustomerId}>
-                          {customers.find((c) => c.id === formParentCustomerId)?.name}
-                        </option>
-                      )}
-                      {!formParentCustomerId &&
-                        customers
-                          .filter((c) => !c.is_deleted)
-                          .map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                    </select>
+                      options={
+                        formParentCustomerId
+                          ? customers
+                              .filter((c) => c.id === formParentCustomerId)
+                              .map((c) => ({ value: c.id, label: c.name }))
+                          : customers
+                              .filter((c) => !c.is_deleted)
+                              .map((c) => ({ value: c.id, label: c.name }))
+                      }
+                    />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>Alamat Site</label>
+                    <label className={LABEL_CLASS}>Detail Area Lokasi</label>
                     <input
                       value={formAddress}
                       onChange={(e) => setFormAddress(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Alamat lokasi site"
+                      placeholder="cth. Pos Tambang Utara"
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>Nama PIC *</label>
+                    <label className={LABEL_CLASS}>Nama Koordinator Site</label>
                     <input
                       value={formPicName}
                       onChange={(e) => setFormPicName(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="Nama penanggung jawab site"
+                      placeholder="cth. Joko - KTT"
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>No WA PIC *</label>
+                    <label className={LABEL_CLASS}>No. WA Koordinator Site</label>
                     <input
                       value={formPicPhone}
                       onChange={(e) => setFormPicPhone(e.target.value)}
@@ -1528,7 +1232,7 @@ export function AdminMasterData() {
               {formMode === "unit" && (
                 <>
                   <div>
-                    <label className={LABEL_CLASS}>Serial Number</label>
+                    <label className={LABEL_CLASS}>Serial Number (SN)</label>
                     <input
                       value={formSerialNumber}
                       onChange={(e) => setFormSerialNumber(e.target.value)}
@@ -1537,12 +1241,12 @@ export function AdminMasterData() {
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>Tipe Unit</label>
+                    <label className={LABEL_CLASS}>Merek & Tipe</label>
                     <input
                       value={formType}
                       onChange={(e) => setFormType(e.target.value)}
                       className={FIELD_CLASS}
-                      placeholder="cth. AC Split 1PK, Genset, dll."
+                      placeholder="cth. Sensor Level"
                     />
                   </div>
                 </>
@@ -1550,17 +1254,22 @@ export function AdminMasterData() {
             </div>
           )}
 
-          <div className="flex justify-end gap-2 mt-8 pt-4 border-t border-border">
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border">
             {formMode === "customer" ? (
               <>
                 {wizStep === 1 && (
                   <>
-                    <SheetClose className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
+                    <DialogClose className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
                       Batal
-                    </SheetClose>
+                    </DialogClose>
                     <button
                       onClick={() => setWizStep(2)}
-                      disabled={!wizCustomerName.trim() || saving}
+                      disabled={
+                        !wizCustomerName.trim() ||
+                        !wizCustomerPicName.trim() ||
+                        !wizCustomerPicPhone.trim() ||
+                        saving
+                      }
                       className="px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-1.5"
                     >
                       Lanjut <ArrowRight className="h-3.5 w-3.5" />
@@ -1623,9 +1332,9 @@ export function AdminMasterData() {
               </>
             ) : (
               <>
-                <SheetClose className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
+                <DialogClose className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
                   Batal
-                </SheetClose>
+                </DialogClose>
                 <button
                   onClick={handleSave}
                   disabled={
@@ -1641,8 +1350,8 @@ export function AdminMasterData() {
               </>
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

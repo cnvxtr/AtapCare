@@ -1,12 +1,12 @@
-import { useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, Inbox, ArrowUpRight, Wrench, Pause, Ban, X } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import { FINAL_STATUSES } from '../../lib/status'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
+import { PriorityDonut, PriorityLegend } from '../../components/PriorityDonut'
 import FieldError from '../../components/FieldError'
 
 export default function PMDashboard() {
@@ -134,19 +134,15 @@ export default function PMDashboard() {
                 </div>
 
                 <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 transition-all w-full">
-                    <div>
-                        <h3 className="font-display font-bold text-foreground">Tiket per Prioritas</h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">Tiket aktif · real-time</p>
+                    <div className="flex items-start justify-between mb-6">
+                        <div>
+                            <h3 className="font-display font-bold text-foreground">Distribusi Prioritas</h3>
+                            <p className="text-xs text-muted-foreground mt-0.5">Tiket aktif · real-time</p>
+                        </div>
+                        <PriorityLegend />
                     </div>
-                    <div className="h-64 w-full relative mt-4">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={priorityData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
-                                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} />
-                                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} width={40} />
-                                <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ backgroundColor: 'white', borderColor: '#d1d5db', borderRadius: '8px', fontSize: '12px' }} />
-                                <Bar dataKey="value" shape={TipBar} barSize={30} />
-                            </BarChart>
-                        </ResponsiveContainer>
+                    <div className="h-64 flex items-center justify-center">
+                        <PriorityDonut p1={priorityData[0].value} p2={priorityData[1].value} p3={priorityData[2].value} />
                     </div>
                 </div>
             </div>
@@ -207,6 +203,7 @@ export default function PMDashboard() {
                     code={selectedTicket.code}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
+                    slaTimeLeft={selectedTicket.slaTimeLeft}
                     createdAt={selectedTicket.createdAt}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
@@ -251,7 +248,7 @@ export default function PMDashboard() {
 
             {/* MODAL VETO PENDING */}
             {showVetoModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in">
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2 text-red-700"><Ban className="w-5 h-5" /> Veto Status Pending</h3>
@@ -260,7 +257,7 @@ export default function PMDashboard() {
                         <p className="text-sm text-muted-foreground mb-4">Membatalkan status Pending dan mengembalikan tiket ke WORKING.</p>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Alasan Veto (Wajib) *</label>
+                                <label className="text-xs font-semibold text-muted-foreground">Alasan Veto (Wajib)</label>
                                 <textarea value={vetoReason} onChange={e => { setVetoReason(e.target.value); setVetoError('') }} rows={3} className={`w-full mt-1 px-3 py-2 border-2 ${vetoError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Alasan pending tidak valid, segera lanjutkan pekerjaan"></textarea>
                                 <FieldError msg={vetoError} />
                             </div>
@@ -276,77 +273,73 @@ export default function PMDashboard() {
     )
 }
 
-function TipBar(props: { x: number; y: number; width: number; height: number; index: number }) {
-    if (props.width <= 0) return null
-    const TIP_COLORS = ['#dc2626', '#f59e0b', '#3b82f6']
-    const CAP = 14, R = 4
-    const tip = TIP_COLORS[props.index] ?? '#171717'
-    const cw = Math.min(CAP, props.width)
-    const bw = props.width - cw
-    const capX = props.x + bw
-    return (
-        <g>
-            {bw > 0 && <rect x={props.x} y={props.y} width={bw} height={props.height} fill="#171717" />}
-            {cw >= 2 * R ? (
-                <path d={`M${capX},${props.y} h${cw - R} a${R},${R} 0 0 1 ${R},${R} v${props.height - 2 * R} a${R},${R} 0 0 1 -${R},${R} h${-(cw - R)} Z`} fill={tip} />
-            ) : (
-                <rect x={capX} y={props.y} width={cw} height={props.height} fill={tip} />
-            )}
-        </g>
-    )
-}
-
 function TrendChart({ data }: { data: { name: string; masuk: number; selesai: number }[] }) {
     const [hover, setHover] = useState<number | null>(null)
-    const w = 600, h = 200, pad = 20
+    const [tipPos, setTipPos] = useState<{ x: number; y: number; below: boolean } | null>(null)
+    const wrapRef = useRef<HTMLDivElement>(null)
+    const w = 600, h = 200, pad = 20, padB = 32
     const max = Math.max(1, ...data.flatMap(d => [d.masuk, d.selesai]))
     const x = (i: number) => pad + (i * (w - pad * 2)) / (data.length - 1)
-    const y = (v: number) => h - pad - (v / max) * (h - pad * 2)
+    const y = (v: number) => h - padB - (v / max) * (h - pad - padB)
     const line = (key: 'masuk' | 'selesai') =>
         data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[key])}`).join(' ')
 
     const handleMove = (e: ReactMouseEvent<SVGSVGElement>) => {
-        const rect = e.currentTarget.getBoundingClientRect()
+        const svg = e.currentTarget
+        const ctm = svg.getScreenCTM()
+        const wrap = wrapRef.current
+        if (!ctm || !wrap) return
+        const rect = svg.getBoundingClientRect()
         const px = ((e.clientX - rect.left) / rect.width) * w
-        const idx = Math.round((px - pad) / ((w - pad * 2) / (data.length - 1)))
-        setHover(Math.max(0, Math.min(data.length - 1, idx)))
+        const idx = Math.max(0, Math.min(data.length - 1, Math.round((px - pad) / ((w - pad * 2) / (data.length - 1)))))
+        const pt = svg.createSVGPoint()
+        pt.x = x(idx)
+        pt.y = y(Math.max(data[idx].masuk, data[idx].selesai))
+        const p = pt.matrixTransform(ctm)
+        const wr = wrap.getBoundingClientRect()
+        const below = p.y <= wr.top + 0.35 * wr.height
+        setHover(idx)
+        setTipPos({ x: p.x, y: p.y, below })
     }
 
+    const isFirst = hover === 0
+    const isLast = hover === data.length - 1
+
     return (
-        <div className="relative">
-            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56" onMouseMove={handleMove} onMouseLeave={() => setHover(null)}>
+        <div className="relative" ref={wrapRef}>
+            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56" onMouseMove={handleMove} onMouseLeave={() => { setHover(null); setTipPos(null) }}>
                 {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-                    <line key={f} x1={pad} x2={w - pad} y1={pad + f * (h - pad * 2)} y2={pad + f * (h - pad * 2)}
+                    <line key={f} x1={pad} x2={w - pad} y1={pad + f * (h - pad - padB)} y2={pad + f * (h - pad - padB)}
                         stroke="currentColor" strokeOpacity="0.06" />
                 ))}
                 {hover !== null && (
-                    <line x1={x(hover)} x2={x(hover)} y1={pad} y2={h - pad} stroke="currentColor" strokeOpacity="0.15" />
+                    <line x1={x(hover)} x2={x(hover)} y1={pad} y2={h - padB} stroke="currentColor" strokeOpacity="0.15" />
                 )}
-                <path d={`${line('masuk')} L${x(data.length - 1)},${h - pad} L${x(0)},${h - pad} Z`}
+                <path d={`${line('masuk')} L${x(data.length - 1)},${h - padB} L${x(0)},${h - padB} Z`}
                     fill="currentColor" opacity="0.08" />
                 <path d={line('masuk')} fill="none" stroke="currentColor" strokeWidth="3" />
                 <path d={line('selesai')} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="4 3" opacity="0.5" />
                 {data.map((d, i) => (
                     <g key={i}>
                         <circle cx={x(i)} cy={y(d.masuk)} r={hover === i ? 5 : 4} fill="currentColor" />
-                        <text x={x(i)} y={h - 4} textAnchor="middle" fontSize="10" fill="currentColor" opacity="0.5">{d.name}</text>
+                        <text x={x(i)} y={h - 6} textAnchor="middle" fontSize="14" fill="currentColor" opacity="0.5">M{i + 1}</text>
                     </g>
                 ))}
             </svg>
-            {hover !== null && (
+            {hover !== null && tipPos && createPortal((
                 <div
-                    className="absolute pointer-events-none bg-foreground text-background text-xs rounded px-2 py-1.5 shadow-lg z-10"
+                    className="fixed pointer-events-none bg-foreground text-background text-xs rounded px-2 py-1.5 shadow-lg z-50"
                     style={{
-                        left: `${(x(hover) / w) * 100}%`,
-                        top: `${(y(Math.max(data[hover].masuk, data[hover].selesai)) / h) * 100}%`,
-                        transform: 'translate(-50%, -130%)',
+                        left: tipPos.x,
+                        top: tipPos.y,
+                        transform: `${isFirst ? 'translateX(0)' : isLast ? 'translateX(-100%)' : 'translateX(-50%)'} ${tipPos.below ? 'translateY(8px)' : 'translateY(calc(-100% - 8px))'}`,
                     }}
                 >
-                    <p className="font-semibold">{data[hover].name}</p>
+                    <p className="font-semibold">M{hover + 1}</p>
                     <p>Masuk: <span className="font-bold">{data[hover].masuk}</span></p>
                     <p>Selesai: <span className="font-bold">{data[hover].selesai}</span></p>
                 </div>
-            )}
+            ), document.body)}
         </div>
     )
 }

@@ -62,14 +62,6 @@ export default function TugasTeknisi() {
         return byStatus
     }, [myTickets])
 
-    const statusActions: Record<string, { label: string; action: (t: Ticket) => void; color: string } | null> = {
-        SCHEDULED: { label: 'Terima Tugas', action: (t) => handleTerimaTugas(t), color: 'bg-blue-600 hover:bg-blue-700' },
-        EN_ROUTE: { label: 'Mulai Kerja', action: (t) => handleMulaiKerja(t), color: 'bg-emerald-600 hover:bg-emerald-700' },
-        WORKING: null,
-        PENDING: null,
-        RESOLVED: null,
-    }
-
     const handleTerimaTugas = (ticket: Ticket) => {
         const { jadwal } = getAssignmentInfo(ticket.activities)
         if (isScheduleOvertime(jadwal)) {
@@ -143,7 +135,6 @@ export default function TugasTeknisi() {
     }
 
     const renderCard = (ticket: Ticket) => {
-        const act = statusActions[ticket.status]
         const isP1 = ticket.priority === 'P1'
         const { jadwal } = getAssignmentInfo(ticket.activities)
         const isOvertime = ticket.status === 'SCHEDULED' && isScheduleOvertime(jadwal)
@@ -171,13 +162,6 @@ export default function TugasTeknisi() {
                     </div>
                     <div className="flex flex-col items-end gap-2 flex-shrink-0">
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                        {act && (
-                            <button onClick={(e) => { e.stopPropagation(); act.action(ticket) }}
-                                disabled={isLoading === ticket.id || isLoading === 'gps'}
-                                className={`px-3 py-1.5 min-h-[44px] rounded text-xs font-bold text-white transition-all ${act.color} disabled:opacity-50 disabled:cursor-wait`}>
-                                {isLoading === ticket.id ? 'Memproses...' : isLoading === 'gps' && act.label === 'Mulai Kerja' ? 'Mengambil GPS...' : act.label}
-                            </button>
-                        )}
                     </div>
                 </div>
             </div>
@@ -189,15 +173,7 @@ export default function TugasTeknisi() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between gap-4 pb-4 border-b border-border">
-                <div>
-                    <h2 className="text-2xl font-display font-bold text-foreground">Tugas</h2>
-                    {user?.full_name && (
-                        <p className="text-sm text-muted-foreground">
-                            Selamat datang, <span className="font-semibold text-foreground">{user.full_name}</span>
-                        </p>
-                    )}
-                </div>
+            <div className="flex justify-end gap-4">
                 <span className="px-3 py-2 rounded bg-red-600 text-white text-sm font-medium flex items-center gap-2 shadow-sm">
                     <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                     {incomingCount} Tugas Masuk
@@ -275,6 +251,7 @@ export default function TugasTeknisi() {
                     code={selectedTicket.code}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
+                    slaTimeLeft={selectedTicket.slaTimeLeft}
                     createdAt={selectedTicket.createdAt}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
@@ -347,7 +324,7 @@ export default function TugasTeknisi() {
 
             {/* Pending Modal */}
             {showPendingModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowPendingModal(false)}>
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowPendingModal(false)}>
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2">
@@ -370,7 +347,7 @@ export default function TugasTeknisi() {
 
             {/* Complete Modal */}
             {showCompleteModal && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowCompleteModal(false)}>
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowCompleteModal(false)}>
                     <div className="bg-card w-full max-w-lg rounded-lg border-2 border-border p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
@@ -390,7 +367,7 @@ export default function TugasTeknisi() {
                                     className="w-full px-3 py-2 border-2 border-border rounded text-sm outline-none focus:border-foreground" placeholder="Nama sparepart..." />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto Dokumentasi <span className="text-red-600">(min. 1)</span></label>
+                                <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto Dokumentasi ({photos.length}/5) <span className="text-red-600">(min. 1)</span></label>
                                 <div className="border-2 border-dashed border-border rounded p-4 text-center hover:border-foreground transition-colors cursor-pointer"
                                     onClick={() => document.getElementById('foto-upload')?.click()}>
                                     <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
@@ -399,7 +376,13 @@ export default function TugasTeknisi() {
                                     <input id="foto-upload" type="file" accept="image/*" capture="environment" multiple
                                         className="hidden" onChange={e => {
                                             const files = Array.from(e.target.files || [])
-                                            setPhotos(prev => [...prev, ...files].slice(0, 10))
+                                            setPhotos(prev => {
+                                                const merged = [...prev, ...files]
+                                                if (merged.length > 5) { toast.error('Maksimal 5 foto.'); return prev }
+                                                const totalSize = merged.reduce((s, f) => s + f.size, 0)
+                                                if (totalSize > 10 * 1024 * 1024) { toast.error('Total ukuran foto maks 10 MB.'); return prev }
+                                                return merged
+                                            })
                                         }} />
                                 </div>
                                 {photos.length > 0 && (
@@ -428,7 +411,7 @@ export default function TugasTeknisi() {
 
             {/* Lembur Modal */}
             {showLemburModal && lemburTarget && createPortal((
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowLemburModal(false)}>
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowLemburModal(false)}>
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2">

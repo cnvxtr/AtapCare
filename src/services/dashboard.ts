@@ -1,14 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { PRIORITY_DEFAULTS } from "./sla";
 import { isSlaOverdue } from "./slaCalc";
-import { getOvertimeReport } from "./reports";
 
-export interface DateRange {
-  from: string;
-  to: string;
+export interface AdminRealtimeData {
+  activeUsers: number;
+  workOrdersActive: number;
+  slaOverdue: number;
+  priorityDist: Record<"P1" | "P2" | "P3", number>;
 }
-
-export type RangeLabel = "today" | "week" | "month" | "custom";
 
 export interface LeaderboardRow {
   name: string;
@@ -17,18 +16,9 @@ export interface LeaderboardRow {
   reworkRate: number;
 }
 
-export interface DashboardData {
-  slaOverdue: number;
+export interface AdminMonthlyData {
   ticketsDone: number;
-  activeUsers: number;
-  workOrdersActive: number;
-  onLeaveToday: number;
-  lockedAccounts: number;
   leaderboard: LeaderboardRow[];
-  priorityDist: Record<"P1" | "P2" | "P3", number>;
-  overtimeTickets: number;
-  dataAgeMinutes: number;
-  hasData: boolean;
 }
 
 const ACTIVE_STATUSES = [
@@ -41,54 +31,30 @@ const ACTIVE_STATUSES = [
   "PENDING",
 ];
 
-export function getDefaultRange(label: RangeLabel): DateRange {
-  const now = new Date();
-  const start = new Date(now);
-  if (label === "today") {
-    start.setHours(0, 0, 0, 0);
-  } else if (label === "week") {
-    // Minggu kalender dimulai Senin (hari ini minus offset ISO weekday).
-    const day = (start.getDay() + 6) % 7; // 0 = Senin
-    start.setDate(start.getDate() - day);
-    start.setHours(0, 0, 0, 0);
-  } else if (label === "month") {
-    start.setDate(1);
-    start.setHours(0, 0, 0, 0);
-  } else {
-    // custom: fallback 30 hari terakhir bila picker belum diisi
-    start.setDate(start.getDate() - 30);
-    start.setHours(0, 0, 0, 0);
-  }
-  return { from: start.toISOString(), to: now.toISOString() };
-}
-
-export async function getDashboardData(range: DateRange): Promise<DashboardData> {
+export async function getAdminRealtimeData(): Promise<AdminRealtimeData> {
   const [ticketsRes, usersRes, slaRes, holidaysRes] = await Promise.all([
     supabase
       .from("tickets")
-      .select("id, priority, status, assigned_to, sla_time_left, rejection_reason, created_at, closed_at")
-      .gte("created_at", range.from)
-      .lte("created_at", range.to),
+      .select("id, priority, status, created_at"),
     supabase
       .from("users")
-      .select("id, full_name, status, role")
+      .select("id, status")
       .eq("is_deleted", false),
     supabase.from("sla_config").select("priority, target_hours"),
     supabase.from("holidays").select("date").eq("is_active", true),
   ]);
+
   const tickets = ticketsRes.data || [];
   const users = usersRes.data || [];
   const slaTargets = Object.fromEntries(
     (slaRes.data || []).map((r) => [r.priority, Number(r.target_hours)]),
   );
   const holidays = (holidaysRes.data || []).map((h) => h.date);
-  const userNameById = new Map(users.map((u) => [u.id, u.full_name]));
+
+  const activeUsers = users.filter((u) => !u.status || u.status === "aktif").length;
+  const workOrdersActive = tickets.filter((t) => t.status === "WORKING").length;
 
   const active = tickets.filter((t) => ACTIVE_STATUSES.includes(t.status));
-  const closed = tickets.filter((t) => t.status === "CLOSED" || t.status === "DUPLICATE");
-
-  // sla_time_left di DB tidak pernah diisi; overdue dihitung real-time dari created_at,
-  // target SLA per prioritas, dan jam operasional (lihat slaCalc).
   const slaOverdue = active.filter((t) => {
     const target = slaTargets[t.priority] ?? PRIORITY_DEFAULTS[t.priority];
     return !!target && isSlaOverdue(t.created_at, target, holidays);
@@ -96,9 +62,66 @@ export async function getDashboardData(range: DateRange): Promise<DashboardData>
 
   const priorityDist = { P1: 0, P2: 0, P3: 0 } as Record<"P1" | "P2" | "P3", number>;
   for (const t of tickets) {
+    if (t.status === "CLOSED") continue;
     const p = t.priority as "P1" | "P2" | "P3";
     if (p === "P1" || p === "P2" || p === "P3") priorityDist[p]++;
   }
+
+  return { activeUsers, workOrdersActive, slaOverdue, priorityDist };
+}
+
+export interface AdminFrtData {
+  avgHours: number;
+  responded: number;
+  total: number;
+}
+
+export async function getAdminFrt(): Promise<AdminFrtData> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  const [ticketsRes, activitiesRes] = await Promise.all([
+    supabase.from("tickets").select("id, created_at").gte("created_at", monthStart),
+    supabase.from("activities").select("ticket_id, created_at, action"),
+  ]);
+
+  const tickets = ticketsRes.data || [];
+  const createdById = new Map(tickets.map((t) => [t.id, new Date(t.created_at).getTime()]));
+  const activities = (activitiesRes.data || []).filter((a) => createdById.has(a.ticket_id));
+
+  const respondedAt = new Map<string, number>();
+  for (const a of activities) {
+    if (a.action.startsWith("Tiket dibuat")) continue;
+    const ms = new Date(a.created_at).getTime() - createdById.get(a.ticket_id)!;
+    const prev = respondedAt.get(a.ticket_id);
+    if (prev === undefined || ms < prev) respondedAt.set(a.ticket_id, ms);
+  }
+
+  const values = [...respondedAt.values()].filter((ms) => ms >= 0);
+  const avgHours = values.length ? values.reduce((s, v) => s + v, 0) / values.length / 3_600_000 : 0;
+
+  return { avgHours, responded: values.length, total: tickets.length };
+}
+
+export async function getAdminMonthlyData(): Promise<AdminMonthlyData> {
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+  const [closedRes, usersRes] = await Promise.all([
+    supabase
+      .from("tickets")
+      .select("id, assigned_to, rejection_reason")
+      .eq("status", "CLOSED")
+      .gte("created_at", monthStart),
+    supabase
+      .from("users")
+      .select("id, full_name")
+      .eq("is_deleted", false),
+  ]);
+
+  const closed = closedRes.data || [];
+  const users = usersRes.data || [];
+  const userNameById = new Map(users.map((u) => [u.id, u.full_name]));
 
   const byTech = new Map<string, { completed: number; rework: number }>();
   for (const t of closed) {
@@ -108,6 +131,7 @@ export async function getDashboardData(range: DateRange): Promise<DashboardData>
     if (t.rejection_reason) cur.rework++;
     byTech.set(name, cur);
   }
+
   const leaderboard = Array.from(byTech.entries()).map(([name, v]) => ({
     name,
     completed: v.completed,
@@ -115,21 +139,5 @@ export async function getDashboardData(range: DateRange): Promise<DashboardData>
     reworkRate: v.completed ? Math.round((v.rework / v.completed) * 100) : 0,
   }));
 
-  // ponytail: durasi lembur per tiket tidak tercatat (tidak ada "jam selesai"),
-  // jadi KPI = jumlah tiket yang dijadwalkan di luar jam operasional/weekend.
-  const overtimeTickets = (await getOvertimeReport({ from: range.from, to: range.to })).length;
-
-  return {
-    slaOverdue,
-    ticketsDone: closed.length,
-    activeUsers: users.filter((u) => !u.status || u.status === "aktif").length,
-    workOrdersActive: tickets.filter((t) => t.status === "WORKING").length,
-    onLeaveToday: users.filter((u) => u.status === "cuti").length,
-    lockedAccounts: users.filter((u) => u.status === "nonaktif").length,
-    leaderboard,
-    priorityDist,
-    overtimeTickets,
-    dataAgeMinutes: 0,
-    hasData: tickets.length > 0,
-  };
+  return { ticketsDone: closed.length, leaderboard };
 }

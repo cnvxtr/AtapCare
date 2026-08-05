@@ -2,16 +2,33 @@ import { supabase } from "@/integrations/supabase/client";
 import { getSites, type SiteRow } from "./master-data";
 import { PRIORITY_DEFAULTS } from "./sla";
 import { isSlaOverdue } from "./slaCalc";
-import { isScheduleOvertime } from "@/components/TicketDrawer";
 
 export interface ReportFilters {
   from?: string;
   to?: string;
-  siteId?: string;
-  status?: string;
-  priority?: string;
-  technicianId?: string;
+  siteId?: string[];
+  status?: string[];
+  priority?: string[];
 }
+
+// Label status Indonesia untuk filter. "Ditugaskan" mencakup beberapa status
+// mentah (UNASSIGNED/SCHEDULED/EN_ROUTE) yang berlabel sama di UI.
+export const STATUS_FILTER_GROUPS: Record<string, string[]> = {
+  Baru: ["NEW"],
+  Diproses: ["OPEN"],
+  Ditugaskan: ["UNASSIGNED", "SCHEDULED", "EN_ROUTE"],
+  Dikerjakan: ["WORKING"],
+  Dijeda: ["PENDING"],
+  Selesai: ["RESOLVED"],
+  Tutup: ["CLOSED"],
+  Dibatalkan: ["VOID"],
+  Digabungkan: ["DUPLICATE"],
+};
+
+export const STATUS_FILTER_OPTIONS = Object.keys(STATUS_FILTER_GROUPS).map((label) => ({
+  value: label,
+  label,
+}));
 
 export interface TicketReportRow {
   code: string;
@@ -23,7 +40,7 @@ export interface TicketReportRow {
   createdAt: string;
   closedAt: string;
   assignee: string;
-  duration: string | number;
+  duration: string;
 }
 
 export const TICKET_REPORT_HEADERS = [
@@ -36,34 +53,12 @@ export const TICKET_REPORT_HEADERS = [
   "Tanggal Masuk",
   "Tanggal Selesai",
   "Teknisi",
-  "Durasi (jam)",
+  "Durasi",
 ];
 
 export const KPI_HEADERS = ["Prioritas", "Total", "Terbuka", "Selesai", "Overdue", "FTF (%)"];
 
-export const OVERTIME_HEADERS = [
-  "Teknisi",
-  "Tanggal",
-  "Jam Mulai",
-  "Prioritas",
-  "Tiket",
-];
-
 export const AUDIT_HEADERS = ["Waktu", "User", "Role", "Aktivitas", "Entitas", "Detail"];
-
-export const MASTER_DATA_HEADERS = [
-  "Tipe",
-  "Nama",
-  "Customer",
-  "Site",
-  "Region",
-  "Serial Number",
-  "Tipe Unit",
-  "Nama PIC",
-  "No WA PIC",
-  "Alamat",
-  "No Telepon",
-];
 
 const ACTIVE_STATUSES = [
   "NEW",
@@ -90,24 +85,24 @@ function dayEnd(date: string): string {
   return new Date(`${date.slice(0, 10)}T23:59:59`).toISOString();
 }
 
-async function buildTicketQuery(filters: ReportFilters, statuses?: string[]) {
+async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
       "id, code, customer, site, unit, priority, status, assigned_to, sla_time_left, rejection_reason, created_at, closed_at",
     )
     .order("created_at", { ascending: false });
-  if (statuses) q = q.in("status", statuses);
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
   if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
-  if (filters.status) q = q.eq("status", filters.status);
-  if (filters.priority) q = q.eq("priority", filters.priority);
-  if (filters.siteId) {
-    const { data: site } = await supabase.from("sites").select("name").eq("id", filters.siteId).single();
-    if (site?.name) q = q.eq("site", site.name);
+  if (filters.status?.length) {
+    const raws = filters.status.flatMap((s) => STATUS_FILTER_GROUPS[s] ?? [s]);
+    if (raws.length) q = q.in("status", raws);
   }
-  if (filters.technicianId) {
-    q = q.eq("assigned_to", filters.technicianId);
+  if (filters.priority?.length) q = q.in("priority", filters.priority);
+  if (filters.siteId?.length) {
+    const { data: sites } = await supabase.from("sites").select("name").in("id", filters.siteId);
+    const names = (sites || []).map((s) => s.name).filter(Boolean);
+    if (names.length) q = q.in("site", names);
   }
   return q;
 }
@@ -139,22 +134,13 @@ function toTicketRow(
     createdAt: fmt(t.created_at),
     closedAt: t.closed_at ? fmt(t.closed_at) : "—",
     assignee: t.assigned_to ? names?.get(t.assigned_to) ?? "—" : "—",
-    duration: hours,
+    duration: `${hours} jam`,
   };
 }
 
 export async function getTicketReport(filters: ReportFilters): Promise<TicketReportRow[]> {
   const [res, usersRes] = await Promise.all([
     buildTicketQuery(filters),
-    supabase.from("users").select("id, full_name"),
-  ]);
-  const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
-  return (res.data || []).map((t) => toTicketRow(t, names));
-}
-
-export async function getArchiveSnapshot(filters: ReportFilters): Promise<TicketReportRow[]> {
-  const [res, usersRes] = await Promise.all([
-    buildTicketQuery(filters, ["CLOSED", "DUPLICATE", "VOID"]),
     supabase.from("users").select("id, full_name"),
   ]);
   const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
@@ -195,56 +181,6 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
   return rows;
 }
 
-// Jadwal penugasan ditulis sebagai string di detail aktivitas ("Jadwal: YYYY-MM-DD HH:mm").
-// Ambil dari aktivitas terbaru (pola sama dengan getAssignmentInfo di TicketDrawer).
-function findJadwal(items: { details?: string | null }[]): string | undefined {
-  for (const act of [...items].reverse()) {
-    const m = (act.details || "").match(/Jadwal:\s*([^.]+)/);
-    if (m) return m[1].trim();
-  }
-  return undefined;
-}
-
-export async function getOvertimeReport(
-  filters: ReportFilters,
-): Promise<Record<string, string | number>[]> {
-  const [res, usersRes] = await Promise.all([
-    buildTicketQuery(filters),
-    supabase.from("users").select("id, full_name"),
-  ]);
-  const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
-  const tickets = res.data || [];
-  if (tickets.length === 0) return [];
-
-  const { data: activities } = await supabase
-    .from("activities")
-    .select("ticket_id, action, details")
-    .in("ticket_id", tickets.map((t) => t.id));
-
-  const byTicket = new Map<string, { details?: string | null }[]>();
-  for (const a of activities || []) {
-    const list = byTicket.get(a.ticket_id) || [];
-    list.push(a);
-    byTicket.set(a.ticket_id, list);
-  }
-
-  const rows: Record<string, string | number>[] = [];
-  for (const t of tickets) {
-    const jadwal = findJadwal(byTicket.get(t.id) || []);
-    // isScheduleOvertime: akhir pekan ATAU jam di luar 08.15–17.00 WIB.
-    if (!jadwal || !isScheduleOvertime(jadwal)) continue;
-    const [tanggal, jam] = jadwal.split(" ");
-    rows.push({
-      teknisi: t.assigned_to ? names.get(t.assigned_to) || "-" : "-",
-      tanggal: tanggal || jadwal,
-      jam: jam || "",
-      prioritas: t.priority || "P3",
-      tiket: t.code,
-    });
-  }
-  return rows;
-}
-
 export async function getAuditReport(
   filters: ReportFilters,
 ): Promise<Record<string, string>[]> {
@@ -266,64 +202,6 @@ export async function getAuditReport(
       detail: r.entity_id ? r.entity_id.slice(0, 8) : "—",
     };
   });
-}
-
-export async function getMasterDataReport(): Promise<Record<string, string>[]> {
-  const [customers, sites, units, regions] = await Promise.all([
-    supabase.from("customers").select("id, name, address, phone"),
-    supabase.from("sites").select("id, name, customer_id, region_id, pic_name, pic_phone, address"),
-    supabase.from("units").select("id, name, site_id, serial_number, type"),
-    supabase.from("regions").select("id, name"),
-  ]);
-  const customerName = new Map((customers.data || []).map((c) => [c.id, c.name]));
-  const regionName = new Map((regions.data || []).map((r) => [r.id, r.name]));
-  const siteById = new Map((sites.data || []).map((s) => [s.id, s]));
-  const rows: Record<string, string>[] = [];
-  for (const c of customers.data || [])
-    rows.push({
-      tipe: "Customer",
-      nama: c.name,
-      customer: c.name,
-      site: "",
-      region: "",
-      serial: "",
-      tipe_unit: "",
-      pic: "",
-      wa: "",
-      alamat: c.address || "",
-      telepon: c.phone || "",
-    });
-  for (const s of sites.data || [])
-    rows.push({
-      tipe: "Site",
-      nama: s.name,
-      customer: customerName.get(s.customer_id) || "",
-      site: s.name,
-      region: regionName.get(s.region_id) || "",
-      serial: "",
-      tipe_unit: "",
-      pic: s.pic_name || "",
-      wa: s.pic_phone || "",
-      alamat: s.address || "",
-      telepon: "",
-    });
-  for (const u of units.data || []) {
-    const site = siteById.get(u.site_id);
-    rows.push({
-      tipe: "Unit",
-      nama: u.name,
-      customer: customerName.get(site?.customer_id) || "",
-      site: site?.name || "",
-      region: "",
-      serial: u.serial_number || "",
-      tipe_unit: u.type || "",
-      pic: "",
-      wa: "",
-      alamat: "",
-      telepon: "",
-    });
-  }
-  return rows;
 }
 
 export { getSites, type SiteRow };
