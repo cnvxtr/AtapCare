@@ -6,7 +6,7 @@ import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
 import FieldError from '../../components/FieldError'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import SchedulePicker from '../../components/SchedulePicker'
@@ -367,11 +367,10 @@ export default function PMCommandCenter() {
                                         {technicians.length === 0 ? (
                                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
                                         ) : technicians.map(t => (
-                                            <label key={t.id} onClick={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
-                                                <input type="radio" name="assign-tech" checked={selectedTech === t.id} readOnly className="sr-only" />
+                                            <DropdownMenuItem key={t.id} onSelect={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground focus:bg-foreground focus:text-primary-foreground'}`}>
                                                 <span className="truncate">{t.name}</span>
                                                 {selectedTech === t.id && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
-                                            </label>
+                                            </DropdownMenuItem>
                                         ))}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
