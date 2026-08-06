@@ -355,7 +355,7 @@ export default function PMCommandCenter() {
                         </div>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Pilih Teknisi</label>
+                                <label className="text-xs font-semibold text-foreground">Pilih Teknisi</label>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <button type="button" className={`w-full mt-1 px-3 py-2 border-2 ${assignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
@@ -367,8 +367,8 @@ export default function PMCommandCenter() {
                                         {technicians.length === 0 ? (
                                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
                                         ) : technicians.map(t => (
-                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
-                                                <input type="radio" name="assign-tech" checked={selectedTech === t.id} onChange={() => { setSelectedTech(t.id); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className="sr-only" />
+                                            <label key={t.id} onClick={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                                <input type="radio" name="assign-tech" checked={selectedTech === t.id} readOnly className="sr-only" />
                                                 <span className="truncate">{t.name}</span>
                                                 {selectedTech === t.id && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
                                             </label>
@@ -378,7 +378,7 @@ export default function PMCommandCenter() {
                                 <FieldError msg={assignErrors.tech} />
                             </div>
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Teknisi Pendukung</label>
+                                <label className="text-xs font-semibold text-foreground">Teknisi Pendukung</label>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
                                         <button type="button" className="w-full mt-1 px-3 py-2 border-2 border-border focus:border-foreground rounded text-sm flex items-center justify-between gap-1 outline-none">
@@ -406,7 +406,7 @@ export default function PMCommandCenter() {
                                 </DropdownMenu>
                             </div>
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Jadwal Pelaksanaan</label>
+                                <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
                                 <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                                     <PopoverTrigger asChild>
                                         <button type="button" className={`w-full mt-1 px-3 py-2 border-2 ${assignErrors.date || assignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
@@ -418,7 +418,7 @@ export default function PMCommandCenter() {
                                             <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                                         </button>
                                     </PopoverTrigger>
-                                    <PopoverContent align="start" className="z-[130] w-auto p-3 border-border">
+                                    <PopoverContent align="start" className="z-[130] w-auto p-3 border-border bg-card">
                                         <SchedulePicker
                                             date={scheduleDate}
                                             time={scheduleTime}
