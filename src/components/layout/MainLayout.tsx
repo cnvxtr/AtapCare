@@ -78,8 +78,8 @@ export default function MainLayout() {
       setNotifCount(c)
     }
     refresh()
-    // Polling 60 detik (blueprint 2.8.1)
-    const t = setInterval(refresh, 60_000)
+    // Polling 30 detik (blueprint 2.8.1)
+    const t = setInterval(refresh, 30_000)
     return () => { alive = false; clearInterval(t) }
   }, [user])
 

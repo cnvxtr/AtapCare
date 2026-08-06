@@ -13,17 +13,19 @@ export default function TrackPage() {
 
   const [ticketId, setTicketId] = useState(urlTicket);
   const [result, setResult] = useState<{
-    status: string; site: string; unit: string; updated: string; technician: string | null
+    status: string; site: string; unit: string; updated: string; technician: string | null; rawStatus: string
   } | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [lastSearched, setLastSearched] = useState("");
 
   const isFromSubmit = !!urlTicket && !!result;
 
   const doSearch = useCallback(async (id: string) => {
     setSearching(true);
     const ticket = await getTicketByCode(id.trim().toUpperCase());
+    setLastSearched(id.trim().toUpperCase());
 
     if (ticket) {
       setResult({
@@ -42,6 +44,7 @@ export default function TrackPage() {
           hour: "2-digit", minute: "2-digit",
         }),
         technician: ticket.technicianName,
+        rawStatus: ticket.status,
       });
       setNotFound(false);
     } else {
@@ -50,6 +53,15 @@ export default function TrackPage() {
     }
     setSearching(false);
   }, []);
+
+  // Polling 30s selama hasil tampil; berhenti saat status final
+  // (Realtime anon diblokir RLS → polling adalah jalur yang diizinkan blueprint 2.8.1).
+  useEffect(() => {
+    if (!lastSearched || !result) return
+    if (["CLOSED", "VOID", "DUPLICATE", "REJECTED"].includes(result.rawStatus)) return
+    const t = setInterval(() => { doSearch(lastSearched) }, 30_000)
+    return () => clearInterval(t)
+  }, [lastSearched, result, doSearch]);
 
   useEffect(() => {
     if (urlTicket) {
