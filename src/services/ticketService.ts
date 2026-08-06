@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { compressImage } from '@/lib/image'
+import { uploadTicketPhoto } from '@/services/photoService'
 
 export function generateTicketCode(): string {
   const now = new Date()
@@ -24,7 +24,15 @@ export interface CreateTicketPayload {
 
 export async function createTicket(data: CreateTicketPayload) {
   let photos: string[] = []
-  if (data.photos?.length) photos = await Promise.all(data.photos.map(compressImage))
+  if (data.photos?.length) {
+    // Foto portal → Storage (bukan data URL) agar kolom DB tidak membengkak (K2).
+    const folder = `ticket-photos/guest/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+    try {
+      photos = await Promise.all(data.photos.map((f) => uploadTicketPhoto(f, folder)))
+    } catch {
+      return { error: 'Gagal mengunggah foto. Silakan coba lagi.' }
+    }
+  }
 
   // RPC SECURITY DEFINER: validasi + insert dilakukan di sisi server (RLS anon
   // tidak lagi mengizinkan insert langsung ke tickets/activities).

@@ -1,8 +1,10 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Phone, Loader2, AlertTriangle, X } from "lucide-react";
+import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Phone, Loader2, AlertTriangle, X, Save } from "lucide-react";
 import { Combobox } from "@/components/ui/combobox";
 import { createTicket, getSitesForReport, type SiteReport } from "@/services";
+import { loadDraft, clearDraft, persistDraft } from "@/lib/draft";
+import { toast } from "sonner";
 import logo from '../assets/logo.png'
 
 const WA_NUMBER = "6281242141414";
@@ -39,6 +41,40 @@ export default function ReportPage() {
     });
     return () => { alive = false; };
   }, []);
+
+  // Pulihkan draft (BR 2.2: expiry 24 jam, dihapus loadDraft bila lewat).
+  useEffect(() => {
+    const draft = loadDraft();
+    if (!draft) return;
+    setReporterName(draft.reporterName);
+    setPosition(draft.position);
+    setPhone(draft.phone);
+    setCompany(draft.company);
+    setSite(draft.site);
+    setUnit(draft.unit);
+    setDesc(draft.desc);
+    if (draft.photos.length) {
+      Promise.all(draft.photos.map(dataUrlToFile)).then(setPhotos).catch(() => setPhotos([]));
+    }
+    toast.info("Draft tersimpan dipulihkan.");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave setiap 10 detik selama tidak dalam layar sukses (BR 2.2).
+  useEffect(() => {
+    if (submitted) return;
+    const t = setTimeout(() => {
+      persistDraft({ reporterName, position, phone, company, site, unit, desc }, photos);
+    }, 10_000);
+    return () => clearTimeout(t);
+  }, [reporterName, position, phone, company, site, unit, desc, photos, submitted]);
+
+  async function handleSaveDraft() {
+    const status = await persistDraft({ reporterName, position, phone, company, site, unit, desc }, photos);
+    if (status === 'ok') toast.success("Draft tersimpan. Anda bisa lanjut nanti.");
+    else if (status === 'text') toast.warning("Draft teks tersimpan, foto tidak ikut (penyimpanan penuh).");
+    else toast.error("Gagal menyimpan draft.");
+  }
 
   const NO_COMPANY = "(Tanpa Perusahaan)";
   const companyOptions = Array.from(new Set(sites.map((s) => s.customer_name || NO_COMPANY))).map((n) => ({ value: n, label: n }));
@@ -106,6 +142,7 @@ export default function ReportPage() {
 
     if (result?.code) {
       setTicketId(result.code);
+      clearDraft();
       setSubmitted(true);
     } else {
       setSubmitError(result?.error || "Gagal mengirim tiket. Silakan coba lagi.");
@@ -318,7 +355,14 @@ export default function ReportPage() {
             )}
           </Field>
 
-          <div className="flex items-center justify-end pt-4 border-t border-border">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-accent/40 transition inline-flex items-center gap-2"
+            >
+              <Save className="h-4 w-4" /> Simpan & Lanjut Nanti
+            </button>
             <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-lg bg-foreground text-background font-medium hover:bg-foreground/90 transition disabled:opacity-50 inline-flex items-center gap-2">
               {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Mengirim…</> : "Kirim Tiket"}
             </button>
@@ -435,4 +479,10 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </label>
   );
+}
+
+async function dataUrlToFile(dataUrl: string, index: number): Promise<File> {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  return new File([blob], `draft-${index}.jpg`, { type: "image/jpeg" });
 }
