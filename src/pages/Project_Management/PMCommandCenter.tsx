@@ -1,15 +1,14 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
-import { Search, Table, LayoutGrid, Filter, User, Ban, AlertTriangle, ChevronDown, Check, X, Calendar as CalendarIcon } from 'lucide-react'
+import { Search, Table, LayoutGrid, Filter, User, Ban, AlertTriangle, ChevronDown, Check, X } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import FieldError from '../../components/FieldError'
-import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
-import Calendar from '../../components/Calendar'
+import SchedulePicker from '../../components/SchedulePicker'
 import { getTechnicians } from '../../services/users'
 
 // SEGMEN STATUS FLOW TIKET (persis helpdesk)
@@ -48,9 +47,7 @@ export default function PMCommandCenter() {
     const [selectedTech, setSelectedTech] = useState('')
     const [supportSel, setSupportSel] = useState<string[]>([])
     const [scheduleDate, setScheduleDate] = useState('')
-    const [scheduleHour, setScheduleHour] = useState('')
-    const [scheduleMinute, setScheduleMinute] = useState('')
-    const [calendarOpen, setCalendarOpen] = useState(false)
+    const [scheduleTime, setScheduleTime] = useState('')
     const [actionReason, setActionReason] = useState('')
     const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
 
@@ -86,15 +83,12 @@ export default function PMCommandCenter() {
     }
 
     const handleAssign = () => {
-        const hh = Number(scheduleHour), mm = Number(scheduleMinute)
         const errs: { tech?: string; date?: string; time?: string } = {}
         if (!selectedTech) errs.tech = 'Mohon pilih teknisi'
         if (!scheduleDate) errs.date = 'Mohon pilih tanggal'
-        if (scheduleHour === '' || hh > 23) errs.time = 'Mohon isi jam (00-23)'
-        else if (scheduleMinute === '' || mm > 59) errs.time = 'Mohon isi menit (00-59)'
+        if (!scheduleTime) errs.time = 'Mohon pilih jam'
         if (Object.keys(errs).length) { setAssignErrors(errs); return }
         setAssignErrors({})
-        const scheduleTime = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
         // Cek Lembur (BR 3.2.2): akhir pekan ATAU jam di luar jam operasional 08.15-17.00 WIB.
         const isOvertime = isScheduleOvertime(`${scheduleDate}T${scheduleTime}`)
         setConfirmAssign({
@@ -129,7 +123,7 @@ export default function PMCommandCenter() {
     const closeModals = () => {
         setShowAssignModal(false); setShowReassignModal(false); setShowVetoModal(false)
         setConfirmAssign(null); setAssignErrors({}); setReassignErrors({}); setVetoErrors({})
-        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleHour(''); setScheduleMinute(''); setCalendarOpen(false); setActionReason('')
+        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleTime(''); setActionReason('')
     }
 
     return (
@@ -352,7 +346,7 @@ export default function PMCommandCenter() {
             {/* 1. MODAL TUGASKAN */}
             {showAssignModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
-                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                    <div className="bg-card w-full max-w-lg rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5" /> Tugaskan Teknisi</h3>
                             <button onClick={() => setShowAssignModal(false)} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
@@ -382,48 +376,6 @@ export default function PMCommandCenter() {
                                 <FieldError msg={assignErrors.tech} />
                             </div>
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Jadwal Pelaksanaan</label>
-                                <div className="mt-1 flex items-center gap-2">
-                                    <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-                                        <PopoverTrigger asChild>
-                                            <button type="button" className={`flex-1 min-w-0 px-3 py-2 border-2 ${assignErrors.date ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
-                                                <span className={`truncate ${scheduleDate ? 'text-foreground' : 'text-muted-foreground'}`}>
-                                                    {scheduleDate
-                                                        ? new Date(`${scheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
-                                                        : 'Pilih Tanggal'}
-                                                </span>
-                                                <CalendarIcon className="w-4 h-4 opacity-50 shrink-0" />
-                                            </button>
-                                        </PopoverTrigger>
-                                        <PopoverContent align="start" className="z-[130] w-auto p-0 border-border">
-                                            <Calendar value={scheduleDate} onChange={d => { setScheduleDate(d); setCalendarOpen(false); setAssignErrors(prev => ({ ...prev, date: undefined })) }} />
-                                        </PopoverContent>
-                                    </Popover>
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            maxLength={2}
-                                            placeholder="Jam"
-                                            value={scheduleHour}
-                                            onChange={e => { setScheduleHour(e.target.value.replace(/\D/g, '').slice(0, 2)); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
-                                            className={`w-14 px-2 py-2 border-2 ${assignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm text-center outline-none`}
-                                        />
-                                        <span className="text-muted-foreground font-bold">:</span>
-                                        <input
-                                            type="text"
-                                            inputMode="numeric"
-                                            maxLength={2}
-                                            placeholder="Menit"
-                                            value={scheduleMinute}
-                                            onChange={e => { setScheduleMinute(e.target.value.replace(/\D/g, '').slice(0, 2)); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
-                                            className={`w-14 px-2 py-2 border-2 ${assignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm text-center outline-none`}
-                                        />
-                                    </div>
-                                </div>
-                                <FieldError msg={assignErrors.date || assignErrors.time} />
-                            </div>
-                            <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Teknisi Pendukung (opsional)</label>
                                 <div className="mt-1 border-2 border-border rounded p-2 space-y-0.5 max-h-40 overflow-y-auto">
                                     {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
@@ -437,6 +389,18 @@ export default function PMCommandCenter() {
                                         </label>
                                     ))}
                                 </div>
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-muted-foreground">Jadwal Pelaksanaan</label>
+                                <div className="mt-1">
+                                    <SchedulePicker
+                                        date={scheduleDate}
+                                        time={scheduleTime}
+                                        onDate={d => { setScheduleDate(d); setAssignErrors(prev => ({ ...prev, date: undefined })) }}
+                                        onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
+                                    />
+                                </div>
+                                <FieldError msg={assignErrors.date || assignErrors.time} />
                             </div>
                             <div className="flex gap-3 pt-2">
                                 <button onClick={() => setShowAssignModal(false)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
