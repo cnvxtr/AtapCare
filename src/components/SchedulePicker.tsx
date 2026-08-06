@@ -45,8 +45,8 @@ export default function SchedulePicker({ date, time, onDate, onTime }: ScheduleP
           className="w-full"
         />
       </div>
-      <div className="flex-1 min-w-0 max-h-56 md:max-h-72 overflow-y-auto rounded-lg border-2 border-border bg-card p-3">
-        <div className="grid grid-cols-3 gap-1.5">
+      <div className="md:w-48 max-h-56 md:max-h-none overflow-y-auto rounded-lg border-2 border-border bg-card p-3">
+        <div className="grid grid-cols-3 gap-1.5 md:grid-cols-1">
           {SLOTS.map((s) => (
             <button
               key={s}
