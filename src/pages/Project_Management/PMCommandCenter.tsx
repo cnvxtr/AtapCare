@@ -300,17 +300,17 @@ export default function PMCommandCenter() {
                     footer={
                         <>
                             {selectedTicket.status === 'UNASSIGNED' && (
-                                <button onClick={() => setShowAssignModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">
+                                <button onClick={() => setShowAssignModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold">
                                     <User className="w-4 h-4" /> Tugaskan Teknisi
                                 </button>
                             )}
                             {(selectedTicket.status === 'SCHEDULED' || selectedTicket.status === 'EN_ROUTE') && (
-                                <button onClick={() => setShowReassignModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-700 text-white rounded-md font-bold hover:bg-neutral-800 transition">
+                                <button onClick={() => setShowReassignModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-700 text-white rounded-[3px] font-bold hover:bg-neutral-800 transition">
                                     <User className="w-4 h-4" /> Ganti Teknisi
                                 </button>
                             )}
                             {selectedTicket.status === 'PENDING' && (
-                                <button onClick={() => setShowVetoModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-600 text-white rounded-md font-bold hover:bg-red-700 transition">
+                                <button onClick={() => setShowVetoModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-600 text-white rounded-[3px] font-bold hover:bg-red-700 transition">
                                     <Ban className="w-4 h-4" /> Veto Pending (Lanjutkan Kerja)
                                 </button>
                             )}
@@ -351,7 +351,7 @@ export default function PMCommandCenter() {
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5" /> Tugaskan Teknisi</h3>
-                            <button onClick={() => setShowAssignModal(false)} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setShowAssignModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-4">
                             <div>
@@ -443,7 +443,7 @@ export default function PMCommandCenter() {
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2"><Check className="w-5 h-5" /> Konfirmasi Penugasan</h3>
-                            <button onClick={() => setConfirmAssign(null)} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setConfirmAssign(null)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 gap-4">
@@ -486,7 +486,7 @@ export default function PMCommandCenter() {
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2 text-neutral-700"><AlertTriangle className="w-5 h-5" /> Ganti Teknisi</h3>
-                            <button onClick={() => setShowReassignModal(false)} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setShowReassignModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-4">
                             <div>

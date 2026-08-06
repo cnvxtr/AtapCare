@@ -67,7 +67,7 @@ const VARIANT_CLASS: Record<ActionVariant, string> = {
 };
 
 const FIELD_CLASS =
-  "w-full h-9 px-3 rounded-lg border border-border bg-muted text-sm text-foreground outline-none focus:border-ring";
+  "w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring";
 const LABEL_CLASS = "text-xs font-medium text-muted-foreground mb-1 block";
 
 function ActionButton({
@@ -90,7 +90,7 @@ function ActionButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border text-[11px] font-medium transition disabled:opacity-40 ${VARIANT_CLASS[variant]}`}
+      className={`inline-flex items-center gap-1 h-7 px-2.5 rounded-[3px] border text-[11px] font-medium transition disabled:opacity-40 ${VARIANT_CLASS[variant]}`}
     >
       {Icon && <Icon className="h-3 w-3" />}
       {label}
@@ -104,7 +104,7 @@ function RowActionMenu({ onEdit, onDelete }: { onEdit: () => void; onDelete: () 
       <DropdownMenuTrigger asChild>
         <button
           aria-label="Aksi"
-          className="h-8 w-8 grid place-items-center rounded-lg bg-black text-white hover:bg-neutral-800 transition"
+          className="h-8 w-8 grid place-items-center rounded-[3px] bg-black text-white hover:bg-neutral-800 transition"
         >
           <MoreHorizontal className="h-4 w-4" />
         </button>
@@ -663,7 +663,7 @@ export function AdminMasterData() {
     hasChildren ? (
       <button
         onClick={onToggle}
-        className="p-1 rounded-md hover:bg-accent transition text-muted-foreground"
+        className="p-1 rounded-[3px] hover:bg-accent transition text-muted-foreground"
         title={expanded ? "Tutup" : "Buka"}
       >
         {expanded ? (
@@ -690,12 +690,12 @@ export function AdminMasterData() {
                 setPage(1);
               }}
               placeholder="Cari customer, site, unit…"
-              className="pl-9 pr-4 h-9 rounded-lg border border-border bg-card text-sm outline-none focus:border-ring transition w-72 text-foreground"
+              className="pl-9 pr-4 h-9 rounded-[3px] border border-border bg-card text-sm outline-none focus:border-ring transition w-72 text-foreground"
             />
           </div>
           <button
             onClick={openAddCustomer}
-            className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
+            className="h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
           >
             <Plus className="h-3.5 w-3.5" /> Tambah Customer
           </button>
@@ -1259,7 +1259,7 @@ export function AdminMasterData() {
               <>
                 {wizStep === 1 && (
                   <>
-                    <DialogClose className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
+                    <DialogClose className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
                       Batal
                     </DialogClose>
                     <button
@@ -1280,7 +1280,7 @@ export function AdminMasterData() {
                   <>
                     <button
                       onClick={() => setWizStep(1)}
-                      className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition inline-flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition inline-flex items-center gap-1.5"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" /> Kembali
                     </button>
@@ -1291,7 +1291,7 @@ export function AdminMasterData() {
                           clearSiteFields();
                           goStep3();
                         }}
-                        className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition"
+                        className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition"
                       >
                         Lewati
                       </button>
@@ -1305,7 +1305,7 @@ export function AdminMasterData() {
                         setWizSiteSkipped(false);
                         goStep3();
                       }}
-                      className="px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
+                      className="px-5 py-2 rounded-[3px] bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
                     >
                       Lanjut <ArrowRight className="h-3.5 w-3.5" />
                     </button>
@@ -1315,14 +1315,14 @@ export function AdminMasterData() {
                   <>
                     <button
                       onClick={() => setWizStep(2)}
-                      className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition inline-flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition inline-flex items-center gap-1.5"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" /> Kembali
                     </button>
                     <button
                       onClick={handleWizardSave}
                       disabled={saving}
-                      className="px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-2"
+                      className="px-5 py-2 rounded-[3px] bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-2"
                     >
                       {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                       Simpan
@@ -1332,7 +1332,7 @@ export function AdminMasterData() {
               </>
             ) : (
               <>
-                <DialogClose className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
+                <DialogClose className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
                   Batal
                 </DialogClose>
                 <button
@@ -1342,7 +1342,7 @@ export function AdminMasterData() {
                     !formName.trim() ||
                     (formMode === "site" && (!formPicName.trim() || !formPicPhone.trim()))
                   }
-                  className="px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-2"
+                  className="px-5 py-2 rounded-[3px] bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-2"
                 >
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                   Simpan

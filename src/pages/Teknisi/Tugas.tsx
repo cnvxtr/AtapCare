@@ -295,25 +295,25 @@ export default function TugasTeknisi() {
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'SCHEDULED' && (
                                 <button onClick={() => handleTerimaTugas(selectedTicket)}
                                     disabled={isLoading === selectedTicket.id}
-                                    className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                    className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                     {isLoading === selectedTicket.id ? 'Memproses...' : <><ChevronRight className="w-4 h-4" /> Terima Tugas</>}
                                 </button>
                             )}
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'EN_ROUTE' && (
                                 <button onClick={() => handleMulaiKerja(selectedTicket)}
                                     disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
-                                    className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                    className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                     {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
                                 </button>
                             )}
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'WORKING' && (
                                 <div className="grid grid-cols-2 gap-3">
                                     <button onClick={() => setShowPendingModal(true)}
-                                        className="py-2.5 bg-transparent text-amber-600 border border-border rounded-md font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
+                                        className="py-2.5 bg-transparent text-amber-600 border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
                                         <PauseCircle className="w-4 h-4" /> Ajukan Pending
                                     </button>
                                     <button onClick={() => setShowCompleteModal(true)}
-                                        className="py-2.5 bg-foreground text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2">
+                                        className="py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
                                         <CheckCircle2 className="w-4 h-4" /> Selesaikan
                                     </button>
                                 </div>
@@ -326,7 +326,7 @@ export default function TugasTeknisi() {
                             )}
                             {selectedTicket.assignedTo !== user?.id && (
                                 <button onClick={() => setShowNoteModal(true)}
-                                    className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2">
+                                    className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
                                     <FileText className="w-4 h-4" /> Tambahkan Foto & Catatan
                                 </button>
                             )}
@@ -370,7 +370,7 @@ export default function TugasTeknisi() {
                             <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2">
                                 <PauseCircle className="w-5 h-5" /> Ajukan Pending
                             </h3>
-                            <button onClick={() => setShowPendingModal(false)} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setShowPendingModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <textarea value={pendingReason} onChange={e => setPendingReason(e.target.value)}
                             placeholder="Alasan pending (wajib)..."
@@ -393,7 +393,7 @@ export default function TugasTeknisi() {
                             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                                 <CheckCircle2 className="w-5 h-5 text-emerald-600" /> Selesaikan Tugas
                             </h3>
-                            <button onClick={() => { setShowCompleteModal(false); setCompleteNote(''); setSparepart(''); setPhotos([]) }} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => { setShowCompleteModal(false); setCompleteNote(''); setSparepart(''); setPhotos([]) }} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-4">
                             <div>
@@ -457,7 +457,7 @@ export default function TugasTeknisi() {
                             <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2">
                                 <AlertTriangle className="w-5 h-5" /> Berpotensi Lembur
                             </h3>
-                            <button onClick={() => setShowLemburModal(false)} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => setShowLemburModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-200 mb-4">
                             <p className="text-sm text-amber-800">
@@ -486,7 +486,7 @@ export default function TugasTeknisi() {
                             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                                 <FileText className="w-5 h-5" /> Foto & Catatan Pendukung
                             </h3>
-                            <button onClick={() => { setShowNoteModal(false); setNoteText(''); setNotePhotos([]) }} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => { setShowNoteModal(false); setNoteText(''); setNotePhotos([]) }} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-4">
                             <div>

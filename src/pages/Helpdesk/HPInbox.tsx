@@ -499,10 +499,10 @@ export default function HPInbox() {
                         <>
                             {liveTicket.status === 'NEW' && (
                                 <>
-                                    <button onClick={handleValidateOpen} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">Validasi & Kirim WA</button>
+                                    <button onClick={handleValidateOpen} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold">Validasi & Kirim WA</button>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => { setVoidTicketId(liveTicket.id); setVoidError(''); setShowVoidModal(true); }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-md font-medium hover:bg-red-50/60 transition">Batal</button>
-                                        <button onClick={() => { setDupError(''); setShowDuplicateModal(true); }} className="py-2.5 bg-transparent text-amber-600 border border-border rounded-md font-medium hover:bg-amber-50/60 transition">Gabung</button>
+                                        <button onClick={() => { setVoidTicketId(liveTicket.id); setVoidError(''); setShowVoidModal(true); }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-[3px] font-medium hover:bg-red-50/60 transition">Batal</button>
+                                        <button onClick={() => { setDupError(''); setShowDuplicateModal(true); }} className="py-2.5 bg-transparent text-amber-600 border border-border rounded-[3px] font-medium hover:bg-amber-50/60 transition">Gabung</button>
                                     </div>
                                 </>
                             )}
@@ -511,25 +511,25 @@ export default function HPInbox() {
                                     <p className="text-xs font-semibold text-muted-foreground">Pilih prioritas untuk melanjutkan:</p>
                                     <div className="grid grid-cols-3 gap-3">
                                         {(['P1', 'P2', 'P3'] as const).map(p => (
-                                            <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-md border font-bold transition ${p === 'P1' ? 'bg-red-600 text-white border-red-600' : p === 'P2' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600'}`}>{p}</button>
+                                            <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-[3px] border font-bold transition ${p === 'P1' ? 'bg-red-600 text-white border-red-600' : p === 'P2' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600'}`}>{p}</button>
                                         ))}
                                     </div>
                                 </div>
                             )}
                             {liveTicket.status === 'OPEN' && liveTicket.priority && (
                                 <>
-                                    <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">Remote Support</button>
-                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} className="w-full py-2.5 bg-transparent text-foreground border border-border rounded-md font-medium hover:bg-muted transition">Eskalasi ke PM</button>
+                                    <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold">Remote Support</button>
+                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} className="w-full py-2.5 bg-transparent text-foreground border border-border rounded-[3px] font-medium hover:bg-muted transition">Eskalasi ke PM</button>
                                 </>
                             )}
                             {liveTicket.status === 'RESOLVED' && (
                                 <>
-                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'CLOSED', 'Tiket divalidasi dan ditutup oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-emerald-600 text-white rounded-md font-bold hover:bg-emerald-700 transition">Validasi & Tutup</button>
-                                    <button onClick={() => { setValidationAction('rework'); setReworkReason(''); setReworkError(''); setShowValidationModal(true); }} className="w-full py-2.5 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition">Kembalikan / Rework</button>
+                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'CLOSED', 'Tiket divalidasi dan ditutup oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-emerald-600 text-white rounded-[3px] font-bold hover:bg-emerald-700 transition">Validasi & Tutup</button>
+                                    <button onClick={() => { setValidationAction('rework'); setReworkReason(''); setReworkError(''); setShowValidationModal(true); }} className="w-full py-2.5 bg-red-600 text-white rounded-[3px] font-medium hover:bg-red-700 transition">Kembalikan / Rework</button>
                                 </>
                             )}
                             {liveTicket.status === 'CLOSED' && (
-                                <button onClick={() => { updateTicketStatus(liveTicket.id, 'WORKING', 'Tiket dibuka kembali (reopen) oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
+                                <button onClick={() => { updateTicketStatus(liveTicket.id, 'WORKING', 'Tiket dibuka kembali (reopen) oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-blue-600 text-white rounded-[3px] font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
                             )}
                             {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
                                 <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
@@ -668,7 +668,7 @@ export default function HPInbox() {
                                 <span className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
                                     {createStep === 'form' ? 'Mode · Data' : createStep === 'review' ? 'Mode · Eskalasi' : createStep === 'remote' ? 'Mode · Remote' : createStep === 'path' ? 'Mode · Jalur' : 'Mode · Void'}
                                 </span>
-                                <button onClick={closeCreateModal} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                                <button onClick={closeCreateModal} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                             </div>
                         </div>
 
@@ -773,7 +773,7 @@ export default function HPInbox() {
                                                     const on = formData.priority === v
                                                     return (
                                                         <button key={v} onClick={() => { setFormData({ ...formData, priority: v }); setFormErrors(prev => ({ ...prev, priority: undefined })) }}
-                                                            className={`flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-semibold transition ${on ? `text-white shadow-sm ${active}` : 'bg-card border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'}`}>
+                                                            className={`flex items-center justify-center gap-2 py-2.5 rounded-[3px] border text-sm font-semibold transition ${on ? `text-white shadow-sm ${active}` : 'bg-card border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground'}`}>
                                                             <span className={`w-1.5 h-1.5 rounded-full ${on ? 'bg-white' : dot}`} />
                                                             {v} · {sub}
                                                         </button>
@@ -819,7 +819,7 @@ export default function HPInbox() {
                                             <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 mb-1.5">
                                                 <Info className="w-3.5 h-3.5" /> Catatan Internal (Hanya Helpdesk/PM/Admin)
                                             </label>
-                                            <textarea value={formData.catatanInternal} onChange={e => setFormData({ ...formData, catatanInternal: e.target.value })} rows={2} className="w-full px-3 py-2.5 bg-white/70 border border-amber-300 rounded-lg text-sm text-foreground outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 resize-none" />
+                                            <textarea value={formData.catatanInternal} onChange={e => setFormData({ ...formData, catatanInternal: e.target.value })} rows={2} className="w-full px-3 py-2.5 bg-white/70 border border-amber-300 rounded-[3px] text-sm text-foreground outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 resize-none" />
                                         </div>
                                     </section>
                                 </div>
@@ -827,19 +827,19 @@ export default function HPInbox() {
                                 <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl">
                                     <p className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-widest mb-3">Tindakan</p>
                                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        <button onClick={handleSaveNew} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-xl border border-border bg-card hover:border-foreground/50 hover:shadow-sm transition-colors group disabled:opacity-50">
+                                        <button onClick={handleSaveNew} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-border bg-card hover:border-foreground/50 hover:shadow-sm transition-colors group disabled:opacity-50">
                                             <span className="inline-flex p-2 rounded-full bg-muted group-hover:bg-accent transition"><CheckCircle2 className="w-4 h-4 text-muted-foreground group-hover:text-foreground" /></span>
                                             <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground">Simpan Baru</span>
                                         </button>
-                                        <button onClick={handleEskalasiClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-xl border border-blue-200 bg-card hover:border-blue-400 hover:shadow-sm hover:bg-blue-50/40 transition-colors group disabled:opacity-50">
+                                        <button onClick={handleEskalasiClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-blue-200 bg-card hover:border-blue-400 hover:shadow-sm hover:bg-blue-50/40 transition-colors group disabled:opacity-50">
                                             <span className="inline-flex p-2 rounded-full bg-blue-50 group-hover:bg-blue-100 transition"><Send className="w-4 h-4 text-blue-600" /></span>
                                             <span className="text-xs font-bold text-blue-700">Eskalasi PM</span>
                                         </button>
-                                        <button onClick={handleRemoteClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-xl border border-emerald-200 bg-card hover:border-emerald-400 hover:shadow-sm hover:bg-emerald-50/40 transition-colors group disabled:opacity-50">
+                                        <button onClick={handleRemoteClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-emerald-200 bg-card hover:border-emerald-400 hover:shadow-sm hover:bg-emerald-50/40 transition-colors group disabled:opacity-50">
                                             <span className="inline-flex p-2 rounded-full bg-emerald-50 group-hover:bg-emerald-100 transition"><Headset className="w-4 h-4 text-emerald-600" /></span>
                                             <span className="text-xs font-bold text-emerald-700">Selesai Remote</span>
                                         </button>
-                                        <button onClick={handleVoidClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-xl border border-red-200 bg-card hover:border-red-400 hover:shadow-sm hover:bg-red-50/40 transition-colors group disabled:opacity-50">
+                                        <button onClick={handleVoidClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-red-200 bg-card hover:border-red-400 hover:shadow-sm hover:bg-red-50/40 transition-colors group disabled:opacity-50">
                                             <span className="inline-flex p-2 rounded-full bg-red-50 group-hover:bg-red-100 transition"><AlertTriangle className="w-4 h-4 text-red-600" /></span>
                                             <span className="text-xs font-bold text-red-700">Dibatalkan</span>
                                         </button>
@@ -868,8 +868,8 @@ export default function HPInbox() {
                                 <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl">
                                     <p className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-widest mb-3">Koreksi terakhir sebelum data keluar</p>
                                     <div className="flex gap-3">
-                                        <button onClick={() => setCreateStep('form')} className="flex-1 py-2.5 bg-card border border-border rounded-lg text-sm font-semibold hover:border-foreground/50 transition-colors">Edit Dulu</button>
-                                        <button onClick={handleConfirmEskalasi} disabled={submitting} className="flex-1 py-2.5 bg-blue-600 text-white border border-blue-700 rounded-lg text-sm font-semibold hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
+                                        <button onClick={() => setCreateStep('form')} className="flex-1 py-2.5 bg-card border border-border rounded-[3px] text-sm font-semibold hover:border-foreground/50 transition-colors">Edit Dulu</button>
+                                        <button onClick={handleConfirmEskalasi} disabled={submitting} className="flex-1 py-2.5 bg-blue-600 text-white border border-blue-700 rounded-[3px] text-sm font-semibold hover:bg-blue-700 flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
                                             <Send className="w-4 h-4" /> Ya, Eskalasi
                                         </button>
                                     </div>
@@ -882,7 +882,7 @@ export default function HPInbox() {
                                 <div className="p-5 space-y-4 overflow-y-auto flex-1">
                                     <div>
                                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Media</label>
-                                        <div className="flex gap-2">{['WA', 'Telepon', 'VC'].map(m => (<button key={m} onClick={() => setRemoteMedia(m)} className={`flex-1 py-2 rounded-lg border text-sm font-semibold transition ${remoteMedia === m ? 'bg-foreground text-primary-foreground border-foreground' : 'bg-card border-border hover:border-foreground/50'}`}>{m}</button>))}</div>
+                                        <div className="flex gap-2">{['WA', 'Telepon', 'VC'].map(m => (<button key={m} onClick={() => setRemoteMedia(m)} className={`flex-1 py-2 rounded-[3px] border text-sm font-semibold transition ${remoteMedia === m ? 'bg-foreground text-primary-foreground border-foreground' : 'bg-card border-border hover:border-foreground/50'}`}>{m}</button>))}</div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Durasi (Menit)</label>
@@ -896,16 +896,16 @@ export default function HPInbox() {
                                     <div>
                                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Hasil</label>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <button onClick={() => { setRemoteResult('success'); setRemoteCreateErrors(prev => ({ ...prev, result: undefined })) }} className={`py-2.5 rounded-lg border text-sm font-semibold transition ${remoteResult === 'success' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-card border-border hover:border-emerald-400'}`}>Berhasil</button>
-                                            <button onClick={() => { setRemoteResult('fail'); setRemoteCreateErrors(prev => ({ ...prev, result: undefined })) }} className={`py-2.5 rounded-lg border text-sm font-semibold transition ${remoteResult === 'fail' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-card border-border hover:border-red-400'}`}>Gagal</button>
+                                            <button onClick={() => { setRemoteResult('success'); setRemoteCreateErrors(prev => ({ ...prev, result: undefined })) }} className={`py-2.5 rounded-[3px] border text-sm font-semibold transition ${remoteResult === 'success' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-card border-border hover:border-emerald-400'}`}>Berhasil</button>
+                                            <button onClick={() => { setRemoteResult('fail'); setRemoteCreateErrors(prev => ({ ...prev, result: undefined })) }} className={`py-2.5 rounded-[3px] border text-sm font-semibold transition ${remoteResult === 'fail' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-card border-border hover:border-red-400'}`}>Gagal</button>
                                         </div>
                                         <FieldError msg={remoteCreateErrors.result} />
                                         <p className="text-[10px] text-muted-foreground mt-1.5">Berhasil → tiket RESOLVED lalu pilih jalur. Gagal → tiket ditugaskan ke PM.</p>
                                     </div>
                                 </div>
                                 <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl flex gap-3">
-                                    <button onClick={() => setCreateStep('form')} className="flex-1 py-2.5 bg-card border border-border rounded-lg text-sm font-semibold hover:border-foreground/50 transition-colors">Batal</button>
-                                    <button onClick={handleNewRemoteSubmit} disabled={submitting} className="flex-1 py-2.5 bg-emerald-600 text-white border border-emerald-700 rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50">Simpan Remote</button>
+                                    <button onClick={() => setCreateStep('form')} className="flex-1 py-2.5 bg-card border border-border rounded-[3px] text-sm font-semibold hover:border-foreground/50 transition-colors">Batal</button>
+                                    <button onClick={handleNewRemoteSubmit} disabled={submitting} className="flex-1 py-2.5 bg-emerald-600 text-white border border-emerald-700 rounded-[3px] text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50">Simpan Remote</button>
                                 </div>
                             </>
                         )}
@@ -913,17 +913,17 @@ export default function HPInbox() {
                         {createStep === 'path' && (
                             <>
                                 <div className="p-5 space-y-3 overflow-y-auto flex-1">
-                                    <button onClick={handleNewPathA} className="w-full p-4 text-left rounded-xl border border-emerald-200 bg-card hover:border-emerald-400 hover:bg-emerald-50/40 transition-colors">
+                                    <button onClick={handleNewPathA} className="w-full p-4 text-left rounded-[3px] border border-emerald-200 bg-card hover:border-emerald-400 hover:bg-emerald-50/40 transition-colors">
                                         <p className="font-bold text-foreground flex items-center gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-600" /> Jalur A: Konfirmasi Langsung</p>
                                         <p className="text-xs text-muted-foreground mt-0.5">Pelanggan sudah konfirmasi. Langsung tutup tiket.</p>
                                     </button>
-                                    <button onClick={handleNewPathB} className="w-full p-4 text-left rounded-xl border border-blue-200 bg-card hover:border-blue-400 hover:bg-blue-50/40 transition-colors">
+                                    <button onClick={handleNewPathB} className="w-full p-4 text-left rounded-[3px] border border-blue-200 bg-card hover:border-blue-400 hover:bg-blue-50/40 transition-colors">
                                         <p className="font-bold text-foreground flex items-center gap-2"><Send className="w-4 h-4 text-blue-600" /> Jalur B: Kirim WA</p>
                                         <p className="text-xs text-muted-foreground mt-0.5">Kirim template WA. Auto-close 24 jam jika tidak ada balasan.</p>
                                     </button>
                                 </div>
                                 <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl">
-                                    <button onClick={() => setCreateStep('remote')} className="w-full py-2.5 bg-card border border-border rounded-lg text-sm font-semibold hover:border-foreground/50 transition-colors">Kembali</button>
+                                    <button onClick={() => setCreateStep('remote')} className="w-full py-2.5 bg-card border border-border rounded-[3px] text-sm font-semibold hover:border-foreground/50 transition-colors">Kembali</button>
                                 </div>
                             </>
                         )}
@@ -937,13 +937,13 @@ export default function HPInbox() {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Alasan Pembatalan</label>
-                                        <textarea value={newVoidReason} onChange={e => { setNewVoidReason(e.target.value); setVoidCreateError('') }} rows={3} className={`w-full px-3 py-2.5 bg-background border rounded-lg text-sm outline-none transition focus:ring-2 resize-none ${voidCreateError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-red-300 focus:border-red-500 focus:ring-red-500/10'}`} placeholder="Contoh: Pelapor mengirim laporan ganda..." />
+                                        <textarea value={newVoidReason} onChange={e => { setNewVoidReason(e.target.value); setVoidCreateError('') }} rows={3} className={`w-full px-3 py-2.5 bg-background border rounded-[3px] text-sm outline-none transition focus:ring-2 resize-none ${voidCreateError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-red-300 focus:border-red-500 focus:ring-red-500/10'}`} placeholder="Contoh: Pelapor mengirim laporan ganda..." />
                                         <FieldError msg={voidCreateError} />
                                     </div>
                                 </div>
                                 <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl flex gap-3">
-                                    <button onClick={() => setCreateStep('form')} className="flex-1 py-2.5 bg-card border border-border rounded-lg text-sm font-semibold hover:border-foreground/50 transition-colors">Batal</button>
-                                    <button onClick={handleNewVoidSubmit} disabled={submitting} className="flex-1 py-2.5 bg-red-600 text-white border border-red-700 rounded-lg text-sm font-semibold hover:bg-red-700 flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
+                                    <button onClick={() => setCreateStep('form')} className="flex-1 py-2.5 bg-card border border-border rounded-[3px] text-sm font-semibold hover:border-foreground/50 transition-colors">Batal</button>
+                                    <button onClick={handleNewVoidSubmit} disabled={submitting} className="flex-1 py-2.5 bg-red-600 text-white border border-red-700 rounded-[3px] text-sm font-semibold hover:bg-red-700 flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
                                         <AlertTriangle className="w-4 h-4" /> Ya, Dibatalkan
                                     </button>
                                 </div>

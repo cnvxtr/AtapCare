@@ -447,13 +447,13 @@ export function AdminUsers() {
               setPage(1);
             }}
             placeholder="Cari nama atau username…"
-            className="pl-9 pr-4 h-9 rounded-lg border border-border bg-card text-sm outline-none focus:border-ring transition w-64 text-foreground"
+            className="pl-9 pr-4 h-9 rounded-[3px] border border-border bg-card text-sm outline-none focus:border-ring transition w-64 text-foreground"
           />
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={openAddDialog}
-            className="h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
+            className="h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
           >
             <Plus className="h-3.5 w-3.5" /> Tambah User
           </button>
@@ -574,7 +574,7 @@ export function AdminUsers() {
                           <DropdownMenuTrigger asChild>
                             <button
                               aria-label="Aksi"
-                              className="h-8 w-8 grid place-items-center rounded-lg bg-black text-white hover:bg-neutral-800 transition"
+                              className="h-8 w-8 grid place-items-center rounded-[3px] bg-black text-white hover:bg-neutral-800 transition"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
@@ -656,7 +656,7 @@ export function AdminUsers() {
               <input
                 value={formName}
                 onChange={(e) => setFormName(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
                 placeholder="Nama lengkap"
               />
             </div>
@@ -665,7 +665,7 @@ export function AdminUsers() {
               <input
                 value={formUsername}
                 onChange={(e) => setFormUsername(e.target.value)}
-                className="w-full h-9 px-3 rounded-lg border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
                 placeholder="Username login"
                 disabled={!!editingId}
               />
@@ -680,7 +680,7 @@ export function AdminUsers() {
                     value={formPassword}
                     onChange={(e) => setFormPassword(e.target.value)}
                     type={showPw ? "text" : "password"}
-                    className="w-full h-9 px-3 pr-10 rounded-lg border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                    className="w-full h-9 px-3 pr-10 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
                     placeholder="Min. 6 karakter"
                   />
                   <button
@@ -706,7 +706,7 @@ export function AdminUsers() {
                       key={r.value}
                       onClick={() => togglePrimaryRole(r.value)}
                       disabled={blocked}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
+                      className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${
                         selected
                           ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
                           : blocked
@@ -729,7 +729,7 @@ export function AdminUsers() {
                   <button
                     key={r.value}
                     onClick={() => toggleRole(r.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
+                    className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${
                       formRoles.includes(r.value)
                         ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
                         : "border-border text-muted-foreground hover:border-foreground/40"
@@ -748,7 +748,7 @@ export function AdminUsers() {
                     <button
                       key={s.value}
                       onClick={() => setFormStatus(s.value)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
+                      className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${
                         formStatus === s.value
                           ? s.value === "aktif"
                             ? "bg-green-600 text-white border-green-600"
@@ -778,7 +778,7 @@ export function AdminUsers() {
                     value={formPassword}
                     onChange={(e) => setFormPassword(e.target.value)}
                     type={showPw ? "text" : "password"}
-                    className="w-full h-9 px-3 pr-10 rounded-lg border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                    className="w-full h-9 px-3 pr-10 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
                     placeholder="Min. 6 karakter"
                   />
                   <button
@@ -793,7 +793,7 @@ export function AdminUsers() {
             )}
           </div>
           <div className="flex justify-end gap-2 pt-4 border-t border-border mt-6">
-            <DialogClose className="px-4 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
+            <DialogClose className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
               Batal
             </DialogClose>
             <button
@@ -805,7 +805,7 @@ export function AdminUsers() {
                 !formPrimaryRole ||
                 (!editingId && !formPassword.trim())
               }
-              className="px-5 py-2 rounded-lg bg-foreground text-background text-sm font-medium hover:opacity-90 transition disabled:opacity-50 inline-flex items-center gap-2"
+              className="px-5 py-2 rounded-[3px] bg-foreground text-background text-sm font-medium hover:opacity-90 transition disabled:opacity-50 inline-flex items-center gap-2"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               {editingId ? "Simpan" : "Tambah User"}

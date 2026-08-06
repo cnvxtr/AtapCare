@@ -28,13 +28,13 @@ export default function Landing() {
         <div className="mt-8 grid sm:grid-cols-2 gap-3 w-full max-w-md">
           <Link
             to="/report"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-foreground text-background font-medium hover:bg-foreground/90 transition text-sm"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] bg-foreground text-background font-medium hover:bg-foreground/90 transition text-sm"
           >
             Lapor Kendala <ArrowRight className="h-4 w-4" />
           </Link>
           <Link
             to="/track"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg border border-border bg-card text-foreground font-medium hover:border-foreground/30 transition text-sm"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] border border-border bg-card text-foreground font-medium hover:border-foreground/30 transition text-sm"
           >
             Pelacakan <ArrowRight className="h-4 w-4" />
           </Link>

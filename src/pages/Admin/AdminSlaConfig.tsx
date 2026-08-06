@@ -132,7 +132,7 @@ export function AdminSlaConfig() {
         <button
           onClick={() => handleSync()}
           disabled={syncing}
-          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-md border border-border text-xs text-muted-foreground hover:bg-muted transition disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-[3px] border border-border text-xs text-muted-foreground hover:bg-muted transition disabled:opacity-50"
         >
           <RefreshCw className={`h-3 w-3 ${syncing ? "animate-spin" : ""}`} />
           Sinkronkan libur
@@ -160,14 +160,14 @@ export function AdminSlaConfig() {
                   onChange={(e) =>
                     setEditHours((prev) => ({ ...prev, [priority]: Number(e.target.value) }))
                   }
-                  className="w-24 h-9 px-3 rounded-lg border border-border bg-card text-sm text-center font-mono text-foreground outline-none focus:border-ring"
+                  className="w-24 h-9 px-3 rounded-[3px] border border-border bg-card text-sm text-center font-mono text-foreground outline-none focus:border-ring"
                   min={1}
                 />
                 <span className="text-xs text-muted-foreground">jam</span>
                 <button
                   onClick={() => handleSavePreset(priority)}
                   disabled={saving || !dirty}
-                  className="ml-auto h-9 px-4 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition disabled:opacity-40 inline-flex items-center gap-1.5"
+                  className="ml-auto h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition disabled:opacity-40 inline-flex items-center gap-1.5"
                 >
                   <Save className="h-3.5 w-3.5" /> Simpan
                 </button>

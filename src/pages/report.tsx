@@ -180,7 +180,7 @@ export default function ReportPage() {
               <button
                 type="button"
                 onClick={handleCopy}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-background border border-border hover:bg-accent transition text-xs font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-background border border-border hover:bg-accent transition text-xs font-medium"
               >
                 {copied ? (
                   <><Check className="h-3.5 w-3.5 text-success" /> Tersalin</>
@@ -197,13 +197,13 @@ export default function ReportPage() {
             <div className="mt-8 flex flex-col gap-3 animate-in fade-in duration-500 delay-[400ms]">
               <button
                 onClick={handleCopyAndRedirect}
-                className="w-full px-5 py-3 rounded-lg bg-foreground text-background font-medium hover:bg-foreground/90 transition text-sm inline-flex items-center justify-center gap-2"
+                className="w-full px-5 py-3 rounded-[3px] bg-foreground text-background font-medium hover:bg-foreground/90 transition text-sm inline-flex items-center justify-center gap-2"
               >
                 Lacak Tiket Sekarang
               </button>
               <Link
                 to="/"
-                className="w-full px-5 py-3 rounded-lg bg-foreground text-background font-medium hover:bg-foreground/90 transition text-sm inline-flex items-center justify-center gap-2"
+                className="w-full px-5 py-3 rounded-[3px] bg-foreground text-background font-medium hover:bg-foreground/90 transition text-sm inline-flex items-center justify-center gap-2"
               >
                 Kembali ke Beranda
               </Link>
@@ -233,7 +233,7 @@ export default function ReportPage() {
       <div className="relative flex-1 max-w-2xl mx-auto px-6 py-12 w-full">
         <Link
           to="/"
-          className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition mb-8"
+          className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-[3px] bg-foreground text-background hover:bg-foreground/90 transition mb-8"
         >
           <ArrowLeft className="h-4 w-4" /> Kembali
         </Link>
@@ -349,7 +349,7 @@ export default function ReportPage() {
           </Field>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-            <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-lg bg-foreground text-background font-medium hover:bg-foreground/90 transition disabled:opacity-50 inline-flex items-center gap-2">
+            <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-[3px] bg-foreground text-background font-medium hover:bg-foreground/90 transition disabled:opacity-50 inline-flex items-center gap-2">
               {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Mengirim…</> : "Kirim Tiket"}
             </button>
           </div>
@@ -367,7 +367,7 @@ export default function ReportPage() {
         .input {
           width: 100%;
           padding: 0.625rem 0.75rem;
-          border-radius: 0.5rem;
+          border-radius: 3px;
           border: 1.5px solid hsl(var(--foreground) / 15%);
           background: var(--background);
           font-size: 0.875rem;

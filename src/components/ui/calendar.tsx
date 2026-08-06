@@ -34,10 +34,10 @@ function Calendar({
     ),
     weekday: "size-9 p-0 text-xs font-medium text-muted-foreground/80",
     day_button:
-      "relative flex size-9 items-center justify-center whitespace-nowrap rounded-lg p-0 text-foreground outline-offset-2 focus:outline-none focus-visible:z-10 hover:bg-accent group-data-[selected]:bg-primary hover:text-foreground group-data-[selected]:text-primary-foreground group-data-[disabled]:pointer-events-none group-data-[disabled]:text-foreground/30 group-data-[disabled]:line-through group-data-[outside]:text-foreground/30 group-data-[outside]:group-data-[selected]:text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
+      "relative flex size-9 items-center justify-center whitespace-nowrap rounded-[3px] p-0 text-foreground outline-offset-2 focus:outline-none focus-visible:z-10 hover:bg-accent group-data-[selected]:bg-primary hover:text-foreground group-data-[selected]:text-primary-foreground group-data-[disabled]:pointer-events-none group-data-[disabled]:text-foreground/30 group-data-[disabled]:line-through group-data-[outside]:text-foreground/30 group-data-[outside]:group-data-[selected]:text-primary-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring/70",
     day: "group size-9 px-0 text-sm",
     selected:
-      "group-data-[selected]:rounded-lg group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[selected]:after:hidden",
+      "group-data-[selected]:rounded-[3px] group-data-[selected]:bg-primary group-data-[selected]:text-primary-foreground group-data-[selected]:after:hidden",
     today: "*:after:pointer-events-none *:after:absolute *:after:bottom-1 *:after:start-1/2 *:after:z-10 *:after:size-[3px] *:after:-translate-x-1/2 *:after:rounded-full *:after:bg-primary [&[data-selected]:not(.range-middle)>*]:after:bg-background [&[data-disabled]>*]:after:bg-foreground/30 *:after:transition-colors",
     outside: "text-muted-foreground data-selected:bg-accent/50 data-selected:text-muted-foreground",
     disabled: "opacity-40",

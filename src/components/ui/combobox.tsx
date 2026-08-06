@@ -79,7 +79,7 @@ export function Combobox({
           disabled={disabled}
           placeholder={placeholder}
           className={cn(
-            "flex h-9 w-full rounded-md border border-input bg-card px-3 pr-8 py-1 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+            "flex h-9 w-full rounded-[3px] border border-input bg-card px-3 pr-8 py-1 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
           )}
         />
         <ChevronDown
@@ -101,7 +101,7 @@ export function Combobox({
                 onMouseEnter={() => setHighlight(i)}
                 onClick={() => pick(o)}
                 className={cn(
-                  "w-full text-left px-3 py-2 text-sm flex items-center justify-between transition rounded-md",
+                  "w-full text-left px-3 py-2 text-sm flex items-center justify-between transition rounded-[3px]",
                   i === highlight ? "bg-foreground text-background" : "text-foreground",
                 )}
               >

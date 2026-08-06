@@ -49,7 +49,7 @@ export default function TicketDrawer({ onClose, code, status, priority, slaTimeL
                                 {resolvedAt ? `${formatWIB(createdAt)} - ${formatWIB(resolvedAt)}` : formatWIB(createdAt)}
                             </p>
                         </div>
-                        <button onClick={onClose} className="p-2 rounded-md bg-foreground text-primary-foreground hover:opacity-90 transition" aria-label="Tutup">
+                        <button onClick={onClose} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity" aria-label="Tutup">
                             <X className="w-5 h-5" />
                         </button>
                     </div>
@@ -97,7 +97,7 @@ function PhotoLightbox({ images, index, onClose }: { images: string[]; index: nu
 
     return createPortal(
         <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4 animate-[fade-in_0.2s_ease]" onClick={onClose}>
-            <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-lg bg-foreground text-primary-foreground hover:opacity-80 transition z-10" aria-label="Tutup">
+            <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-[3px] bg-foreground text-background hover:opacity-80 transition z-10" aria-label="Tutup">
                 <X className="w-5 h-5" />
             </button>
             {multiple && hasPrev && (

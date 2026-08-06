@@ -140,7 +140,7 @@ export default function MainLayout() {
             <div className="flex-1" />
           )}
           {!collapsed && (
-            <button onClick={() => setCollapsed(true)} className="h-7 w-7 grid place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition">
+            <button onClick={() => setCollapsed(true)} className="h-7 w-7 grid place-items-center rounded-[3px] text-muted-foreground hover:bg-accent hover:text-foreground transition">
               <PanelLeftClose className="h-5 w-5" />
             </button>
           )}
@@ -183,7 +183,7 @@ export default function MainLayout() {
 
         {/* Profile widget */}
         <div className="relative p-2 border-t border-border">
-          <button onClick={() => !collapsed && setShowDropdown(!showDropdown)} className={`w-full glass rounded-lg p-3 relative overflow-hidden text-left hover:opacity-90 transition ${collapsed ? 'grid place-items-center' : ''}`}>
+          <button onClick={() => !collapsed && setShowDropdown(!showDropdown)} className={`w-full glass rounded-[3px] p-3 relative overflow-hidden text-left hover:opacity-90 transition ${collapsed ? 'grid place-items-center' : ''}`}>
             <div className="absolute -top-6 -right-6 h-16 w-16 rounded-full bg-foreground/5 blur-2xl" />
             <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'}`}>
               <div className="h-8 w-8 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-xs font-bold shrink-0">

@@ -96,7 +96,7 @@ export default function TrackPage() {
       <div className="relative flex-1 max-w-xl mx-auto px-6 py-12 w-full">
         <Link
           to="/"
-          className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg bg-foreground text-background hover:bg-foreground/90 transition mb-8"
+          className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-[3px] bg-foreground text-background hover:bg-foreground/90 transition mb-8"
         >
           <ArrowLeft className="h-4 w-4" /> Kembali
         </Link>
@@ -117,7 +117,7 @@ export default function TrackPage() {
             placeholder="Contoh: ATC-20260728-X7K9"
             className="input flex-1"
           />
-          <button type="submit" disabled={searching} className="px-5 py-2.5 rounded-lg bg-foreground text-background font-medium hover:bg-foreground/90 transition disabled:opacity-50 inline-flex items-center gap-2">
+          <button type="submit" disabled={searching} className="px-5 py-2.5 rounded-[3px] bg-foreground text-background font-medium hover:bg-foreground/90 transition disabled:opacity-50 inline-flex items-center gap-2">
             {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             Cari
           </button>
@@ -136,7 +136,7 @@ export default function TrackPage() {
               <button
                 type="button"
                 onClick={() => handleCopy(displayId)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-card border border-border hover:bg-accent transition text-xs font-medium"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[3px] bg-card border border-border hover:bg-accent transition text-xs font-medium"
               >
                 {copied ? (
                   <><Check className="h-3.5 w-3.5 text-success" /> Tersalin</>
@@ -178,7 +178,7 @@ export default function TrackPage() {
                   <button
                     type="button"
                     onClick={() => handleCopy(displayId)}
-                    className="p-1 rounded-md hover:bg-accent transition"
+                    className="p-1 rounded-[3px] hover:bg-accent transition"
                     title="Salin"
                   >
                     {copied ? (
@@ -231,7 +231,7 @@ export default function TrackPage() {
         .input {
           width: 100%;
           padding: 0.625rem 0.75rem;
-          border-radius: 0.5rem;
+          border-radius: 3px;
           border: 1.5px solid hsl(var(--foreground) / 15%);
           background: var(--background);
           font-size: 0.875rem;

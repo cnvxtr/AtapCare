@@ -198,7 +198,7 @@ html, body {
         padding: 0.5rem 0.75rem;
         background-color: hsl(var(--background));
         border: 1px solid hsl(var(--border));
-        border-radius: 0.5rem;
+        border-radius: 3px;
         color: hsl(var(--foreground));
         font-size: 0.875rem;
         outline: none;

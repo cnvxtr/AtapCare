@@ -77,7 +77,7 @@ export default function Login() {
                   required
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10"
+                  className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10"
                   placeholder=""
                   autoComplete="username"
                 />
@@ -92,7 +92,7 @@ export default function Login() {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 pr-10 rounded-lg bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10"
+                    className="w-full px-3 py-2 pr-10 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10"
                     placeholder=""
                     autoComplete="current-password"
                   />
@@ -111,7 +111,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full px-5 py-2.5 rounded-lg bg-white text-neutral-900 font-medium hover:bg-white/90 transition inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full px-5 py-2.5 rounded-[3px] bg-white text-neutral-900 font-medium hover:bg-white/90 transition inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Memproses...' : 'Masuk'} <ArrowRight className="h-4 w-4" />
               </button>
