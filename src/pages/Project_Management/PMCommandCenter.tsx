@@ -8,6 +8,7 @@ import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../../components/ui/dropdown-menu'
 import FieldError from '../../components/FieldError'
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import SchedulePicker from '../../components/SchedulePicker'
 import { getTechnicians } from '../../services/users'
 
@@ -48,6 +49,7 @@ export default function PMCommandCenter() {
     const [supportSel, setSupportSel] = useState<string[]>([])
     const [scheduleDate, setScheduleDate] = useState('')
     const [scheduleTime, setScheduleTime] = useState('')
+    const [calendarOpen, setCalendarOpen] = useState(false)
     const [actionReason, setActionReason] = useState('')
     const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
 
@@ -123,7 +125,7 @@ export default function PMCommandCenter() {
     const closeModals = () => {
         setShowAssignModal(false); setShowReassignModal(false); setShowVetoModal(false)
         setConfirmAssign(null); setAssignErrors({}); setReassignErrors({}); setVetoErrors({})
-        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleTime(''); setActionReason('')
+        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleTime(''); setCalendarOpen(false); setActionReason('')
     }
 
     return (
@@ -346,7 +348,7 @@ export default function PMCommandCenter() {
             {/* 1. MODAL TUGASKAN */}
             {showAssignModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
-                    <div className="bg-card w-full max-w-lg rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5" /> Tugaskan Teknisi</h3>
                             <button onClick={() => setShowAssignModal(false)} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
@@ -376,30 +378,55 @@ export default function PMCommandCenter() {
                                 <FieldError msg={assignErrors.tech} />
                             </div>
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Teknisi Pendukung (opsional)</label>
-                                <div className="mt-1 border-2 border-border rounded p-2 space-y-0.5 max-h-40 overflow-y-auto">
-                                    {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
-                                        <p className="text-xs text-muted-foreground py-1">Tidak ada teknisi lain</p>
-                                    ) : technicians.filter(t => t.id !== selectedTech).map(t => (
-                                        <label key={t.id} className="flex items-center gap-2 text-sm py-1 cursor-pointer">
-                                            <input type="checkbox" checked={supportSel.includes(t.id)}
-                                                onChange={() => setSupportSel(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
-                                                className="accent-foreground" />
-                                            <span className="truncate">{t.name}</span>
-                                        </label>
-                                    ))}
-                                </div>
+                                <label className="text-xs font-semibold text-muted-foreground">Teknisi Pendukung</label>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button type="button" className="w-full mt-1 px-3 py-2 border-2 border-border focus:border-foreground rounded text-sm flex items-center justify-between gap-1 outline-none">
+                                            <span className={`truncate ${supportSel.length ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {supportSel.length
+                                                    ? supportSel.map(id => technicians.find(t => t.id === id)?.name || id).join(', ')
+                                                    : '-- Pilih Teknisi Pendukung --'}
+                                            </span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="z-[130] border-border bg-card text-foreground p-1.5 min-w-[240px] max-h-72 overflow-y-auto">
+                                        {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
+                                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Tidak ada teknisi lain</p>
+                                        ) : technicians.filter(t => t.id !== selectedTech).map(t => (
+                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${supportSel.includes(t.id) ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                                <input type="checkbox" checked={supportSel.includes(t.id)}
+                                                    onChange={() => setSupportSel(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
+                                                    className="sr-only" />
+                                                <span className="truncate">{t.name}</span>
+                                                {supportSel.includes(t.id) && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                            </label>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
                             </div>
                             <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Jadwal Pelaksanaan</label>
-                                <div className="mt-1">
-                                    <SchedulePicker
-                                        date={scheduleDate}
-                                        time={scheduleTime}
-                                        onDate={d => { setScheduleDate(d); setAssignErrors(prev => ({ ...prev, date: undefined })) }}
-                                        onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
-                                    />
-                                </div>
+                                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className={`w-full mt-1 px-3 py-2 border-2 ${assignErrors.date || assignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                            <span className={`truncate ${scheduleDate && scheduleTime ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {scheduleDate && scheduleTime
+                                                    ? `${new Date(`${scheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${scheduleTime} WIB`
+                                                    : 'Pilih Tanggal & Jam'}
+                                            </span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent align="start" className="z-[130] w-auto p-3 border-border">
+                                        <SchedulePicker
+                                            date={scheduleDate}
+                                            time={scheduleTime}
+                                            onDate={d => { setScheduleDate(d); setAssignErrors(prev => ({ ...prev, date: undefined })) }}
+                                            onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })); setCalendarOpen(false) }}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
                                 <FieldError msg={assignErrors.date || assignErrors.time} />
                             </div>
                             <div className="flex gap-3 pt-2">
