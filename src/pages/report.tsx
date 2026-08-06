@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Phone, Loader2, AlertTriangle, X, Save } from "lucide-react";
+import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Phone, Loader2, AlertTriangle, X } from "lucide-react";
 import { Combobox } from "@/components/ui/combobox";
 import { createTicket, getSitesForReport, type SiteReport } from "@/services";
 import { loadDraft, clearDraft, persistDraft } from "@/lib/draft";
@@ -68,13 +68,6 @@ export default function ReportPage() {
     }, 10_000);
     return () => clearTimeout(t);
   }, [reporterName, position, phone, company, site, unit, desc, photos, submitted]);
-
-  async function handleSaveDraft() {
-    const status = await persistDraft({ reporterName, position, phone, company, site, unit, desc }, photos);
-    if (status === 'ok') toast.success("Draft tersimpan. Anda bisa lanjut nanti.");
-    else if (status === 'text') toast.warning("Draft teks tersimpan, foto tidak ikut (penyimpanan penuh).");
-    else toast.error("Gagal menyimpan draft.");
-  }
 
   const NO_COMPANY = "(Tanpa Perusahaan)";
   const companyOptions = Array.from(new Set(sites.map((s) => s.customer_name || NO_COMPANY))).map((n) => ({ value: n, label: n }));
@@ -356,13 +349,6 @@ export default function ReportPage() {
           </Field>
 
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
-            <button
-              type="button"
-              onClick={handleSaveDraft}
-              className="px-4 py-2.5 rounded-lg border border-border text-sm font-medium hover:bg-accent/40 transition inline-flex items-center gap-2"
-            >
-              <Save className="h-4 w-4" /> Simpan & Lanjut Nanti
-            </button>
             <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-lg bg-foreground text-background font-medium hover:bg-foreground/90 transition disabled:opacity-50 inline-flex items-center gap-2">
               {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Mengirim…</> : "Kirim Tiket"}
             </button>
