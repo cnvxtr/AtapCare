@@ -39,13 +39,14 @@ export default function PMCommandCenter() {
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [showReassignModal, setShowReassignModal] = useState(false)
     const [showVetoModal, setShowVetoModal] = useState(false)
-    const [confirmAssign, setConfirmAssign] = useState<null | { teknisi: string; teknisiId: string; scheduleDate: string; scheduleTime: string; isOvertime: boolean }>(null)
+    const [confirmAssign, setConfirmAssign] = useState<null | { teknisi: string; teknisiId: string; scheduleDate: string; scheduleTime: string; isOvertime: boolean; supportIds: string[] }>(null)
     const [assignErrors, setAssignErrors] = useState<{ tech?: string; date?: string; time?: string }>({})
     const [reassignErrors, setReassignErrors] = useState<{ tech?: string; reason?: string }>({})
     const [vetoErrors, setVetoErrors] = useState<{ reason?: string }>({})
 
     // State Form
     const [selectedTech, setSelectedTech] = useState('')
+    const [supportSel, setSupportSel] = useState<string[]>([])
     const [scheduleDate, setScheduleDate] = useState('')
     const [scheduleHour, setScheduleHour] = useState('')
     const [scheduleMinute, setScheduleMinute] = useState('')
@@ -80,7 +81,7 @@ export default function PMCommandCenter() {
     // --- ACTION HANDLERS ---
     const doAssign = () => {
         if (!confirmAssign || !selectedTicket) return
-        assignTicket(selectedTicket.id, confirmAssign.teknisiId, confirmAssign.teknisi, `Jadwal: ${confirmAssign.scheduleDate} ${confirmAssign.scheduleTime}`)
+        assignTicket(selectedTicket.id, confirmAssign.teknisiId, confirmAssign.teknisi, `Jadwal: ${confirmAssign.scheduleDate} ${confirmAssign.scheduleTime}`, confirmAssign.supportIds)
         closeModals()
     }
 
@@ -102,6 +103,7 @@ export default function PMCommandCenter() {
             scheduleDate,
             scheduleTime,
             isOvertime,
+            supportIds: supportSel,
         })
     }
 
@@ -127,7 +129,7 @@ export default function PMCommandCenter() {
     const closeModals = () => {
         setShowAssignModal(false); setShowReassignModal(false); setShowVetoModal(false)
         setConfirmAssign(null); setAssignErrors({}); setReassignErrors({}); setVetoErrors({})
-        setSelectedTicket(null); setSelectedTech(''); setScheduleDate(''); setScheduleHour(''); setScheduleMinute(''); setCalendarOpen(false); setActionReason('')
+        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleHour(''); setScheduleMinute(''); setCalendarOpen(false); setActionReason('')
     }
 
     return (
@@ -421,6 +423,21 @@ export default function PMCommandCenter() {
                                 </div>
                                 <FieldError msg={assignErrors.date || assignErrors.time} />
                             </div>
+                            <div>
+                                <label className="text-xs font-semibold text-muted-foreground">Teknisi Pendukung (opsional)</label>
+                                <div className="mt-1 border-2 border-border rounded p-2 space-y-0.5 max-h-40 overflow-y-auto">
+                                    {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
+                                        <p className="text-xs text-muted-foreground py-1">Tidak ada teknisi lain</p>
+                                    ) : technicians.filter(t => t.id !== selectedTech).map(t => (
+                                        <label key={t.id} className="flex items-center gap-2 text-sm py-1 cursor-pointer">
+                                            <input type="checkbox" checked={supportSel.includes(t.id)}
+                                                onChange={() => setSupportSel(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
+                                                className="accent-foreground" />
+                                            <span className="truncate">{t.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                             <div className="flex gap-3 pt-2">
                                 <button onClick={() => setShowAssignModal(false)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
                                 <button onClick={handleAssign} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Tugaskan</button>
@@ -452,6 +469,12 @@ export default function PMCommandCenter() {
                                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Jam</p>
                                     <p className="font-medium text-sm">{confirmAssign.scheduleTime}</p>
                                 </div>
+                                {confirmAssign.supportIds.length > 0 && (
+                                    <div className="bg-muted p-4 rounded-lg border border-border">
+                                        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Teknisi Pendukung</p>
+                                        <p className="font-medium text-sm">{confirmAssign.supportIds.map(id => technicians.find(t => t.id === id)?.name || id).join(', ')}</p>
+                                    </div>
+                                )}
                             </div>
                             {confirmAssign.isOvertime && (
                                 <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-200">

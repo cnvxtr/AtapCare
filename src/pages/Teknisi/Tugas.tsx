@@ -1,17 +1,19 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
 import { useTickets, type Ticket, type TicketStatus } from '../../context/TicketContext'
+import { supabase } from '../../lib/supabase'
 import {
     X, MapPin, Camera, ChevronRight,
     Clock, CheckCircle2, Pause, PauseCircle,
-    ClipboardList, Wrench, Archive, AlertTriangle
+    ClipboardList, Wrench, Archive, AlertTriangle, FileText
 } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { uploadTicketPhoto } from '../../services/photoService'
+import { addTeamNote } from '../../services/ticketService'
 
 type TabType = 'detail' | 'timeline' | 'activity'
 
@@ -40,10 +42,22 @@ export default function TugasTeknisi() {
     const [isLoading, setIsLoading] = useState<string | null>(null)
     const [showLemburModal, setShowLemburModal] = useState(false)
     const [lemburTarget, setLemburTarget] = useState<Ticket | null>(null)
+    const [supportTickets, setSupportTickets] = useState<Set<string>>(new Set())
+    const [showNoteModal, setShowNoteModal] = useState(false)
+    const [noteText, setNoteText] = useState('')
+    const [notePhotos, setNotePhotos] = useState<File[]>([])
+    const [noteSubmitting, setNoteSubmitting] = useState(false)
+
+    // Tiket yang user jadi support (bukan lead) — visibilitas per RLS tambahan.
+    useEffect(() => {
+        if (!user) return
+        supabase.from('ticket_assignments').select('ticket_id').eq('user_id', user.id)
+            .then(({ data }) => setSupportTickets(new Set((data ?? []).map(d => d.ticket_id))))
+    }, [user])
 
     const myTickets = useMemo(() =>
-        tickets.filter(t => t.assignedTo === user?.id && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)),
-        [tickets, user?.id]
+        tickets.filter(t => (t.assignedTo === user?.id || supportTickets.has(t.id)) && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)),
+        [tickets, user?.id, supportTickets]
     )
 
     const grouped = useMemo(() => {
@@ -131,6 +145,26 @@ export default function TugasTeknisi() {
             setSparepart('')
             setPhotos([])
             setShowCompleteModal(false)
+        }
+    }
+
+    // Support (non-lead): hanya boleh upload foto + catatan, bukan transisi status.
+    const handleTeamNote = async () => {
+        if (!selectedTicket) return
+        if (!noteText.trim() && notePhotos.length === 0) { toast.error('Isi catatan atau lampirkan foto.'); return }
+        setNoteSubmitting(true)
+        try {
+            const paths = await Promise.all(notePhotos.map(f => uploadTicketPhoto(f, selectedTicket.code)))
+            const parts = [noteText.trim()]
+            if (paths.length) parts.push(`Foto (${paths.length}):\n${paths.join('\n')}`)
+            const ok = await addTeamNote(selectedTicket.id, parts.join(' | '))
+            if (!ok) throw new Error('note')
+            toast.success('Catatan tambahan tersimpan.')
+            setShowNoteModal(false); setNoteText(''); setNotePhotos([])
+        } catch {
+            toast.error('Gagal menyimpan catatan. Coba lagi.')
+        } finally {
+            setNoteSubmitting(false)
         }
     }
 
@@ -258,21 +292,21 @@ export default function TugasTeknisi() {
                     activities={selectedTicket.activities}
                     footer={
                         <>
-                            {selectedTicket.status === 'SCHEDULED' && (
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'SCHEDULED' && (
                                 <button onClick={() => handleTerimaTugas(selectedTicket)}
                                     disabled={isLoading === selectedTicket.id}
                                     className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                     {isLoading === selectedTicket.id ? 'Memproses...' : <><ChevronRight className="w-4 h-4" /> Terima Tugas</>}
                                 </button>
                             )}
-                            {selectedTicket.status === 'EN_ROUTE' && (
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'EN_ROUTE' && (
                                 <button onClick={() => handleMulaiKerja(selectedTicket)}
                                     disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
                                     className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                     {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
                                 </button>
                             )}
-                            {selectedTicket.status === 'WORKING' && (
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'WORKING' && (
                                 <div className="grid grid-cols-2 gap-3">
                                     <button onClick={() => setShowPendingModal(true)}
                                         className="py-2.5 bg-transparent text-amber-600 border border-border rounded-md font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
@@ -284,11 +318,17 @@ export default function TugasTeknisi() {
                                     </button>
                                 </div>
                             )}
-                            {selectedTicket.status === 'PENDING' && (
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'PENDING' && (
                                 <p className="text-center text-sm text-muted-foreground italic">Menunggu keputusan PM untuk melanjutkan.</p>
                             )}
-                            {selectedTicket.status === 'RESOLVED' && (
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'RESOLVED' && (
                                 <p className="text-center text-sm text-muted-foreground italic">Menunggu validasi Helpdesk</p>
+                            )}
+                            {selectedTicket.assignedTo !== user?.id && (
+                                <button onClick={() => setShowNoteModal(true)}
+                                    className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold flex items-center justify-center gap-2">
+                                    <FileText className="w-4 h-4" /> Tambahkan Foto & Catatan
+                                </button>
                             )}
                         </>
                     }
@@ -433,6 +473,64 @@ export default function TugasTeknisi() {
                                 setShowLemburModal(false); setLemburTarget(null)
                             }}
                                 className="flex-1 py-2 bg-amber-500 text-white rounded text-sm font-bold">Ya, Terima Tugas</button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* Catatan Support Modal */}
+            {showNoteModal && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowNoteModal(false)}>
+                    <div className="bg-card w-full max-w-lg rounded-lg border-2 border-border p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                <FileText className="w-5 h-5" /> Foto & Catatan Pendukung
+                            </h3>
+                            <button onClick={() => { setShowNoteModal(false); setNoteText(''); setNotePhotos([]) }} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-muted-foreground mb-1">Catatan</label>
+                                <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
+                                    rows={2} className="w-full px-3 py-2 border-2 border-border rounded text-sm outline-none focus:border-foreground resize-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto ({notePhotos.length}/5)</label>
+                                <div className="border-2 border-dashed border-border rounded p-4 text-center hover:border-foreground transition-colors cursor-pointer"
+                                    onClick={() => document.getElementById('note-foto-upload')?.click()}>
+                                    <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+                                    <p className="text-xs text-muted-foreground">Ketuk untuk upload foto</p>
+                                    <input id="note-foto-upload" type="file" accept="image/*" capture="environment" multiple
+                                        className="hidden" onChange={e => {
+                                            const files = Array.from(e.target.files || [])
+                                            setNotePhotos(prev => {
+                                                const merged = [...prev, ...files]
+                                                if (merged.length > 5) { toast.error('Maksimal 5 foto.'); return prev }
+                                                const totalSize = merged.reduce((s, f) => s + f.size, 0)
+                                                if (totalSize > 10 * 1024 * 1024) { toast.error('Total ukuran foto maks 10 MB.'); return prev }
+                                                return merged
+                                            })
+                                        }} />
+                                </div>
+                                {notePhotos.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {notePhotos.map((f, i) => (
+                                            <div key={i} className="relative">
+                                                <span className="text-[10px] bg-muted px-2 py-1 rounded border border-border">{f.name.slice(0, 15)}...</span>
+                                                <button onClick={() => setNotePhotos(notePhotos.filter((_, j) => j !== i))}
+                                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center">✕</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => { setShowNoteModal(false); setNoteText(''); setNotePhotos([]) }}
+                                disabled={noteSubmitting}
+                                className="flex-1 py-2 bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
+                            <button onClick={handleTeamNote} disabled={noteSubmitting}
+                                className="flex-1 py-2 bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{noteSubmitting ? 'Memproses...' : 'Simpan Catatan'}</button>
                         </div>
                     </div>
                 </div>

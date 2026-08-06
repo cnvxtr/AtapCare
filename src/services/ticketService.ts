@@ -92,6 +92,13 @@ export async function setConfirmSent(ticketId: string): Promise<boolean> {
   return !error
 }
 
+// Catatan pendukung oleh member tiket (lead/support) — K6. Foto sudah di-upload
+// via uploadTicketPhoto; path-nya disertakan di details.
+export async function addTeamNote(ticketId: string, details: string): Promise<boolean> {
+  const { error } = await supabase.rpc("add_team_note", { p_ticket_id: ticketId, p_details: details })
+  return !error
+}
+
 export async function getSitesForReport(): Promise<SiteReport[]> {
   const { data } = await supabase.rpc("get_sites_for_report")
   return (data ?? []) as SiteReport[]

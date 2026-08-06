@@ -128,7 +128,7 @@ interface TicketContextType {
     tickets: Ticket[]
     loading: boolean
     updateTicketStatus: (id: string, newStatus: TicketStatus, actionDetails?: string, newPriority?: Priority, resolvedBy?: 'helpdesk' | 'technician', rejectionReason?: string) => Promise<void>
-    assignTicket: (id: string, technicianId: string | null, technicianName?: string, note?: string) => Promise<void>
+    assignTicket: (id: string, technicianId: string | null, technicianName?: string, note?: string, supportIds?: string[]) => Promise<void>
     addTicket: (data: AddTicketData) => Promise<Ticket | null>
     getTicketCount: (status: TicketStatus) => number
 }
@@ -272,7 +272,8 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         id: string,
         technicianId: string | null,
         technicianName?: string,
-        note?: string
+        note?: string,
+        supportIds?: string[]
     ) => {
         if (!user) return
         const action = technicianId
@@ -284,6 +285,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             p_technician_id: technicianId,
             p_activity_action: action,
             p_activity_details: note,
+            p_support_ids: supportIds || null,
         })
         if (ticketError) {
             console.error('Error updating assignment:', ticketError)
