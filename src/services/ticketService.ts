@@ -86,6 +86,12 @@ export interface SiteReport {
   units: string[]
 }
 
+// Tandai konfirmasi WA terkirim (Jalur B) → auto-close cron menutup setelah 24 jam (K3).
+export async function setConfirmSent(ticketId: string): Promise<boolean> {
+  const { error } = await supabase.rpc("set_confirm_sent", { p_ticket_id: ticketId })
+  return !error
+}
+
 export async function getSitesForReport(): Promise<SiteReport[]> {
   const { data } = await supabase.rpc("get_sites_for_report")
   return (data ?? []) as SiteReport[]

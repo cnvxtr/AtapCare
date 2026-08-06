@@ -11,6 +11,7 @@ import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
 import { getCustomers, getSites, getUnits, type Customer, type SiteRow, type UnitRow } from '../../services/master-data'
+import { setConfirmSent } from '../../services/ticketService'
 
 const MAX_PHOTOS = 5;
 const MAX_TOTAL_SIZE_MB = 10;
@@ -224,8 +225,8 @@ export default function HPInbox() {
     }
 
     const handleNewPathB = async () => {
-        toast.success("Template WA terkirim ke pelanggan! (Simulasi: tiket akan auto-close dalam 24 jam jika tidak ada balasan)")
-        if (newTicketId) await updateTicketStatus(newTicketId, 'CLOSED', 'Konfirmasi via WA terkirim. Auto-close flag aktif.')
+        toast.success("Template WA terkirim ke pelanggan! Tiket auto-close dalam 24 jam jika tidak ada balasan.")
+        if (newTicketId) await setConfirmSent(newTicketId)
         closeCreateModal()
     }
 
@@ -310,9 +311,10 @@ export default function HPInbox() {
         setShowConfirmPath(false); setShowRemoteModal(false); setSelectedTicket(null)
     }
 
-    const handleConfirmPathB = () => {
-        toast.success("Template WA terkirim ke pelanggan! (Simulasi: Tiket akan auto-close dalam 24 jam jika tidak ada balasan)")
-        updateTicketStatus(selectedTicket!.id, 'CLOSED', 'Konfirmasi via WA terkirim. Auto-close flag aktif.')
+    const handleConfirmPathB = async () => {
+        if (!selectedTicket) return
+        toast.success("Template WA terkirim ke pelanggan! Tiket auto-close dalam 24 jam jika tidak ada balasan.")
+        await setConfirmSent(selectedTicket.id)
         setShowConfirmPath(false); setShowRemoteModal(false); setSelectedTicket(null)
     }
 
@@ -526,7 +528,10 @@ export default function HPInbox() {
                                     <button onClick={() => { setValidationAction('rework'); setReworkReason(''); setReworkError(''); setShowValidationModal(true); }} className="w-full py-2.5 bg-red-600 text-white rounded-md font-medium hover:bg-red-700 transition">Kembalikan / Rework</button>
                                 </>
                             )}
-                            {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'CLOSED', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
+                            {liveTicket.status === 'CLOSED' && (
+                                <button onClick={() => { updateTicketStatus(liveTicket.id, 'WORKING', 'Tiket dibuka kembali (reopen) oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-blue-600 text-white rounded-md font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
+                            )}
+                            {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
                                 <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
                             )}
                         </>
