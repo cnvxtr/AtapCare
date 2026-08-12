@@ -1,5 +1,4 @@
--- Self-check sla_deadline() terhadap expected (paritas dengan scripts/slaCalc.selfcheck.ts).
--- Jalankan di SQL Editor / management API setelah migration 06_sla_server.sql.
+-- Self-check sla_deadline(). Jalankan di SQL Editor / management API setelah migration 06_sla_server.sql.
 DO $$
 DECLARE
   c record;
@@ -11,8 +10,8 @@ BEGIN
   FOR c IN
     SELECT * FROM (VALUES
       ('case1', '2026-07-20T01:15:00Z', 4, '2026-07-20T05:15:00Z'),
-      ('case2', '2026-07-20T08:00:00Z', 4, '2026-07-21T03:15:00Z'),
-      ('case3', '2026-07-25T01:15:00Z', 2, '2026-07-27T03:15:00Z')
+      ('case2', '2026-07-20T08:00:00Z', 4, '2026-07-21T03:00:00Z'),
+      ('case3', '2026-07-25T01:15:00Z', 2, '2026-07-27T03:00:00Z')
     ) AS t(label, created, target, expected)
   LOOP
     got := sla_deadline(c.created::timestamptz, c.target);
@@ -26,7 +25,7 @@ BEGIN
   INSERT INTO holidays (name, date, is_active) VALUES ('__selfcheck__', '2026-07-20', true);
   FOR c IN
     SELECT * FROM (VALUES
-      ('case4', '2026-07-20T01:15:00Z', 4, '2026-07-21T05:15:00Z')
+      ('case4', '2026-07-20T01:15:00Z', 4, '2026-07-21T05:00:00Z')
     ) AS t(label, created, target, expected)
   LOOP
     got := sla_deadline(c.created::timestamptz, c.target);

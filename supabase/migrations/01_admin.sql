@@ -85,16 +85,6 @@ CREATE TABLE IF NOT EXISTS holidays (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS broadcasts (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  title text NOT NULL,
-  message text NOT NULL DEFAULT '',
-  recipients text NOT NULL DEFAULT 'semua',
-  status text NOT NULL DEFAULT 'terjadwal',
-  scheduled_at timestamptz,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
 -- ── 3. Seed awal SLA config ──────────────────────────────────
 INSERT INTO sla_config (priority, target_hours) VALUES
   ('P1', 4),
@@ -110,14 +100,13 @@ ALTER TABLE units ENABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sla_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE holidays ENABLE ROW LEVEL SECURITY;
-ALTER TABLE broadcasts ENABLE ROW LEVEL SECURITY;
 
 -- ponytail: policy "boleh semua" untuk anon — aplikasi memakai anon key.
 -- hardening RLS (berbasis role) adalah pekerjaan terpisah.
 DO $$
 DECLARE t text;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['customers','regions','sites','units','audit_logs','sla_config','holidays','broadcasts']
+  FOREACH t IN ARRAY ARRAY['customers','regions','sites','units','audit_logs','sla_config','holidays']
   LOOP
     EXECUTE format('CREATE POLICY "anon_all_%s" ON %I FOR ALL USING (true) WITH CHECK (true)', t, t);
   END LOOP;

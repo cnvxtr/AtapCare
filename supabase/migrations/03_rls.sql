@@ -14,7 +14,6 @@ DROP POLICY IF EXISTS "anon_all_units" ON units;
 DROP POLICY IF EXISTS "anon_all_audit_logs" ON audit_logs;
 DROP POLICY IF EXISTS "anon_all_sla_config" ON sla_config;
 DROP POLICY IF EXISTS "anon_all_holidays" ON holidays;
-DROP POLICY IF EXISTS "anon_all_broadcasts" ON broadcasts;
 DROP POLICY IF EXISTS "anon_all_notifications" ON notifications;
 
 -- ── 1. RPC PORTAL PUBLIK ──
@@ -100,36 +99,6 @@ END $$;
 
 -- ── 2. RPC INTERNAL ──
 
--- Delivery broadcast: resolve penerima + insert notifications + flip status.
--- SECURITY DEFINER agar notifications bisa diisi untuk user lain di balik RLS owner.
-CREATE OR REPLACE FUNCTION deliver_broadcast(bid uuid)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_rec broadcasts%ROWTYPE;
-  v_uid uuid;
-BEGIN
-  SELECT * INTO v_rec FROM broadcasts WHERE id = bid AND status = 'terjadwal';
-  IF NOT FOUND THEN RETURN; END IF;
-
-  FOR v_uid IN
-    SELECT id FROM users
-    WHERE is_deleted = false
-      AND (v_rec.recipients = 'semua' OR role = v_rec.recipients)
-  LOOP
-    INSERT INTO notifications (user_id, title, message)
-    VALUES (v_uid, v_rec.title, v_rec.message);
-  END LOOP;
-
-  UPDATE broadcasts SET status = 'terkirim' WHERE id = bid;
-END $$;
-
-REVOKE EXECUTE ON FUNCTION deliver_broadcast(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION deliver_broadcast(uuid) TO authenticated;
-
 -- Manajemen user (Admin): insert/update baris public.users.
 -- Mencegah eskalasi via self-update (grant ke authenticated hanya last_login).
 CREATE OR REPLACE FUNCTION admin_save_user(
@@ -208,17 +177,11 @@ CREATE POLICY "activities_select_staff" ON activities FOR SELECT TO authenticate
 );
 CREATE POLICY "activities_insert_authenticated" ON activities FOR INSERT TO authenticated WITH CHECK (true);
 
--- ── 6. NOTIFICATIONS (owner-scope; insert via deliver_broadcast) ──
+-- ── 6. NOTIFICATIONS (owner-scope; insert via RPC SECURITY DEFINER) ──
 CREATE POLICY "notifications_select_owner" ON notifications FOR SELECT TO authenticated USING (user_id = auth.uid());
 CREATE POLICY "notifications_update_owner" ON notifications FOR UPDATE TO authenticated USING (user_id = auth.uid()) WITH CHECK (user_id = auth.uid());
 
--- ── 7. BROADCASTS ──
-CREATE POLICY "broadcasts_select_authenticated" ON broadcasts FOR SELECT TO authenticated USING (true);
-CREATE POLICY "broadcasts_insert_admin" ON broadcasts FOR INSERT TO authenticated WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
-CREATE POLICY "broadcasts_update_admin" ON broadcasts FOR UPDATE TO authenticated USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin') WITH CHECK ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
-CREATE POLICY "broadcasts_delete_admin" ON broadcasts FOR DELETE TO authenticated USING ((SELECT role FROM users WHERE id = auth.uid()) = 'admin');
-
--- ── 8. AUDIT LOGS ──
+-- ── 7. AUDIT LOGS ──
 CREATE POLICY "audit_insert_authenticated" ON audit_logs FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "audit_select_staff" ON audit_logs FOR SELECT TO authenticated USING (
   (SELECT role FROM users WHERE id = auth.uid()) IN ('admin', 'helpdesk', 'pm')

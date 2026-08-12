@@ -1,12 +1,13 @@
 -- ============================================================
--- 21: Rate limit submit tiket publik (K12 / BR-115B).
--- Throttle per-phone: maksimal 3 tiket per 10 menit per nomor WA.
--- Tidak ada IP di RPC Postgres → key = phone (keputusan user).
--- ponytail: sliding window per-phone; upgrade path ke per-IP
--- butuh Edge Function (HTTP) yang melihat request origin.
+-- 44: Pulihkan rate limit portal (K12 / BR-115B) yang hilang.
+-- Migration 31 menimpa create_public_ticket (migration 21) dengan menambah
+-- notif helpdesk tapi TANPA blok throttle per-WA → rate limit 3 tiket/10
+-- menit menghilang sejak 31. File ini = body migration 31 (notif helpdesk)
+-- + blok rate limit migration 21, plus CREATE TABLE idempoten untuk
+-- rate_limits (migration 21 ternyata belum pernah diterapkan di DB ini).
 -- ============================================================
 
--- ── 1. Tabel counter ──
+-- ── 1. Tabel counter (idempoten; dari migration 21) ──
 CREATE TABLE IF NOT EXISTS rate_limits (
   key text PRIMARY KEY,
   window_start timestamptz NOT NULL,
@@ -15,8 +16,7 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 -- Akses hanya lewat RPC definer.
 REVOKE ALL ON rate_limits FROM anon, authenticated;
 
--- ── 2. create_public_ticket + throttle ──
--- CREATE OR REPLACE mempertahankan GRANT eksekusi anon yang sudah ada.
+-- ── 2. create_public_ticket + throttle + notif helpdesk ──
 CREATE OR REPLACE FUNCTION create_public_ticket(
   p_reporter_name text,
   p_position text,
@@ -46,9 +46,11 @@ BEGIN
     RETURN json_build_object('error', 'Semua field wajib diisi.');
   END IF;
 
-  -- Throttle per-phone: 3 tiket / 10 menit. Upsert tunggal dirancang agar
+  -- Throttle per-phone: 3 tiket / 10 menit (migration 21). Upsert tunggal
   -- aman dari race (ON CONFLICT diserialisasi per key). Nomor kosong tidak
-  -- dithrottle — tanpa identitas, membatasi semua "unknown" akan saling blokir.
+  -- dithrottle — tanpa identitas, membatasi semua "unknown" saling memblokir.
+  -- ponytail: sliding window per-phone; upgrade ke per-IP butuh Edge
+  -- Function (HTTP) yang melihat request origin.
   IF p_phone IS NOT NULL AND trim(p_phone) <> '' THEN
     INSERT INTO rate_limits (key, window_start, count)
     VALUES ('phone:' || trim(p_phone), now(), 1)
@@ -91,18 +93,53 @@ BEGIN
             'Foto keluhan:' || E'\n' || array_to_string(p_photos, E'\n'));
   END IF;
 
+  PERFORM notify_role('helpdesk', 'Tiket baru: ' || v_code,
+    'Tiket ' || v_code || ' dari ' || p_site || ' (' || p_unit || ') menunggu validasi.');
+
   RETURN json_build_object('code', v_code);
 END $$;
 
--- ── 3. Pembersih tabel counter (jendela hanya 10 menit → aman dibuang setelah 24 jam) ──
-CREATE OR REPLACE FUNCTION cleanup_rate_limits()
-RETURNS void
-LANGUAGE sql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-  DELETE FROM rate_limits WHERE window_start < now() - interval '24 hours';
-$$;
+REVOKE EXECUTE ON FUNCTION create_public_ticket(text, text, text, text, text, text, text[]) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION create_public_ticket(text, text, text, text, text, text, text[]) TO anon, authenticated;
 
-CREATE EXTENSION IF NOT EXISTS pg_cron;
-SELECT cron.schedule('atapcare-rate-limit-cleanup', '0 4 * * *', $$SELECT cleanup_rate_limits()$$);
+-- ── Self-check: 3 sukses, call ke-4 ditolak; notif helpdesk ter-trigger. ──
+DO $$
+DECLARE
+  v_suffix text := replace(gen_random_uuid()::text, '-', '');
+  v_site uuid; v_unit uuid;
+  v_res json; v_code text;
+  v_codes text[] := '{}';
+  v_phone text := '0813' || left(v_suffix, 7);
+  i int;
+BEGIN
+  SET LOCAL session_replication_role = replica;
+
+  INSERT INTO sites (name, pic_name, pic_phone) VALUES ('Site SelfCheck 44', 'PIC', '081') RETURNING id INTO v_site;
+  INSERT INTO units (site_id, name) VALUES (v_site, 'Unit SelfCheck 44') RETURNING id INTO v_unit;
+
+  FOR i IN 1..3 LOOP
+    SELECT create_public_ticket('Chk 44', '', v_phone, 'Site SelfCheck 44', 'Unit SelfCheck 44',
+                                'rate-limit selfcheck ' || i) INTO v_res;
+    v_code := v_res->>'code';
+    ASSERT v_code IS NOT NULL, 'call ' || i || ' harus sukses, dapat: ' || v_res::text;
+    v_codes := v_codes || v_code;
+  END LOOP;
+
+  SELECT create_public_ticket('Chk 44', '', v_phone, 'Site SelfCheck 44', 'Unit SelfCheck 44',
+                              'rate-limit selfcheck 4') INTO v_res;
+  ASSERT v_res->>'error' IS NOT NULL, 'call ke-4 harus ditolak rate limit';
+  ASSERT v_res->>'error' LIKE '%10 menit%', 'pesan rate limit sesuai';
+
+  FOREACH v_code IN ARRAY v_codes LOOP
+    DELETE FROM notifications WHERE title LIKE '%' || v_code || '%';
+    IF to_regclass('public.ticket_status_history') IS NOT NULL THEN
+      DELETE FROM ticket_status_history WHERE ticket_id IN (SELECT id FROM tickets WHERE code = v_code);
+    END IF;
+    DELETE FROM activities WHERE ticket_id IN (SELECT id FROM tickets WHERE code = v_code);
+    DELETE FROM tickets WHERE code = v_code;
+  END LOOP;
+  DELETE FROM rate_limits WHERE key = 'phone:' || v_phone;
+  DELETE FROM units WHERE id = v_unit;
+  DELETE FROM sites WHERE id = v_site;
+  RESET session_replication_role;
+END $$;

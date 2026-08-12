@@ -20,8 +20,10 @@ CREATE INDEX IF NOT EXISTS idx_ticket_assignments_user ON ticket_assignments(use
 ALTER TABLE ticket_assignments ENABLE ROW LEVEL SECURITY;
 -- SELECT untuk authenticated: dipakai subquery RLS tickets/activities
 -- (member) dan frontend menanyakan penugasan miliknya. Write hanya RPC definer.
+DROP POLICY IF EXISTS "ta_select_authenticated" ON ticket_assignments;
 CREATE POLICY "ta_select_authenticated" ON ticket_assignments FOR SELECT TO authenticated USING (true);
-REVOKE ALL ON ticket_assignments FROM anon, authenticated;
+REVOKE ALL ON ticket_assignments FROM anon;
+GRANT SELECT ON ticket_assignments TO authenticated;
 
 -- ── 2. assign_ticket: + p_support_ids uuid[] ──
 -- Ganti overload lama (4 param) agar tidak bentrok; pemanggil named-arg
@@ -161,7 +163,8 @@ CREATE POLICY "activities_select_teknisi_assigned" ON activities FOR SELECT TO a
 );
 
 -- ── 5. Hak eksekusi ──
-REVOKE EXECUTE ON FUNCTION assign_ticket(uuid, uuid, text, text) FROM PUBLIC, anon;
+-- ponytail: REVOKE versi 4-arg dihapus — fungsi itu sudah di-DROP di bagian 2,
+-- merevoke objek yang tidak ada membuat migration gagal (error 42883) sebelum GRANT.
 REVOKE EXECUTE ON FUNCTION assign_ticket(uuid, uuid, text, text, uuid[]) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION assign_ticket(uuid, uuid, text, text, uuid[]) TO authenticated;
 REVOKE EXECUTE ON FUNCTION add_team_note(uuid, text) FROM PUBLIC, anon;

@@ -1,10 +1,10 @@
 -- ============================================================
 -- ATAP CARE — SLA dihitung server-side (Postgres), bukan frontend.
--- Target SLA dari sla_config, jam kerja 08.15-17.00 WIB (Senin-Jumat),
+-- Target SLA dari sla_config, jam kerja 08.00-17.00 WIB (Senin-Jumat),
 -- lewati libur nasional (holidays). Di-hitung real-time saat dibaca.
--- BR-28D (waktu NEW/OPEN/dll tidak dihitung) belum akurat karena butuh
--- timestamp transisi status; deadline tetap dari created_at (sama dgn
--- perilaku sebelumnya). Upgrade saat backend SLA (Node.js) dibangun.
+-- BR-28D (waktu NEW/OPEN/dll tidak dihitung) dipetakan via kolom
+-- tickets.sla_start_at (lihat 29_sla_history.sql); compute_sla_batch
+-- memakai sla_start_at, bukan created_at.
 -- Jalankan setelah 05_fix_legacy_policies.sql.
 -- ============================================================
 

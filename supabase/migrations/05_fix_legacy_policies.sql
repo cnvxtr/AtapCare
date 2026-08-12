@@ -18,9 +18,7 @@ DROP POLICY IF EXISTS "anon_select_users" ON users;
 -- ── 2. RPC internal hanya untuk authenticated ──
 -- (default privilege Supabase memberi EXECUTE ke anon; cabut eksplisit)
 REVOKE EXECUTE ON FUNCTION admin_save_user(uuid,text,text,text,text,text,text) FROM PUBLIC, anon;
-REVOKE EXECUTE ON FUNCTION deliver_broadcast(uuid) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION admin_save_user(uuid,text,text,text,text,text,text) TO authenticated;
-GRANT EXECUTE ON FUNCTION deliver_broadcast(uuid) TO authenticated;
 
 -- ── 3. Harden admin_save_user: auth.uid() NULL harus ditolak ──
 CREATE OR REPLACE FUNCTION admin_save_user(
