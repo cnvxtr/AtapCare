@@ -38,6 +38,57 @@ export interface UnitRow {
   is_deleted: boolean;
 }
 
+export interface CatalogItem {
+  id: string;
+  name: string;
+  is_deleted: boolean;
+}
+
+type CatalogTable = "problem_categories" | "root_causes";
+
+// CRUD katalog (Kategori Masalah & Akar Masalah) — satu pola untuk dua tabel.
+function catalogCrud(table: CatalogTable) {
+  return {
+    getAll: async (includeDeleted = false): Promise<CatalogItem[]> => {
+      let q = supabase.from(table).select("*").order("name");
+      if (!includeDeleted) q = q.eq("is_deleted", false);
+      const { data } = await q;
+      return (data || []) as CatalogItem[];
+    },
+    create: async (name: string): Promise<string | null> => {
+      const { data, error } = await supabase
+        .from(table)
+        .insert({ name, is_deleted: false })
+        .select("id")
+        .single();
+      if (error) return null;
+      await logActivity("create", table, data.id, { name });
+      return data.id;
+    },
+    update: async (id: string, name: string): Promise<boolean> => {
+      const { error } = await supabase.from(table).update({ name }).eq("id", id);
+      if (error) return false;
+      await logActivity("update", table, id, { name });
+      return true;
+    },
+    softDelete: async (id: string): Promise<boolean> => {
+      const { error } = await supabase.from(table).update({ is_deleted: true }).eq("id", id);
+      if (error) return false;
+      await logActivity("soft_delete", table, id);
+      return true;
+    },
+    restore: async (id: string): Promise<boolean> => {
+      const { error } = await supabase.from(table).update({ is_deleted: false }).eq("id", id);
+      if (error) return false;
+      await logActivity("restore", table, id);
+      return true;
+    },
+  };
+}
+
+export const problemCategoriesApi = catalogCrud("problem_categories");
+export const rootCausesApi = catalogCrud("root_causes");
+
 const ACTIVE_STATUSES = [
   "NEW",
   "OPEN",

@@ -1,19 +1,19 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Phone, Loader2, AlertTriangle, X } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { ArrowLeft, Upload, CheckCircle2, Copy, Check, Loader2, AlertTriangle, X } from "lucide-react";
 import { Combobox } from "@/components/ui/combobox";
+import { SiteHeader } from "@/components/SiteHeader";
 import { createTicket, getSitesForReport, type SiteReport } from "@/services";
-import { loadDraft, clearDraft, persistDraft } from "@/lib/draft";
+import { loadDraft, clearDraft, persistDraft, saveDraft, type ReportDraftFields } from "@/lib/draft";
+import { getScenario } from "@/lib/troubleshoot";
 import { toast } from "sonner";
-import logo from '../assets/logo.png'
 
-const WA_NUMBER = "6281242141414";
-const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent("Halo AtapCare, saya butuh bantuan.")}`;
 const MAX_PHOTOS = 5;
 const MAX_TOTAL_SIZE_MB = 10;
 
 export default function ReportPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [reporterName, setReporterName] = useState("");
   const [position, setPosition] = useState("");
   const [phone, setPhone] = useState("");
@@ -31,6 +31,9 @@ export default function ReportPage() {
   const [photoError, setPhotoError] = useState("");
   const [sites, setSites] = useState<SiteReport[]>([]);
   const [mdLoading, setMdLoading] = useState(true);
+  const fieldsRef = useRef<ReportDraftFields>({ reporterName: "", position: "", phone: "", company: "", site: "", unit: "", desc: "" });
+  const lastPhotosRef = useRef<string[]>([]);
+  const submittedRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -42,10 +45,18 @@ export default function ReportPage() {
     return () => { alive = false; };
   }, []);
 
-  // Pulihkan draft (BR 2.2: expiry 24 jam, dihapus loadDraft bila lewat).
+  // Pulihkan draft per-sesi (sessionStorage).
+  // Prefill skenario troubleshoot bila dibuka via /report?kendala=<slug>.
   useEffect(() => {
     const draft = loadDraft();
-    if (!draft) return;
+    if (!draft) {
+      const prefix = getScenario(searchParams.get("kendala") ?? "")?.reportPrefix;
+      if (prefix) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill skenario one-shot
+        setDesc(prefix);
+      }
+      return;
+    }
     setReporterName(draft.reporterName);
     setPosition(draft.position);
     setPhone(draft.phone);
@@ -56,18 +67,37 @@ export default function ReportPage() {
     if (draft.photos.length) {
       Promise.all(draft.photos.map(dataUrlToFile)).then(setPhotos).catch(() => setPhotos([]));
     }
-    toast.info("Draft tersimpan dipulihkan.");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    toast.info("Draft tersimpan dipulihkan.", { id: "draft-restore" });
+  }, [searchParams]);
 
-  // Autosave setiap 10 detik selama tidak dalam layar sukses (BR 2.2).
+  // Autosave setiap 10 detik selama tidak dalam layar sukses.
   useEffect(() => {
     if (submitted) return;
-    const t = setTimeout(() => {
-      persistDraft({ reporterName, position, phone, company, site, unit, desc }, photos);
+    const t = setTimeout(async () => {
+      const { dataUrls } = await persistDraft({ reporterName, position, phone, company, site, unit, desc }, photos);
+      lastPhotosRef.current = dataUrls;
     }, 10_000);
     return () => clearTimeout(t);
   }, [reporterName, position, phone, company, site, unit, desc, photos, submitted]);
+
+  // Flush sinkron saat tab ditutup/reload (pagehide) atau navigasi keluar dari
+  // halaman (unmount): draft tersimpan begitu form terisi, tanpa menunggu autosave.
+  useEffect(() => {
+    fieldsRef.current = { reporterName, position, phone, company, site, unit, desc };
+  }, [reporterName, position, phone, company, site, unit, desc]);
+
+  useEffect(() => {
+    const flush = () => {
+      if (submittedRef.current) return;
+      saveDraft(fieldsRef.current, lastPhotosRef.current);
+    };
+    const onPageHide = () => flush();
+    window.addEventListener("pagehide", onPageHide);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      flush();
+    };
+  }, []);
 
   const NO_COMPANY = "(Tanpa Perusahaan)";
   const companyOptions = Array.from(new Set(sites.map((s) => s.customer_name || NO_COMPANY))).map((n) => ({ value: n, label: n }));
@@ -136,6 +166,7 @@ export default function ReportPage() {
     if (result?.code) {
       setTicketId(result.code);
       clearDraft();
+      submittedRef.current = true;
       setSubmitted(true);
     } else {
       setSubmitError(result?.error || "Gagal mengirim tiket. Silakan coba lagi.");
@@ -191,7 +222,7 @@ export default function ReportPage() {
             </div>
 
             <p className="text-sm text-muted-foreground mt-5 animate-in fade-in duration-500 delay-300">
-              Tim helpdesk akan menghubungi via WhatsApp.
+              Tim akan menghubungi via WhatsApp.
             </p>
 
             <div className="mt-8 flex flex-col gap-3 animate-in fade-in duration-500 delay-[400ms]">
@@ -239,116 +270,124 @@ export default function ReportPage() {
         </Link>
 
         <div className="mb-8">
-          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Portal Publik</p>
           <h1 className="text-3xl font-display font-bold mt-2">Laporkan Kendala</h1>
           <p className="text-sm text-muted-foreground mt-2">
             Isi formulir di bawah. Anda akan menerima nomor tiket untuk pelacakan.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6">
-          <div className="grid md:grid-cols-2 gap-4">
-            <Field label="Nama Pelapor">
-              <input required value={reporterName} onChange={(e) => setReporterName(e.target.value)} className="input" placeholder="Nama lengkap" />
-            </Field>
-            <Field label="Jabatan">
-              <input required value={position} onChange={(e) => setPosition(e.target.value)} className="input" placeholder="Contoh: Teknisi, Supervisor" />
-            </Field>
-            <Field label="Nomor WhatsApp">
-              <input required value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="" />
-            </Field>
-          </div>
-
-          <div className="h-px bg-border" />
-
-          <div className="grid md:grid-cols-3 gap-4">
-            <Field label="Perusahaan">
-              <Combobox
-                options={companyOptions}
-                value={company}
-                onChange={(v) => { setCompany(v); setSite(""); setUnit(""); }}
-                placeholder="Pilih perusahaan…"
-                disabled={mdLoading || sites.length === 0}
-              />
-            </Field>
-            <Field label="Site">
-              <Combobox
-                options={siteOptions}
-                value={site}
-                onChange={(v) => { setSite(v); setUnit(""); }}
-                placeholder="Pilih site…"
-                disabled={!company}
-              />
-            </Field>
-            <Field label="Unit / Perangkat">
-              <Combobox
-                options={unitOptions}
-                value={unit}
-                onChange={setUnit}
-                placeholder="Pilih unit…"
-                disabled={!site}
-                emptyText="Belum ada unit di site ini"
-              />
-            </Field>
-          </div>
-
-          {!mdLoading && sites.length === 0 && (
-            <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <AlertTriangle className="h-4 w-4 shrink-0" />
-              <span>Belum ada Site terdaftar. Silakan hubungi Helpdesk via WhatsApp Group.</span>
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-[3px] border border-border bg-card p-4 sm:p-6">
+          <section>
+            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Identitas Pelapor</h2>
+            <div className="grid md:grid-cols-2 gap-4 mt-4">
+              <Field label="Nama Pelapor">
+                <input required value={reporterName} onChange={(e) => setReporterName(e.target.value)} className="input" placeholder="Nama lengkap" />
+              </Field>
+              <Field label="Jabatan">
+                <input required value={position} onChange={(e) => setPosition(e.target.value)} className="input" placeholder="Contoh: Teknisi, Supervisor" />
+              </Field>
+              <Field label="Nomor WhatsApp">
+                <input required value={phone} onChange={(e) => setPhone(e.target.value)} className="input" placeholder="" />
+              </Field>
             </div>
-          )}
+          </section>
 
-          <Field label={`Deskripsi Kendala (${desc.length}/500)`}>
-            <textarea
-              required maxLength={500} rows={4}
-              value={desc} onChange={(e) => setDesc(e.target.value)}
-              className="input resize-none"
-              placeholder="Jelaskan kendala yang terjadi, kapan mulai bermasalah, dampak…"
-            />
-          </Field>
+          <section className="border-t border-border pt-6">
+            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Lokasi Unit</h2>
+            <div className="grid md:grid-cols-3 gap-4 mt-4">
+              <Field label="Perusahaan">
+                <Combobox
+                  options={companyOptions}
+                  value={company}
+                  onChange={(v) => { setCompany(v); setSite(""); setUnit(""); }}
+                  placeholder="Pilih perusahaan…"
+                  disabled={mdLoading || sites.length === 0}
+                />
+              </Field>
+              <Field label="Site">
+                <Combobox
+                  options={siteOptions}
+                  value={site}
+                  onChange={(v) => { setSite(v); setUnit(""); }}
+                  placeholder="Pilih site…"
+                  disabled={!company}
+                />
+              </Field>
+              <Field label="Unit / Perangkat">
+                <Combobox
+                  options={unitOptions}
+                  value={unit}
+                  onChange={setUnit}
+                  placeholder="Pilih unit…"
+                  disabled={!site}
+                  emptyText="Belum ada unit di site ini"
+                />
+              </Field>
+            </div>
 
-          <Field label={`Foto Pendukung (${photos.length}/${MAX_PHOTOS})`}>
-            <label className="flex items-center gap-3 p-4 border border-dashed border-border rounded-lg cursor-pointer hover:bg-accent/40 transition">
-              <Upload className="h-5 w-5 text-muted-foreground" />
-              <div className="flex-1">
-                <p className="text-sm font-medium">Klik untuk upload</p>
-                <p className="text-xs text-muted-foreground">JPG / JPEG / PNG · maks {MAX_PHOTOS} foto · total maks {MAX_TOTAL_SIZE_MB} MB</p>
+            {!mdLoading && sites.length === 0 && (
+              <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3 mt-4">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Belum ada Site terdaftar. Silakan hubungi Helpdesk via WhatsApp Group.</span>
               </div>
-              <input
-                type="file"
-                accept="image/jpeg,image/png"
-                multiple
-                className="hidden"
-                onChange={handlePhotosChange}
-              />
-            </label>
-            {photoError && (
-              <p className="text-xs text-destructive mt-1.5">{photoError}</p>
             )}
-            {photos.length > 0 && (
-              <div className="flex gap-2 mt-3 flex-wrap">
-                {photos.map((file, idx) => (
-                  <div key={idx} className="relative group">
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt={`Foto ${idx + 1}`}
-                      className="h-16 w-16 rounded-lg object-cover border border-border"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(idx)}
-                      className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-foreground text-background grid place-items-center opacity-0 group-hover:opacity-100 transition"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
+          </section>
+
+          <section className="border-t border-border pt-6">
+            <h2 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Detail Kendala</h2>
+            <div className="space-y-4 mt-4">
+              <Field label={`Deskripsi Kendala (${desc.length}/2000)`}>
+                <textarea
+                  required maxLength={2000} rows={4}
+                  value={desc} onChange={(e) => setDesc(e.target.value)}
+                  className="input resize-none"
+                  placeholder="Jelaskan kendala yang terjadi, kapan mulai bermasalah, dampak…"
+                />
+              </Field>
+
+              <Field label={`Foto Pendukung (${photos.length}/${MAX_PHOTOS})`}>
+                <label className="flex items-center gap-3 p-4 border border-dashed border-border rounded-lg cursor-pointer hover:bg-accent/40 transition">
+                  <Upload className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">Klik untuk upload</p>
+                    <p className="text-xs text-muted-foreground">JPG / JPEG / PNG · maks {MAX_PHOTOS} foto · total maks {MAX_TOTAL_SIZE_MB} MB</p>
                   </div>
-                ))}
-              </div>
-            )}
-          </Field>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png"
+                    multiple
+                    className="hidden"
+                    onChange={handlePhotosChange}
+                  />
+                </label>
+                {photoError && (
+                  <p className="text-xs text-destructive mt-1.5">{photoError}</p>
+                )}
+                {photos.length > 0 && (
+                  <div className="flex gap-2 mt-3 flex-wrap">
+                    {photos.map((file, idx) => (
+                      <div key={idx} className="relative group">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={`Foto ${idx + 1}`}
+                          className="h-16 w-16 rounded-lg object-cover border border-border"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => removePhoto(idx)}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-foreground text-background grid place-items-center opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Field>
+            </div>
+          </section>
 
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+          <div className="flex justify-end pt-4 border-t border-border">
             <button type="submit" disabled={submitting} className="px-5 py-2.5 rounded-[3px] bg-foreground text-background font-medium hover:bg-foreground/90 transition disabled:opacity-50 inline-flex items-center gap-2">
               {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Mengirim…</> : "Kirim Tiket"}
             </button>
@@ -380,63 +419,6 @@ export default function ReportPage() {
         }
       `}</style>
     </div>
-  );
-}
-
-function SiteHeader() {
-  return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between w-full">
-        <Link to="/" className="flex items-center gap-2">
-          <img src={logo} alt="Atap Care" className="h-9 w-9 rounded-xl object-contain" />
-          <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold">Atap Care</span>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">PT Atap Teknologi Indonesia</span>
-          </div>
-        </Link>
-        <div className="flex items-center gap-4">
-          <a href={WA_LINK} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition">
-            <Phone className="h-3.5 w-3.5" />
-            <span className="font-mono">0812421414</span>
-          </a>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-2.5">
-            <SocialIcon href="https://facebook.com" label="Facebook">
-              <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-            </SocialIcon>
-            <SocialIcon href="https://twitter.com" label="Twitter">
-              <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
-            </SocialIcon>
-            <SocialIcon href="https://linkedin.com" label="LinkedIn">
-              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
-              <rect width="4" height="12" x="2" y="9" />
-              <circle cx="4" cy="4" r="2" />
-            </SocialIcon>
-            <SocialIcon href="https://instagram.com" label="Instagram">
-              <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-              <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-            </SocialIcon>
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function SocialIcon({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={label}
-      className="text-muted-foreground hover:text-foreground transition"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {children}
-      </svg>
-    </a>
   );
 }
 

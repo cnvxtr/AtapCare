@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
+import AnimatedNumber from "./AnimatedNumber";
 
 export const DONUT_COLORS = ["#ef4444", "#f59e0b", "#3b82f6"];
 const DONUT_LABELS = ["P1", "P2", "P3"];
@@ -27,7 +29,7 @@ export function PriorityDonut({ p1, p2, p3 }: { p1: number; p2: number; p3: numb
     <div className="relative h-36 w-36">
       <svg viewBox="0 0 144 144" className="h-full w-full -rotate-90">
         {parts.map((p, i) => (
-          <circle
+          <motion.circle
             key={i}
             cx="72"
             cy="72"
@@ -35,17 +37,20 @@ export function PriorityDonut({ p1, p2, p3 }: { p1: number; p2: number; p3: numb
             fill="none"
             stroke={p.color}
             strokeWidth="22"
-            strokeDasharray={`${p.len} ${C - p.len}`}
             strokeDashoffset={-p.offset}
-            className="cursor-pointer transition-opacity"
-            opacity={hovered === null || hovered === i ? 1 : 0.35}
+            initial={{ strokeDasharray: `0 ${C}` }}
+            animate={{ strokeDasharray: `${p.len} ${C - p.len}` }}
+            transition={{ duration: 0.7, ease: "easeOut", delay: i * 0.15 }}
+            className={`cursor-pointer transition-opacity duration-200 ${
+              hovered === null || hovered === i ? "opacity-100" : "opacity-35"
+            }`}
             onMouseEnter={() => setHovered(i)}
             onMouseLeave={() => setHovered(null)}
           />
         ))}
       </svg>
       <div className="absolute inset-[22%] rounded-full bg-card grid place-items-center pointer-events-none">
-        <span className="text-sm font-bold text-foreground">{total}</span>
+        <AnimatedNumber value={total} className="text-sm font-bold text-foreground" />
       </div>
       {hovered !== null && (
         <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 rounded-md bg-foreground text-primary-foreground text-[11px] font-mono whitespace-nowrap z-10 shadow-lg pointer-events-none">

@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Badge as ColorBadge } from "@/components/Badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FileSpreadsheet, Loader2, RefreshCw, Search } from "lucide-react";
 import MultiSelectFilter from "@/components/MultiSelectFilter";
 import DateRangePicker from "@/components/DateRangePicker";
@@ -21,11 +22,14 @@ import {
   getTicketReport,
   getKpiReport,
   getAuditReport,
+  getRootCauseReport,
+  getSerialNumberReport,
   getSites,
   TICKET_REPORT_HEADERS,
   KPI_HEADERS,
   AUDIT_HEADERS,
-  STATUS_FILTER_OPTIONS,
+  ROOTCAUSE_HEADERS,
+  SERIAL_NUMBER_HEADERS,
   exportStyledXlsx,
   todayStamp,
   type ReportFilters,
@@ -34,7 +38,7 @@ import {
 import type { SiteRow } from "@/services";
 
 type ExportCell = string | number | null | undefined;
-type TabKey = "tickets" | "kpi" | "audit";
+type TabKey = "tickets" | "kpi" | "audit" | "rootcause" | "sparepart";
 
 const fmtIso = (iso: string) =>
   new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
@@ -46,18 +50,31 @@ const PRIORITY_OPTIONS = ["P1", "P2", "P3"].map((p) => ({ value: p, label: p }))
 const DATASETS: Array<{ key: TabKey; label: string }> = [
   { key: "tickets", label: "Tiket & Penanganan" },
   { key: "kpi", label: "KPI Agregat" },
-  { key: "audit", label: "Audit / Activity" },
+  { key: "audit", label: "Audit Log Admin" },
+  { key: "rootcause", label: "Akar Masalah" },
+  { key: "sparepart", label: "Serial Number" },
 ];
 
+// Per-role dataset: admin semua; helpdesk tiket + akar masalah.
+function datasetsFor(mode: "admin" | "helpdesk") {
+  return DATASETS.filter((d) =>
+    mode === "admin" ? true : d.key === "tickets" || d.key === "rootcause",
+  );
+}
+
 const PRIORITY_COLS: Record<TabKey, number[]> = {
-  tickets: [4],
+  tickets: [5],
   kpi: [0],
   audit: [],
+  rootcause: [],
+  sparepart: [],
 };
 const STATUS_COLS: Record<TabKey, number[]> = {
-  tickets: [5],
+  tickets: [6],
   kpi: [],
   audit: [],
+  rootcause: [],
+  sparepart: [],
 };
 
 function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
@@ -70,12 +87,15 @@ function FilterGroup({ label, children }: { label: string; children: ReactNode }
 }
 
 export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) {
+  const mode: "admin" | "helpdesk" = helpdesk ? "helpdesk" : "admin";
+  const visibleDatasets = datasetsFor(mode);
   const [tab, setTab] = useState<TabKey>("tickets");
   const [filters, setFilters] = useState<ReportFilters>({});
   const [search, setSearch] = useState("");
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [loadedKeys, setLoadedKeys] = useState<Partial<Record<TabKey, string>>>({});
 
   const [tickets, setTickets] = useState<TicketReportRow[]>([]);
   const [kpis, setKpis] = useState<Array<Record<string, string | number>>>([]);
@@ -86,29 +106,36 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   }, []);
 
   const loadDataset = useCallback(async () => {
+    const filtersKey = JSON.stringify(filters);
+    if (loadedKeys[tab] === filtersKey) return;
     setLoading(true);
     try {
-      if (tab === "tickets") setTickets(await getTicketReport(filters));
+      if (tab === "tickets") setTickets(await getTicketReport({ ...filters, status: ["CLOSED"] }));
       if (tab === "kpi")
         setKpis((await getKpiReport(filters)) as unknown as Array<Record<string, string | number>>);
       if (tab === "audit")
         setAudits((await getAuditReport(filters)) as unknown as Array<Record<string, string>>);
+      if (tab === "rootcause")
+        setKpis((await getRootCauseReport(filters)) as unknown as Array<Record<string, string | number>>);
+      if (tab === "sparepart")
+        setAudits((await getSerialNumberReport(filters)) as unknown as Array<Record<string, string>>);
     } finally {
       setLoading(false);
+      setLoadedKeys((prev) => ({ ...prev, [tab]: filtersKey }));
     }
-  }, [tab, filters]);
+  }, [tab, filters, loadedKeys]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadDataset();
   }, [loadDataset]);
 
   const activeRows: ExportCell[][] =
     tab === "tickets"
       ? tickets.map((r) => Object.values(r))
-      : tab === "kpi"
+      : tab === "kpi" || tab === "rootcause"
         ? kpis.map((r) => Object.values(r))
         : audits.map((r) => Object.values(r));
-
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return activeRows;
@@ -122,7 +149,11 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       ? TICKET_REPORT_HEADERS
       : tab === "kpi"
         ? KPI_HEADERS
-        : AUDIT_HEADERS;
+        : tab === "audit"
+          ? AUDIT_HEADERS
+          : tab === "rootcause"
+            ? ROOTCAUSE_HEADERS
+            : SERIAL_NUMBER_HEADERS;
 
   const stamp = todayStamp();
   const baseName = `atapcare-${tab}-${stamp}`;
@@ -180,20 +211,20 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       <Card>
         <CardContent className="px-2.5 py-3">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
-            <div className="relative">
+            <div className="relative grow">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
                 placeholder="Cari"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-8 w-52 rounded border border-border bg-card pl-8 pr-2 text-[13px] text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-foreground"
+                className="h-8 w-full min-w-52 rounded border border-border bg-card pl-8 pr-2 text-[13px] text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-foreground"
               />
             </div>
             <FilterGroup label="Periode">
               <DateRangePicker from={filters.from} to={filters.to} onChange={setRange} />
             </FilterGroup>
-            {tab !== "audit" && (
+            {(tab === "tickets" || tab === "kpi") && (
               <>
                 <FilterGroup label="Site">
                   <MultiSelectFilter
@@ -202,15 +233,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                     selected={selectedRecord(filters.siteId)}
                     onToggle={(v) => toggleFilterValue("siteId", v)}
                     className={selectTriggerFilter}
-                  />
-                </FilterGroup>
-                <FilterGroup label="Status">
-                  <MultiSelectFilter
-                    label="Semua"
-                    options={STATUS_FILTER_OPTIONS}
-                    selected={selectedRecord(filters.status)}
-                    onToggle={(v) => toggleFilterValue("status", v)}
-                    className={selectTriggerFilterSm}
                   />
                 </FilterGroup>
                 <FilterGroup label="Prioritas">
@@ -242,7 +264,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
 
       {/* ─── 3 Tab Dataset ───────────────────────────────────────── */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-        {!helpdesk && (
+        {mode === "admin" && (
           <TabsList className="flex-wrap h-auto gap-1 rounded border border-border bg-card p-1.5">
             {DATASETS.map((d) => (
               <TabsTrigger
@@ -256,7 +278,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
           </TabsList>
         )}
 
-        {DATASETS.filter((d) => !helpdesk || d.key === "tickets").map((d) => (
+        {visibleDatasets.map((d) => (
           <TabsContent key={d.key} value={d.key}>
             <Card>
               <CardContent className="p-4">
@@ -288,7 +310,11 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                 </div>
 
                 {loading ? (
-                  <p className="text-sm text-muted-foreground py-8 text-center">Memuat data…</p>
+                  <div className="space-y-2 py-6">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <Skeleton key={i} className="h-8 w-full" />
+                    ))}
+                  </div>
                 ) : visibleRows.length === 0 ? (
                   <p className="text-sm text-muted-foreground py-8 text-center">
                     {search.trim()
@@ -304,7 +330,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                               {activeHeaders.map((h) => (
                                 <TableHead
                                   key={h}
-                                  className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground px-2 py-2 whitespace-nowrap"
+                                  className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground px-1.5 py-1.5 whitespace-nowrap"
                                 >
                                   {h}
                                 </TableHead>
@@ -317,7 +343,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                               {r.map((c, j) => (
                                 <TableCell
                                   key={j}
-                                  className="whitespace-nowrap text-[11px] px-2 py-2"
+                                  className="text-[10px] px-1.5 py-1.5"
                                 >
                                   {PRIORITY_COLS[tab].includes(j) ? (
                                     <ColorBadge type="priority" value={String(c ?? "—")} />

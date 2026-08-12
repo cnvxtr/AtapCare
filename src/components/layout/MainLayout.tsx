@@ -1,24 +1,27 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
-import logo from '../../assets/logo.png'
+import Logo from '../Logo'
 import {
   LayoutDashboard, Inbox, ClipboardList, LayoutGrid,
   ChevronRight, Bell, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
-  Users, Building2, FileBarChart2, Timer, Sun, Moon, Check
+  Users, Building2, FileBarChart2, Timer, Sun, Moon, Check, X
 } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../../components/ui/tooltip'
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent,
-  DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator
+  DropdownMenuLabel, DropdownMenuSeparator
 } from '../../components/ui/dropdown-menu'
 import {
-  getMyNotifications, getUnreadCount, markAllRead, deliverDueBroadcasts,
+  getMyNotifications, getUnreadCount, markAllRead, markNotificationRead,
   type NotificationRow
 } from '../../services/notifications'
+import { approveBackup, rejectBackup } from '../../services/ticketService'
+import { getAdminActivities, type AdminActivityRow } from '../../services/dashboard'
 import { getStoredTheme, setTheme } from '../../lib/theme'
+import { registerPush, playChime } from '../../lib/pushNotifications'
 import ErrorBoundary from '../ErrorBoundary'
 
 const ROLE_LABELS: Record<string, string> = {
@@ -62,18 +65,28 @@ export default function MainLayout() {
   const [hoverLogo, setHoverLogo] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [showActivities, setShowActivities] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
+  const [activities, setActivities] = useState<AdminActivityRow[]>([])
+  const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
+
+  const prevNotifIds = useRef<string[]>([])
+  const firstNotifLoad = useRef(true)
 
   useEffect(() => {
     if (!user) return
     let alive = true
     const refresh = async () => {
-      await deliverDueBroadcasts()
       const [n, c] = await Promise.all([getMyNotifications(user.id), getUnreadCount(user.id)])
       if (!alive) return
+      // Chime hanya saat app terbuka & ada notif baru (banner OS datang dari push SW)
+      const fresh = n.filter(x => !prevNotifIds.current.includes(x.id))
+      prevNotifIds.current = n.map(x => x.id)
+      if (!firstNotifLoad.current && fresh.length > 0 && document.visibilityState === 'visible') playChime()
+      firstNotifLoad.current = false
       setNotifs(n)
       setNotifCount(c)
     }
@@ -81,6 +94,12 @@ export default function MainLayout() {
     // Polling 30 detik (blueprint 2.8.1)
     const t = setInterval(refresh, 30_000)
     return () => { alive = false; clearInterval(t) }
+  }, [user])
+
+  useEffect(() => {
+    if (!user) return
+    // Web Push: daftar SW + minta izin + subscribe (sekali per login)
+    void registerPush(user.id)
   }, [user])
 
   const roleLabel = user?.role === 'teknisi' ? 'Teknisi'
@@ -96,6 +115,18 @@ export default function MainLayout() {
     logout()
     setShowLogoutConfirm(false)
     setIsSidebarOpen(false)
+  }
+
+  const toggleDropdown = () => {
+    if (collapsed) return
+    setShowDropdown(!showDropdown)
+  }
+
+  const openActivities = () => {
+    setShowActivities(true)
+    if (user?.role === 'admin') {
+      getAdminActivities(10).then(setActivities).catch(() => setActivities([]))
+    }
   }
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
@@ -117,6 +148,21 @@ export default function MainLayout() {
     navigate(roleHome(r))
   }
 
+  const handleBackupAction = async (n: NotificationRow, action: 'approve' | 'reject') => {
+    if (!n.ticket_id || backupBusy) return
+    setBackupBusy(n.id)
+    const ok = action === 'approve' ? await approveBackup(n.ticket_id) : await rejectBackup(n.ticket_id)
+    if (ok) await markNotificationRead(n.id)
+    setBackupBusy(null)
+    if (ok) {
+      toast.success(action === 'approve' ? 'Pengalihan disetujui.' : 'Pengalihan ditolak.')
+      setNotifs(prev => prev.filter(x => x.id !== n.id))
+      setNotifCount(c => Math.max(0, c - 1))
+    } else {
+      toast.error(action === 'approve' ? 'Gagal menyetujui pengalihan.' : 'Gagal menolak pengalihan.')
+    }
+  }
+
   return (
     <div className="max-w-full min-h-screen bg-background text-foreground flex">
       {/* Sidebar */}
@@ -127,7 +173,7 @@ export default function MainLayout() {
             {collapsed && hoverLogo ? (
               <PanelLeftOpen className="h-5 w-5 text-foreground" />
             ) : (
-              <img src={logo} alt="Atap Care" className="h-6 w-6 object-contain" />
+              <Logo className="h-6 w-6 object-contain" />
             )}
           </div>
           {!collapsed && (
@@ -140,7 +186,7 @@ export default function MainLayout() {
             <div className="flex-1" />
           )}
           {!collapsed && (
-            <button onClick={() => setCollapsed(true)} className="h-7 w-7 grid place-items-center rounded-[3px] text-muted-foreground hover:bg-accent hover:text-foreground transition">
+            <button onClick={() => setCollapsed(true)} className="h-7 w-7 grid place-items-center rounded-[5px] text-muted-foreground hover:bg-accent hover:text-foreground transition">
               <PanelLeftClose className="h-5 w-5" />
             </button>
           )}
@@ -183,7 +229,7 @@ export default function MainLayout() {
 
         {/* Profile widget */}
         <div className="relative p-2 border-t border-border">
-          <button onClick={() => !collapsed && setShowDropdown(!showDropdown)} className={`w-full glass rounded-[3px] p-3 relative overflow-hidden text-left hover:opacity-90 transition ${collapsed ? 'grid place-items-center' : ''}`}>
+          <button onClick={toggleDropdown} className={`w-full glass rounded-[5px] p-3 relative overflow-hidden text-left hover:opacity-90 transition ${collapsed ? 'grid place-items-center' : ''}`}>
             <div className="absolute -top-6 -right-6 h-16 w-16 rounded-full bg-foreground/5 blur-2xl" />
             <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'}`}>
               <div className="h-8 w-8 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-xs font-bold shrink-0">
@@ -230,6 +276,16 @@ export default function MainLayout() {
                     <div className="border-t border-border" />
                   </>
                 )}
+                {user?.role === 'admin' && (
+                  <>
+                    <div className="border-t border-border" />
+                    <button onClick={() => { setShowDropdown(false); openActivities() }} className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-foreground hover:text-background transition-colors text-left">
+                      <span className="font-medium">Aktivitas Terbaru</span>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                  </>
+                )}
+                <div className="border-t border-border" />
                 <button onClick={() => { setShowDropdown(false); setShowLogoutConfirm(true) }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500 hover:bg-red-100 hover:text-red-500 transition-colors text-left font-semibold">
                   <LogOut className="h-4 w-4" /> Keluar
                 </button>
@@ -276,7 +332,7 @@ export default function MainLayout() {
                   {notifCount > 0 && (
                     <button
                       onClick={() => { if (user) { markAllRead(user.id); setNotifCount(0); setNotifs(notifs.map(n => ({ ...n, read: true }))) } }}
-                      className="text-xs text-muted-foreground hover:text-foreground"
+                      className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-[5px] px-1.5 py-0.5 hover:bg-accent transition-colors"
                     >
                       Tandai dibaca
                     </button>
@@ -286,16 +342,37 @@ export default function MainLayout() {
                 {notifs.length === 0 ? (
                   <div className="px-4 py-8 text-center text-sm text-muted-foreground">Tidak ada notifikasi</div>
                 ) : (
-                  <div className="max-h-80 overflow-y-auto">
-                    {notifs.map((n) => (
-                      <DropdownMenuItem key={n.id} className={`cursor-default flex flex-col items-start py-2.5 ${n.read ? 'opacity-60' : ''}`}>
-                        <span className="text-sm font-medium text-foreground">{n.title}</span>
-                        {n.message && <span className="text-xs text-muted-foreground mt-0.5">{n.message}</span>}
-                        <span className="text-[10px] text-muted-foreground/70 mt-1">
-                          {new Date(n.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </DropdownMenuItem>
-                    ))}
+                  <div className="max-h-80 overflow-y-auto space-y-1.5">
+                    {notifs.map((n) => {
+                      const actionable = user?.role === 'pm' && !!n.ticket_id
+                      return (
+                        <div key={n.id} className={`flex flex-col items-start py-2.5 px-3 bg-muted rounded-[5px] ${n.read ? 'opacity-60' : ''}`}>
+                          <span className="text-sm font-medium text-foreground">{n.title}</span>
+                          {n.message && <span className="text-xs text-muted-foreground mt-0.5">{n.message}</span>}
+                          <span className="text-[10px] text-muted-foreground/70 mt-1">
+                            {new Date(n.created_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {actionable && (
+                            <div className="flex gap-2 mt-2 w-full">
+                              <button
+                                disabled={backupBusy !== null}
+                                onClick={() => handleBackupAction(n, 'approve')}
+                                className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-[3px] font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                              >
+                                Setujui
+                              </button>
+                              <button
+                                disabled={backupBusy !== null}
+                                onClick={() => handleBackupAction(n, 'reject')}
+                                className="flex-1 py-1.5 text-xs bg-red-600 text-white rounded-[3px] font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
+                              >
+                                Tolak
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </DropdownMenuContent>
@@ -316,6 +393,34 @@ export default function MainLayout() {
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />
       )}
+
+      {/* MODAL AKTIVITAS */}
+      {showActivities && createPortal((
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowActivities(false)}>
+          <div className="bg-card border border-border w-full max-w-md rounded-lg shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <h3 className="text-lg font-display font-bold text-foreground">Aktivitas Terbaru</h3>
+              <button onClick={() => setShowActivities(false)} className="h-7 w-7 grid place-items-center rounded-lg bg-foreground text-primary-foreground hover:opacity-90 transition-opacity">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-96 overflow-y-auto scrollbar-transparent divide-y divide-border">
+              {activities.length === 0 ? (
+                <p className="px-5 py-8 text-center text-sm text-muted-foreground">Belum ada aktivitas</p>
+              ) : (
+                activities.map((a, i) => (
+                  <div key={i} className="px-5 py-3">
+                    <p className="text-sm text-foreground">
+                      <span className="font-semibold">{a.user}</span> {a.aktivitas}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{a.waktu}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      ), document.body)}
 
       {/* MODAL LOGOUT */}
       {showLogoutConfirm && createPortal((

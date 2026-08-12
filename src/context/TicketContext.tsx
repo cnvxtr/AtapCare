@@ -28,7 +28,7 @@ export interface Ticket {
     assignedTo?: string
     status: TicketStatus
     priority?: Priority
-    slaTimeLeft: number
+    slaTimeLeft: number | null
     createdAt: string
     closedAt?: string
     photoUrl?: string
@@ -37,6 +37,11 @@ export interface Ticket {
     location?: string
     description?: string
     rejectionReason?: string
+    categoryId?: string | null
+    rootCauseId?: string | null
+    rootCauseNote?: string | null
+    duplicateOf?: string | null
+    updatedAt?: string
     activities: TicketActivity[]
 }
 
@@ -50,7 +55,6 @@ interface SupabaseTicketRow {
     assigned_to?: string
     status: TicketStatus
     priority?: Priority
-    sla_time_left?: number
     created_at: string
     closed_at?: string
     photo_url?: string
@@ -59,6 +63,10 @@ interface SupabaseTicketRow {
     location?: string
     description?: string
     rejection_reason?: string
+    category_id?: string | null
+    root_cause_id?: string | null
+    root_cause_note?: string | null
+    duplicate_of?: string | null
     created_by?: string
     updated_at?: string
     activities?: SupabaseActivityRow[]
@@ -75,7 +83,8 @@ interface SupabaseActivityRow {
 const FINAL_STATUSES = ['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'] as const
 
 function mapTicketRow(t: SupabaseTicketRow, slaRemaining: Map<string, number>): Ticket {
-    // Tiket final tidak menampilkan countdown SLA → netral (perilaku lama).
+    // Tiket final tidak menampilkan countdown SLA → null (belum mulai). Sama seperti
+    // tiket yang SLA-nya belum pernah berjalan (BR-28D: NEW/OPEN/UNASSIGNED/SCHEDULED/EN_ROUTE).
     const final = FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number])
     return {
         id: t.id,
@@ -87,7 +96,7 @@ function mapTicketRow(t: SupabaseTicketRow, slaRemaining: Map<string, number>): 
         assignedTo: t.assigned_to || '-',
         status: t.status,
         priority: t.priority,
-        slaTimeLeft: final ? 24 : (slaRemaining.get(t.id) ?? t.sla_time_left ?? 24),
+        slaTimeLeft: final ? null : (slaRemaining.get(t.id) ?? null),
         createdAt: t.created_at,
         closedAt: t.closed_at,
         photoUrl: t.photo_url,
@@ -96,6 +105,11 @@ function mapTicketRow(t: SupabaseTicketRow, slaRemaining: Map<string, number>): 
         location: t.location,
         description: t.description,
         rejectionReason: t.rejection_reason,
+        categoryId: t.category_id,
+        rootCauseId: t.root_cause_id,
+        rootCauseNote: t.root_cause_note,
+        duplicateOf: t.duplicate_of ?? null,
+        updatedAt: t.updated_at,
         activities: (t.activities || [])
             .slice()
             .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
@@ -127,10 +141,11 @@ interface AddTicketData {
 interface TicketContextType {
     tickets: Ticket[]
     loading: boolean
-    updateTicketStatus: (id: string, newStatus: TicketStatus, actionDetails?: string, newPriority?: Priority, resolvedBy?: 'helpdesk' | 'technician', rejectionReason?: string) => Promise<void>
+    updateTicketStatus: (id: string, newStatus: TicketStatus, actionDetails?: string, newPriority?: Priority, resolvedBy?: 'helpdesk' | 'technician', rejectionReason?: string, duplicateOf?: string | null) => Promise<boolean>
     assignTicket: (id: string, technicianId: string | null, technicianName?: string, note?: string, supportIds?: string[]) => Promise<void>
     addTicket: (data: AddTicketData) => Promise<Ticket | null>
     getTicketCount: (status: TicketStatus) => number
+    refreshTickets: () => Promise<void>
 }
 
 const TicketContext = createContext<TicketContextType | undefined>(undefined)
@@ -176,8 +191,14 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             })
             .subscribe()
 
+        const onFocus = () => {
+            if (document.visibilityState === 'visible') fetchTickets()
+        }
+        document.addEventListener('visibilitychange', onFocus)
+
         return () => {
             supabase.removeChannel(channel)
+            document.removeEventListener('visibilitychange', onFocus)
         }
     }, [user, fetchTickets])
 
@@ -233,12 +254,13 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         actionDetails?: string,
         newPriority?: Priority,
         resolvedBy?: 'helpdesk' | 'technician',
-        rejectionReason?: string
+        rejectionReason?: string,
+        duplicateOf?: string | null
     ) => {
-        if (!user) return
+        if (!user) return false
 
         const actionMap: Record<TicketStatus, string> = {
-            'NEW': 'Status diubah ke Baru', 'OPEN': 'Tiket divalidasi & dibuka',
+            'NEW': 'Status diubah ke Baru', 'OPEN': 'Tiket divalidasi',
             'UNASSIGNED': 'Tiket dieskalasi ke PM Lead', 'SCHEDULED': 'Tiket dijadwalkan',
             'EN_ROUTE': 'Teknisi dalam perjalanan', 'WORKING': 'Pekerjaan dimulai',
             'PENDING': 'Tiket dijeda', 'RESOLVED': 'Tugas diselesaikan',
@@ -254,13 +276,16 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             p_rejection_reason: rejectionReason,
             p_activity_action: actionMap[newStatus],
             p_activity_details: actionDetails || rejectionReason,
+            p_duplicate_of: duplicateOf ?? null,
         })
 
         if (ticketError) {
             console.error('Error updating status:', ticketError)
-            toast.error('Gagal memperbarui status tiket.')
+            toast.error('Gagal memperbarui status tiket: ' + ticketError.message)
+            return false
         } else {
             await fetchTickets()
+            return true
         }
     }
 
@@ -300,7 +325,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <TicketContext.Provider value={{ tickets, loading, updateTicketStatus, assignTicket, addTicket, getTicketCount }}>
+        <TicketContext.Provider value={{ tickets, loading, updateTicketStatus, assignTicket, addTicket, getTicketCount, refreshTickets: fetchTickets }}>
             {children}
         </TicketContext.Provider>
     )

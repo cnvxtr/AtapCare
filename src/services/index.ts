@@ -1,7 +1,6 @@
 export * from "./master-data";
 export * from "./audit";
 export * from "./sla";
-export * from "./broadcast";
 export * from "./dashboard";
 export * from "./reports";
 export * from "./users";

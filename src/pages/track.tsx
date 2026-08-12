@@ -1,11 +1,51 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
-import { ArrowLeft, Search, Clock, CheckCircle2, AlertCircle, Copy, Check, Phone, Loader2, User } from "lucide-react";
-import { getTicketByCode } from "@/services";
-import logo from '../assets/logo.png'
+import { ArrowLeft, Search, Clock, CheckCircle2, AlertCircle, Copy, Check, Loader2, User } from "lucide-react";
+import { getTicketByCode, getPublicTimeline, type PublicTimelineItem } from "@/services";
+import { resolvePhotos } from "@/services/photoService";
+import { sanitizeTimeline } from "@/components/TicketDrawer";
+import { SiteHeader } from "@/components/SiteHeader";
+import { OrderTracking } from "@/components/ui/order-tracking";
 
-const WA_NUMBER = "6281242141414";
-const WA_LINK = `https://wa.me/${WA_NUMBER}?text=${encodeURIComponent("Halo AtapCare, saya butuh bantuan terkait tiket saya.")}`;
+const WA_LINK = `https://wa.me/6281242141414?text=${encodeURIComponent("Halo AtapCare, saya butuh bantuan terkait tiket saya.")}`;
+
+const STATUS_LABEL: Record<string, string> = {
+  NEW: "Baru",
+  OPEN: "Diproses",
+  UNASSIGNED: "Belum Ditugaskan",
+  SCHEDULED: "Ditugaskan",
+  EN_ROUTE: "Dalam Perjalanan",
+  WORKING: "Dikerjakan",
+  PENDING: "Dijeda",
+  RESOLVED: "Selesai",
+  CLOSED: "Selesai",
+  VOID: "Dibatalkan",
+  DUPLICATE: "Duplikat",
+  REJECTED: "Ditolak",
+};
+
+function labelForAction(action: string): string {
+  if (action.startsWith("Tiket dibuat")) return "Laporan Dibuat";
+  if (action === "Tiket dijeda") return "Tiket Dijeda";
+  const m = action.match(/^Status:\s*.*?\s*->\s*(.+)$/);
+  if (m) return STATUS_LABEL[m[1].trim()] || action;
+  return action;
+}
+
+// Details pending: "Ditunda: <alasan> [ | Foto (N):\n<path1>\n<path2>]".
+function parsePendingDetails(details?: string | null): { reason: string; photos: string[] } {
+  if (!details) return { reason: "", photos: [] };
+  const m = details.match(/^Ditunda:\s*(.*?)(?:\s*\|\s*Foto \(\d+\):\s*\n(.*))?$/s);
+  if (!m) return { reason: details, photos: [] };
+  return { reason: m[1].trim(), photos: m[2] ? m[2].split("\n").map(s => s.trim()).filter(Boolean) : [] };
+}
+
+function formatWib(iso: string): string {
+  return new Date(iso).toLocaleString("id-ID", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
 
 export default function TrackPage() {
   const [searchParams] = useSearchParams();
@@ -19,36 +59,32 @@ export default function TrackPage() {
   const [copied, setCopied] = useState(false);
   const [searching, setSearching] = useState(false);
   const [lastSearched, setLastSearched] = useState("");
+  const [timeline, setTimeline] = useState<PublicTimelineItem[]>([]);
+  const [pendingPhotoUrls, setPendingPhotoUrls] = useState<Record<string, string>>({});
 
   const isFromSubmit = !!urlTicket && !!result;
 
   const doSearch = useCallback(async (id: string) => {
     setSearching(true);
-    const ticket = await getTicketByCode(id.trim().toUpperCase());
-    setLastSearched(id.trim().toUpperCase());
+    const code = id.trim().toUpperCase();
+    const ticket = await getTicketByCode(code);
+    const tl = await getPublicTimeline(code);
+    setLastSearched(code);
 
     if (ticket) {
       setResult({
-        status:
-          ticket.status === "NEW" || ticket.status === "OPEN"
-            ? "antrian"
-            : ticket.status === "WORKING" || ticket.status === "EN_ROUTE" || ticket.status === "SCHEDULED"
-            ? "diproses"
-            : ticket.status === "RESOLVED" || ticket.status === "CLOSED"
-            ? "selesai"
-            : "antrian",
+        status: ticket.status,
         site: ticket.site,
         unit: ticket.unit,
-        updated: new Date(ticket.updatedAt || ticket.createdAt).toLocaleString("id-ID", {
-          day: "numeric", month: "short", year: "numeric",
-          hour: "2-digit", minute: "2-digit",
-        }),
+        updated: formatWib(ticket.updatedAt || ticket.createdAt),
         technician: ticket.technicianName,
         rawStatus: ticket.status,
       });
+      setTimeline(tl);
       setNotFound(false);
     } else {
       setResult(null);
+      setTimeline([]);
       setNotFound(true);
     }
     setSearching(false);
@@ -70,6 +106,19 @@ export default function TrackPage() {
     }
   }, [urlTicket, doSearch]);
 
+  // Resolve foto bukti pending ke signed URL (anon diizinkan via policy migration 32).
+  useEffect(() => {
+    const paths: string[] = [];
+    for (const item of timeline) {
+      if (item.action !== "Tiket dijeda") continue;
+      paths.push(...parsePendingDetails(item.details).photos);
+    }
+    if (!paths.length) { setPendingPhotoUrls({}); return; }
+    let active = true;
+    resolvePhotos(paths).then((m) => { if (active) setPendingPhotoUrls(m); });
+    return () => { active = false; };
+  }, [timeline]);
+
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     doSearch(ticketId);
@@ -81,10 +130,19 @@ export default function TrackPage() {
     setTimeout(() => setCopied(false), 2000);
   }
 
-  const statusConfig = {
-    antrian: { label: "Dalam Antrian", color: "text-yellow-600", bg: "bg-yellow-500/10", icon: Clock },
-    diproses: { label: "Sedang Diproses", color: "text-blue-600", bg: "bg-blue-500/10", icon: AlertCircle },
-    selesai: { label: "Selesai", color: "text-green-600", bg: "bg-green-500/10", icon: CheckCircle2 },
+  const statusConfig: Record<string, { label: string; color: string; bg: string; icon: typeof Clock }> = {
+    NEW: { label: STATUS_LABEL.NEW, color: "text-blue-600", bg: "bg-blue-500/10", icon: Clock },
+    OPEN: { label: STATUS_LABEL.OPEN, color: "text-blue-600", bg: "bg-blue-500/10", icon: AlertCircle },
+    UNASSIGNED: { label: STATUS_LABEL.UNASSIGNED, color: "text-indigo-600", bg: "bg-indigo-500/10", icon: Clock },
+    SCHEDULED: { label: STATUS_LABEL.SCHEDULED, color: "text-indigo-600", bg: "bg-indigo-500/10", icon: Clock },
+    EN_ROUTE: { label: STATUS_LABEL.EN_ROUTE, color: "text-blue-600", bg: "bg-blue-500/10", icon: AlertCircle },
+    WORKING: { label: STATUS_LABEL.WORKING, color: "text-blue-600", bg: "bg-blue-500/10", icon: AlertCircle },
+    PENDING: { label: STATUS_LABEL.PENDING, color: "text-amber-600", bg: "bg-amber-500/10", icon: Clock },
+    RESOLVED: { label: STATUS_LABEL.RESOLVED, color: "text-emerald-600", bg: "bg-emerald-500/10", icon: CheckCircle2 },
+    CLOSED: { label: STATUS_LABEL.CLOSED, color: "text-emerald-600", bg: "bg-emerald-500/10", icon: CheckCircle2 },
+    VOID: { label: STATUS_LABEL.VOID, color: "text-muted-foreground", bg: "bg-muted", icon: AlertCircle },
+    DUPLICATE: { label: STATUS_LABEL.DUPLICATE, color: "text-muted-foreground", bg: "bg-muted", icon: AlertCircle },
+    REJECTED: { label: STATUS_LABEL.REJECTED, color: "text-red-600", bg: "bg-red-500/10", icon: AlertCircle },
   };
 
   const displayId = ticketId.trim().toUpperCase();
@@ -102,7 +160,6 @@ export default function TrackPage() {
         </Link>
 
         <div className="mb-8">
-          <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Portal Publik</p>
           <h1 className="text-3xl font-display font-bold mt-2">Pelacakan Tiket</h1>
           <p className="text-sm text-muted-foreground mt-2">
             Masukkan nomor tiket Anda untuk melihat status laporan.
@@ -147,7 +204,7 @@ export default function TrackPage() {
             </div>
 
             <p className="text-sm text-muted-foreground mt-4">
-              Tim helpdesk akan menghubungi via WhatsApp.
+              Tim akan menghubungi via WhatsApp.
             </p>
           </div>
         )}
@@ -168,8 +225,45 @@ export default function TrackPage() {
         )}
 
         {result && (() => {
-          const cfg = statusConfig[result.status as keyof typeof statusConfig];
+          const cfg = statusConfig[result.status] ?? statusConfig.NEW;
           const StatusIcon = cfg.icon;
+          const isFinal = ["CLOSED", "RESOLVED", "VOID", "DUPLICATE", "REJECTED"].includes(result.status);
+          const steps = timeline.map((item, i) => {
+            const { action, details } = sanitizeTimeline(item.action, item.details ?? undefined);
+            return {
+              name: labelForAction(action),
+              timestamp: formatWib(item.created_at),
+              isCompleted: i < timeline.length - 1 || isFinal,
+              details: action === "Tiket dijeda" ? (() => {
+                const { reason, photos } = parsePendingDetails(details);
+                return (
+                  <>
+                    {reason && (
+                      <p className="text-xs text-muted-foreground">
+                        Alasan: <span className="text-foreground font-medium">{reason}</span>
+                      </p>
+                    )}
+                    {photos.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {photos.map((p, j) => {
+                          const url = pendingPhotoUrls[p];
+                          return url ? (
+                            <a key={j} href={url} target="_blank" rel="noopener noreferrer"
+                              className="block w-20 h-20 rounded-lg overflow-hidden border border-border hover:opacity-90 transition"
+                              title="Buka foto bukti">
+                              <img src={url} alt={`Bukti pending ${j + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                            </a>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </>
+                );
+              })() : details ? (
+                <p className="whitespace-pre-wrap">{details}</p>
+              ) : undefined,
+            };
+          });
           return (
             <div className="mt-4 rounded-xl border border-border bg-muted p-6 space-y-4">
               <div className="flex items-center justify-between">
@@ -214,6 +308,13 @@ export default function TrackPage() {
                   </p>
                 </div>
               </div>
+
+              {steps.length > 0 && (
+                <div className="pt-4 border-t border-border">
+                  <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4">Riwayat Status</h3>
+                  <OrderTracking steps={steps} />
+                </div>
+              )}
             </div>
           );
         })()}
@@ -244,63 +345,6 @@ export default function TrackPage() {
         }
       `}</style>
     </div>
-  );
-}
-
-function SiteHeader() {
-  return (
-    <header className="sticky top-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between w-full">
-        <Link to="/" className="flex items-center gap-2">
-          <img src={logo} alt="Atap Care" className="h-9 w-9 rounded-xl object-contain" />
-          <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold">Atap Care</span>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">PT Atap Teknologi Indonesia</span>
-          </div>
-        </Link>
-        <div className="flex items-center gap-4">
-          <a href={WA_LINK} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition">
-            <Phone className="h-3.5 w-3.5" />
-            <span className="font-mono">0812421414</span>
-          </a>
-          <div className="h-4 w-px bg-border" />
-          <div className="flex items-center gap-2.5">
-            <SocialIcon href="https://facebook.com" label="Facebook">
-              <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />
-            </SocialIcon>
-            <SocialIcon href="https://twitter.com" label="Twitter">
-              <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
-            </SocialIcon>
-            <SocialIcon href="https://linkedin.com" label="LinkedIn">
-              <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
-              <rect width="4" height="12" x="2" y="9" />
-              <circle cx="4" cy="4" r="2" />
-            </SocialIcon>
-            <SocialIcon href="https://instagram.com" label="Instagram">
-              <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-              <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-              <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-            </SocialIcon>
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-}
-
-function SocialIcon({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={label}
-      className="text-muted-foreground hover:text-foreground transition"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {children}
-      </svg>
-    </a>
   );
 }
 

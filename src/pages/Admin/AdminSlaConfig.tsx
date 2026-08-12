@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Clock, CalendarDays, Loader2, RefreshCw, Save } from "lucide-react";
+import { Clock, CalendarDays, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
 import {
@@ -35,7 +35,6 @@ export function AdminSlaConfig() {
   const [holidayCount, setHolidayCount] = useState(0);
   const [holidayRows, setHolidayRows] = useState<HolidayRow[]>([]);
   const [calendarOpen, setCalendarOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
@@ -53,14 +52,12 @@ export function AdminSlaConfig() {
     rows.filter((h) => h.is_active && h.date.startsWith(String(year)) && h.date >= todayWib).length;
 
   async function loadData() {
-    setLoading(true);
     const [presetRows, holidayRows] = await Promise.all([getSlaConfig(), getHolidays()]);
     const hours: Record<string, number> = {};
     for (const p of presetRows) hours[p.priority] = p.target_hours;
     setEditHours(hours);
     setSavedHours(hours);
     setHolidayCount(countRemaining(holidayRows));
-    setLoading(false);
     handleSync(true);
   }
 
@@ -107,14 +104,6 @@ export function AdminSlaConfig() {
     }
     toast.success(`Target SLA ${priority} disimpan (${hours} jam)`);
     setSavedHours((prev) => ({ ...prev, [priority]: hours }));
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat konfigurasi…
-      </div>
-    );
   }
 
   return (

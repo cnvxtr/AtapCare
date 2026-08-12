@@ -92,14 +92,105 @@ export async function setConfirmSent(ticketId: string): Promise<boolean> {
   return !error
 }
 
-// Catatan pendukung oleh member tiket (lead/support) — K6. Foto sudah di-upload
-// via uploadTicketPhoto; path-nya disertakan di details.
-export async function addTeamNote(ticketId: string, details: string): Promise<boolean> {
-  const { error } = await supabase.rpc("add_team_note", { p_ticket_id: ticketId, p_details: details })
+// Teknisi pendukung meminta pengalihan penanggung jawab (persetujuan PM via
+// approve_backup). Sinyal + audit; bukan takeover langsung.
+export async function requestBackup(ticketId: string, reason?: string | null): Promise<boolean> {
+  const { error } = await supabase.rpc("request_backup", { p_ticket_id: ticketId, p_reason: reason ?? null })
   return !error
+}
+
+export interface BackupRequest {
+  requester_id: string
+  requester_name: string
+  requested_at: string
+}
+
+// Request pengalihan yang masih menunggu persetujuan PM (null jika tidak ada).
+export async function getBackupRequest(ticketId: string): Promise<BackupRequest | null> {
+  const { data, error } = await supabase.rpc("get_backup_request", { p_ticket_id: ticketId })
+  if (error) return null
+  return (data as BackupRequest) || null
+}
+
+export async function approveBackup(ticketId: string): Promise<boolean> {
+  const { error } = await supabase.rpc("approve_backup", { p_ticket_id: ticketId })
+  return !error
+}
+
+export async function rejectBackup(ticketId: string): Promise<boolean> {
+  const { error } = await supabase.rpc("reject_backup", { p_ticket_id: ticketId })
+  return !error
+}
+
+// Isi kategori/akar masalah tiket (RPC terpisah dari transisi status).
+export async function setTicketCatalog(
+  ticketId: string,
+  categoryId?: string | null,
+  rootCauseId?: string | null,
+  rootCauseNote?: string | null,
+): Promise<boolean> {
+  const { error } = await supabase.rpc("set_ticket_catalog", {
+    p_ticket_id: ticketId,
+    p_category_id: categoryId ?? null,
+    p_root_cause_id: rootCauseId ?? null,
+    p_root_cause_note: rootCauseNote ?? null,
+  });
+  return !error;
 }
 
 export async function getSitesForReport(): Promise<SiteReport[]> {
   const { data } = await supabase.rpc("get_sites_for_report")
   return (data ?? []) as SiteReport[]
+}
+
+export interface LandingStats {
+  active_units: number
+  customers: string[]
+  total_tickets: number
+  resolved_this_month: number
+  sla: Record<string, number>
+}
+
+export async function getLandingStats(): Promise<LandingStats> {
+  const { data } = await supabase.rpc("get_landing_stats")
+  return (
+    data ?? { active_units: 0, customers: [], total_tickets: 0, resolved_this_month: 0, sla: { P1: 4, P2: 24, P3: 72 } }
+  ) as LandingStats
+}
+
+export async function recordGps(ticketId: string, lat: number, lon: number, phase: 'start' | 'end') {
+  const { error } = await supabase.rpc("record_gps", {
+    p_ticket_id: ticketId,
+    p_lat: lat,
+    p_lon: lon,
+    p_phase: phase,
+  })
+  return !error
+}
+
+export interface GpsPoint {
+  lat: number
+  lon: number
+  phase: 'start' | 'end'
+  captured_at: string
+}
+
+export async function getTicketGps(code: string): Promise<GpsPoint[]> {
+  const { data } = await supabase
+    .from("ticket_gps")
+    .select("lat, lon, phase, captured_at, tickets!inner(code)")
+    .eq("tickets.code", code)
+  return (data ?? []) as unknown as GpsPoint[]
+}
+
+export interface PublicTimelineItem {
+  action: string
+  created_at: string
+  user_name: string | null
+  details?: string | null
+}
+
+export async function getPublicTimeline(code: string): Promise<PublicTimelineItem[]> {
+  const { data } = await supabase.rpc("get_public_timeline", { p_code: code })
+  return (data ?? []) as PublicTimelineItem[]
 }

@@ -1,13 +1,18 @@
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, Inbox, ArrowUpRight, Wrench, ClipboardCheck, X, Copy } from 'lucide-react'
 import { Badge } from '../../components/Badge'
+import SlaBadge from '../../components/SlaBadge'
 import { FINAL_STATUSES, FIELD_STATUSES } from '../../lib/status'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
 import FieldError from '../../components/FieldError'
+import { getPendingAlarm } from '../../lib/pendingAlarm'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
+import TrendChart from '../../components/TrendChart'
+import AnimatedNumber from '../../components/AnimatedNumber'
 
 export default function HPDashboard() {
     const navigate = useNavigate()
@@ -17,6 +22,7 @@ export default function HPDashboard() {
     const [actionModal, setActionModal] = useState<null | { kind: 'void' | 'duplicate' }>(null)
     const [actionInput, setActionInput] = useState('')
     const [actionError, setActionError] = useState('')
+    const [duplicateTargetId, setDuplicateTargetId] = useState('')
 
     // Rolling bulan kalender: otomatis geser ke bulan baru tiap tanggal 1, tanpa reset manual
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
@@ -58,18 +64,22 @@ export default function HPDashboard() {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 10) // Tampilkan 10 teratas
 
-    const slaOverdue = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft <= 0).length
+    const slaOverdue = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft != null && t.slaTimeLeft <= 0).length
 
     const confirmAction = () => {
+        if (actionModal?.kind === 'duplicate' && !duplicateTargetId) {
+            setActionError('Mohon pilih tiket utama'); return
+        }
         const val = actionInput.trim()
-        if (!val) { setActionError('Mohon isi ' + (actionModal?.kind === 'void' ? 'alasan pembatalan' : 'kode tiket utama')); return }
+        if (!val) { setActionError('Mohon isi ' + (actionModal?.kind === 'void' ? 'alasan pembatalan' : 'tiket utama')); return }
         setActionError('')
         if (actionModal?.kind === 'void') {
             updateTicketStatus(selectedTicket!.id, 'VOID', val)
         } else {
-            updateTicketStatus(selectedTicket!.id, 'DUPLICATE', `Duplikat dari ${val}`)
+            const target = tickets.find(t => t.id === duplicateTargetId)
+            updateTicketStatus(selectedTicket!.id, 'DUPLICATE', `Duplikat dari tiket ${target?.code || duplicateTargetId}`, undefined, undefined, undefined, duplicateTargetId)
         }
-        setActionModal(null); setActionInput(''); setSelectedTicket(null)
+        setActionModal(null); setActionInput(''); setDuplicateTargetId(''); setSelectedTicket(null)
     }
 
     return (
@@ -82,7 +92,7 @@ export default function HPDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Baru (Perlu Validasi)</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('NEW')}</h3>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('NEW')} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><Inbox className="w-5 h-5 text-foreground" /></div>
                     </div>
@@ -92,7 +102,7 @@ export default function HPDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Sedang Diproses</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('OPEN')}</h3>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('OPEN')} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><Wrench className="w-5 h-5 text-foreground" /></div>
                     </div>
@@ -102,7 +112,7 @@ export default function HPDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Menunggu Validasi</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('RESOLVED')}</h3>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('RESOLVED')} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><ClipboardCheck className="w-5 h-5 text-foreground" /></div>
                     </div>
@@ -114,7 +124,7 @@ export default function HPDashboard() {
                                 <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> SLA Overdue
                             </p>
                             <h3 className="text-4xl font-display font-black text-white mt-2 tracking-tight">
-                                {slaOverdue}
+                                <AnimatedNumber value={slaOverdue} />
                             </h3>
                         </div>
                         <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
@@ -148,8 +158,8 @@ export default function HPDashboard() {
                             <BarChart data={statusData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                                 <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} />
                                 <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} width={85} />
-                                <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ backgroundColor: 'white', borderColor: '#d1d5db', borderRadius: '8px', fontSize: '12px' }} />
-                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                                <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ backgroundColor: 'black', borderColor: '#333', borderRadius: '8px', fontSize: '12px', color: 'white' }} labelStyle={{ color: 'white' }} itemStyle={{ color: 'white' }} />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} animationDuration={700} animationEasing="ease-out">
                                     {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
                                 </Bar>
                             </BarChart>
@@ -189,14 +199,14 @@ export default function HPDashboard() {
                                         </td>
                                         <td className="p-4">
                                             <Badge type="status" value={ticket.status} />
+                                            {ticket.status === 'PENDING' && getPendingAlarm(ticket.updatedAt) && (
+                                                <span className="ml-1.5 inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-[3px] text-[9px] font-bold whitespace-nowrap">
+                                                    <AlertTriangle className="h-2.5 w-2.5" /> {getPendingAlarm(ticket.updatedAt)}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="p-4">
-                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${ticket.slaTimeLeft <= 0 ? 'bg-red-100 text-red-700' :
-                                                    ticket.slaTimeLeft <= 4 ? 'bg-amber-100 text-amber-700' :
-                                                        'bg-emerald-100 text-emerald-700'
-                                                }`}>
-                                                {ticket.slaTimeLeft <= 0 ? 'Overdue' : `Sisa ${Math.ceil(ticket.slaTimeLeft)} Jam`}
-                                            </span>
+                                            <SlaBadge remaining={ticket.slaTimeLeft} />
                                         </td>
                                     </tr>
                                 ))
@@ -219,14 +229,15 @@ export default function HPDashboard() {
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={selectedTicket.activities}
+                    duplicateCode={selectedTicket.duplicateOf ? (tickets.find(t => t.id === selectedTicket.duplicateOf)?.code ?? undefined) : undefined}
                     footer={
                         <>
                             {selectedTicket.status === 'NEW' && (
                                 <>
                                     <button onClick={() => { updateTicketStatus(selectedTicket.id, 'OPEN'); setSelectedTicket(null); }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-md font-bold">Validasi</button>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => { setActionInput(''); setActionError(''); setActionModal({ kind: 'void' }) }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-md font-medium hover:bg-red-50/60 transition">Batal</button>
-                                        <button onClick={() => { setActionInput(''); setActionError(''); setActionModal({ kind: 'duplicate' }) }} className="py-2.5 bg-transparent text-amber-600 border border-border rounded-md font-medium hover:bg-amber-50/60 transition">Gabung</button>
+                                        <button onClick={() => { setActionInput(''); setDuplicateTargetId(''); setActionError(''); setActionModal({ kind: 'void' }) }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-md font-medium hover:bg-red-50/60 transition">Batal</button>
+                                        <button onClick={() => { setActionInput(''); setDuplicateTargetId(''); setActionError(''); setActionModal({ kind: 'duplicate' }) }} className="py-2.5 bg-transparent text-amber-600 border border-border rounded-md font-medium hover:bg-amber-50/60 transition">Gabung</button>
                                     </div>
                                 </>
                             )}
@@ -238,6 +249,11 @@ export default function HPDashboard() {
                 >
                     {activeDrawerTab === 'detail' && (
                         <div className="space-y-4">
+                            {selectedTicket.status === 'PENDING' && getPendingAlarm(selectedTicket.updatedAt) && (
+                                <div className="bg-amber-50/60 p-3 rounded-[3px] border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" /> Dijeda {getPendingAlarm(selectedTicket.updatedAt)} tanpa aktivitas
+                                </div>
+                            )}
                             <AssignmentCard items={selectedTicket.activities} />
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
@@ -252,28 +268,46 @@ export default function HPDashboard() {
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}
-                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} />}
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
                     {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
                 </TicketDrawer>
             )}
 
             {/* MODAL VOID / DUPLICATE */}
             {actionModal && createPortal((
-                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }}>
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => { setActionModal(null); setActionInput(''); setDuplicateTargetId(''); setActionError('') }}>
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className={`text-lg font-bold flex items-center gap-2 ${actionModal.kind === 'void' ? 'text-red-600' : 'text-amber-600'}`}>
                                 {actionModal.kind === 'void' ? <AlertTriangle className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
                                 {actionModal.kind === 'void' ? 'Batalkan Tiket' : 'Tandai Duplikat'}
                             </h3>
-                            <button onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => { setActionModal(null); setActionInput(''); setDuplicateTargetId(''); setActionError('') }} className="p-2 bg-foreground text-background rounded-lg hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
-                        <textarea value={actionInput} onChange={e => { setActionInput(e.target.value); setActionError('') }}
-                            rows={3} className={`w-full px-3 py-2 border-2 ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`}
-                            placeholder={actionModal.kind === 'void' ? 'Alasan pembatalan (wajib)...' : 'Kode tiket utama (contoh: ATC-20260724-X7K9)...'} />
+                        {actionModal.kind === 'void' ? (
+                            <textarea value={actionInput} onChange={e => { setActionInput(e.target.value); setActionError('') }}
+                                rows={3} className={`w-full px-3 py-2 border-2 ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`}
+                                placeholder="Alasan pembatalan (wajib)..." />
+                        ) : (
+                            <Select value={duplicateTargetId} onValueChange={(v) => { setDuplicateTargetId(v); setActionError('') }}>
+                                <SelectTrigger className={`w-full px-3 py-2 border-2 ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm`}>
+                                    <SelectValue placeholder="Pilih tiket utama..." />
+                                </SelectTrigger>
+                                <SelectContent className="z-[130] border-border bg-card text-foreground">
+                                    {tickets.filter(t => t.id !== selectedTicket?.id && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)).map(t => (
+                                        <SelectItem key={t.id} value={t.id} className="focus:bg-foreground focus:text-background">{t.code} - {t.customer}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
                         <FieldError msg={actionError} />
+                        {actionModal.kind === 'duplicate' && (
+                            <p className="mt-4 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded px-3 py-2">
+                                Terdapat tiket duplicate terkait. Pastikan pelanggan telah diinformasikan.
+                            </p>
+                        )}
                         <div className="flex gap-3 mt-4">
-                            <button onClick={() => { setActionModal(null); setActionInput(''); setActionError('') }} className="flex-1 py-2 bg-muted rounded text-sm font-medium">Batal</button>
+                            <button onClick={() => { setActionModal(null); setActionInput(''); setDuplicateTargetId(''); setActionError('') }} className="flex-1 py-2 bg-muted rounded text-sm font-medium">Batal</button>
                             <button onClick={confirmAction} className={`flex-1 py-2 text-white rounded text-sm font-bold ${actionModal.kind === 'void' ? 'bg-red-600' : 'bg-amber-500'}`}>
                                 {actionModal.kind === 'void' ? 'Ya, Batalkan' : 'Ya, Tandai Duplikat'}
                             </button>
@@ -282,76 +316,5 @@ export default function HPDashboard() {
                 </div>
             ), document.body)}
     </>
-    )
-}
-
-function TrendChart({ data }: { data: { name: string; masuk: number; selesai: number }[] }) {
-    const [hover, setHover] = useState<number | null>(null)
-    const [tipPos, setTipPos] = useState<{ x: number; y: number; below: boolean } | null>(null)
-    const wrapRef = useRef<HTMLDivElement>(null)
-    const w = 600, h = 200, pad = 20, padB = 32
-    const max = Math.max(1, ...data.flatMap(d => [d.masuk, d.selesai]))
-    const x = (i: number) => pad + (i * (w - pad * 2)) / (data.length - 1)
-    const y = (v: number) => h - padB - (v / max) * (h - pad - padB)
-    const line = (key: 'masuk' | 'selesai') =>
-        data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[key])}`).join(' ')
-
-    const handleMove = (e: ReactMouseEvent<SVGSVGElement>) => {
-        const svg = e.currentTarget
-        const ctm = svg.getScreenCTM()
-        const wrap = wrapRef.current
-        if (!ctm || !wrap) return
-        const rect = svg.getBoundingClientRect()
-        const px = ((e.clientX - rect.left) / rect.width) * w
-        const idx = Math.max(0, Math.min(data.length - 1, Math.round((px - pad) / ((w - pad * 2) / (data.length - 1)))))
-        const pt = svg.createSVGPoint()
-        pt.x = x(idx)
-        pt.y = y(Math.max(data[idx].masuk, data[idx].selesai))
-        const p = pt.matrixTransform(ctm)
-        const wr = wrap.getBoundingClientRect()
-        const below = p.y <= wr.top + 0.35 * wr.height
-        setHover(idx)
-        setTipPos({ x: p.x, y: p.y, below })
-    }
-
-    const isFirst = hover === 0
-    const isLast = hover === data.length - 1
-
-    return (
-        <div className="relative" ref={wrapRef}>
-            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56" onMouseMove={handleMove} onMouseLeave={() => { setHover(null); setTipPos(null) }}>
-                {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-                    <line key={f} x1={pad} x2={w - pad} y1={pad + f * (h - pad - padB)} y2={pad + f * (h - pad - padB)}
-                        stroke="currentColor" strokeOpacity="0.06" />
-                ))}
-                {hover !== null && (
-                    <line x1={x(hover)} x2={x(hover)} y1={pad} y2={h - padB} stroke="currentColor" strokeOpacity="0.15" />
-                )}
-                <path d={`${line('masuk')} L${x(data.length - 1)},${h - padB} L${x(0)},${h - padB} Z`}
-                    fill="currentColor" opacity="0.08" />
-                <path d={line('masuk')} fill="none" stroke="currentColor" strokeWidth="3" />
-                <path d={line('selesai')} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="4 3" opacity="0.5" />
-                {data.map((d, i) => (
-                    <g key={i}>
-                        <circle cx={x(i)} cy={y(d.masuk)} r={hover === i ? 5 : 4} fill="currentColor" />
-                        <text x={x(i)} y={h - 6} textAnchor="middle" fontSize="14" fill="currentColor" opacity="0.5">M{i + 1}</text>
-                    </g>
-                ))}
-            </svg>
-            {hover !== null && tipPos && createPortal((
-                <div
-                    className="fixed pointer-events-none bg-foreground text-background text-xs rounded px-2 py-1.5 shadow-lg z-50"
-                    style={{
-                        left: tipPos.x,
-                        top: tipPos.y,
-                        transform: `${isFirst ? 'translateX(0)' : isLast ? 'translateX(-100%)' : 'translateX(-50%)'} ${tipPos.below ? 'translateY(8px)' : 'translateY(calc(-100% - 8px))'}`,
-                    }}
-                >
-                    <p className="font-semibold">M{hover + 1}</p>
-                    <p>Masuk: <span className="font-bold">{data[hover].masuk}</span></p>
-                    <p>Selesai: <span className="font-bold">{data[hover].selesai}</span></p>
-                </div>
-            ), document.body)}
-        </div>
     )
 }

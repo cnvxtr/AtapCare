@@ -16,11 +16,14 @@ import {
   Check,
   ArrowRight,
   ArrowLeft,
+  ListTree,
+  Tags,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -41,20 +44,31 @@ import {
   updateUnit,
   softDeleteUnit,
   restoreUnit,
+  problemCategoriesApi,
+  rootCausesApi,
   type Customer,
   type SiteRow,
   type UnitRow,
+  type CatalogItem,
 } from "@/services";
 
 type FormMode = "customer" | "site" | "unit";
 type ActionVariant = "green" | "neutral" | "red" | "brand";
 type WizardStep = 1 | 2 | 3;
+type MasterTab = "assets" | "categories" | "rootcauses";
+type CatalogTable = "problem_categories" | "root_causes";
 
 const NEW_ID = "__new__";
 const WIZARD_STEPS: Array<{ n: WizardStep; label: string }> = [
   { n: 1, label: "Customer" },
   { n: 2, label: "Site" },
   { n: 3, label: "Unit" },
+];
+
+const MASTER_TABS: Array<{ key: MasterTab; label: string; icon: React.ElementType }> = [
+  { key: "assets", label: "Pohon Aset", icon: Building2 },
+  { key: "categories", label: "Kategori Masalah", icon: ListTree },
+  { key: "rootcauses", label: "Akar Masalah", icon: Tags },
 ];
 
 const ITEMS_PER_PAGE = 20;
@@ -171,6 +185,185 @@ function MenuSelect({
   );
 }
 
+function CatalogPanel({
+  items,
+  loading,
+  searchQ,
+  onSearch,
+  page,
+  setPage,
+  icon: Icon,
+  iconClass,
+  addLabel,
+  emptyHint,
+  onAdd,
+  onEdit,
+  onArchive,
+  onRestore,
+}: {
+  items: CatalogItem[];
+  loading: boolean;
+  searchQ: string;
+  onSearch: (v: string) => void;
+  page: number;
+  setPage: (v: number) => void;
+  icon: React.ElementType;
+  iconClass: string;
+  addLabel: string;
+  emptyHint: string;
+  onAdd: () => void;
+  onEdit: (item: CatalogItem) => void;
+  onArchive: (item: CatalogItem) => void;
+  onRestore: (item: CatalogItem) => void;
+}) {
+  const filtered = items.filter((i) => i.name.toLowerCase().includes(searchQ.toLowerCase()));
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
+  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  return (
+    <>
+      <div className="bg-card p-4 rounded-xl border border-border">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="relative">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={searchQ}
+              onChange={(e) => {
+                onSearch(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Cari…"
+              className="pl-9 pr-4 h-9 rounded-[3px] border border-border bg-card text-sm outline-none focus:border-ring transition w-72 text-foreground"
+            />
+          </div>
+          <button
+            onClick={onAdd}
+            className="h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
+          >
+            <Plus className="h-3.5 w-3.5" /> {addLabel}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2 py-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full rounded-xl" />
+          ))}
+        </div>
+      ) : paginated.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground rounded-2xl border border-dashed border-border bg-card">
+          <Database className="h-10 w-10 mb-2" />
+          <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>
+          <p className="text-xs mt-1">{emptyHint}</p>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/70">
+                  <th className="text-left px-4 py-2.5 text-[10px] font-mono uppercase tracking-wider text-muted-foreground w-[40%]">
+                    Nama
+                  </th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    Status
+                  </th>
+                  <th className="text-right px-4 py-2.5 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                    Aksi
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginated.map((i) => (
+                  <tr
+                    key={i.id}
+                    className={`border-b border-border bg-card hover:bg-accent/60 transition ${i.is_deleted ? "opacity-50" : ""}`}
+                  >
+                    <td className="py-3 pl-4 pr-2">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`h-7 w-7 rounded-lg grid place-items-center shrink-0 ${iconClass}`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                        </span>
+                        <span className="text-[13px] font-medium text-foreground">{i.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      {i.is_deleted ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground border border-border">
+                          Diarsipkan
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-600 border border-emerald-200">
+                          Aktif
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {i.is_deleted ? (
+                        <div className="flex justify-end">
+                          <ActionButton
+                            icon={RotateCcw}
+                            label="Pulihkan"
+                            variant="green"
+                            onClick={() => onRestore(i)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex justify-end">
+                          <RowActionMenu onEdit={() => onEdit(i)} onDelete={() => onArchive(i)} />
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div className="px-4 py-3 border-t border-border">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <button
+                      onClick={() => setPage(Math.max(1, page - 1))}
+                      disabled={page <= 1}
+                      className="px-3 py-1 text-xs text-muted-foreground hover:bg-accent rounded disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                    <PaginationItem key={p}>
+                      <button
+                        onClick={() => setPage(p)}
+                        className={`px-3 py-1 text-xs rounded ${p === page ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}
+                      >
+                        {p}
+                      </button>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <button
+                      onClick={() => setPage(Math.min(totalPages, page + 1))}
+                      disabled={page >= totalPages}
+                      className="px-3 py-1 text-xs text-muted-foreground hover:bg-accent rounded disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function AdminMasterData() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sites, setSites] = useState<SiteRow[]>([]);
@@ -187,6 +380,69 @@ export function AdminMasterData() {
   const [formParentSiteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ─── Tab Master Data: Pohon Aset / Kategori Masalah / Akar Masalah ───
+  const [tab, setTab] = useState<MasterTab>("assets");
+  const [cats, setCats] = useState<CatalogItem[]>([]);
+  const [roots, setRoots] = useState<CatalogItem[]>([]);
+  const [catLoading, setCatLoading] = useState(true);
+  const [catSearch, setCatSearch] = useState("");
+  const [catPage, setCatPage] = useState(1);
+  const [catDialog, setCatDialog] = useState<{
+    table: CatalogTable;
+    editingId: string | null;
+    name: string;
+  } | null>(null);
+  const [catSaving, setCatSaving] = useState(false);
+
+  async function loadCatalog(table: CatalogTable) {
+    setCatLoading(true);
+    const api = table === "problem_categories" ? problemCategoriesApi : rootCausesApi;
+    const rows = await api.getAll();
+    if (table === "problem_categories") setCats(rows);
+    else setRoots(rows);
+    setCatLoading(false);
+  }
+
+  async function handleCatalogSave() {
+    if (!catDialog || !catDialog.name.trim()) return;
+    setCatSaving(true);
+    const api = catDialog.table === "problem_categories" ? problemCategoriesApi : rootCausesApi;
+    const ok = catDialog.editingId
+      ? await api.update(catDialog.editingId, catDialog.name.trim())
+      : (await api.create(catDialog.name.trim())) !== null;
+    setCatSaving(false);
+    if (!ok) {
+      toast.error("Gagal menyimpan");
+      return;
+    }
+    toast.success(catDialog.editingId ? "Nama diperbarui" : "Ditambahkan");
+    setCatDialog(null);
+    loadCatalog(catDialog.table);
+  }
+
+  async function handleCatalogArchive(table: CatalogTable, item: CatalogItem) {
+    const api = table === "problem_categories" ? problemCategoriesApi : rootCausesApi;
+    const ok = await api.softDelete(item.id);
+    if (!ok) {
+      toast.error("Gagal mengarsipkan");
+      return;
+    }
+    toast.success(`"${item.name}" diarsipkan`);
+    loadCatalog(table);
+  }
+
+  async function handleCatalogRestore(table: CatalogTable, item: CatalogItem) {
+    const api = table === "problem_categories" ? problemCategoriesApi : rootCausesApi;
+    const ok = await api.restore(item.id);
+    if (!ok) {
+      toast.error("Gagal memulihkan");
+      return;
+    }
+    toast.success(`"${item.name}" dipulihkan`);
+    loadCatalog(table);
+  }
+
 
   const [formName, setFormName] = useState("");
   const [formAddress, setFormAddress] = useState("");
@@ -217,6 +473,16 @@ export function AdminMasterData() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  // Lazy-load katalog saat tab pertama kali dibuka.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (tab === "categories" && cats.length === 0) loadCatalog("problem_categories");
+    if (tab === "rootcauses" && roots.length === 0) loadCatalog("root_causes");
+    setCatPage(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
+
 
   async function loadAll() {
     setLoading(true);
@@ -658,6 +924,7 @@ export function AdminMasterData() {
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE));
   const paginatedTop = filteredCustomers.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const activeCount = units.filter((u) => !u.is_deleted).length;
 
   const chevronBtn = (expanded: boolean, hasChildren: boolean, onToggle: () => void) =>
     hasChildren ? (
@@ -678,6 +945,26 @@ export function AdminMasterData() {
 
   return (
     <div className="space-y-4">
+      {/* ─── Tab Master Data ───────────────────────────────────── */}
+      <div className="bg-card p-1 rounded-xl border border-border inline-flex gap-1 flex-wrap w-fit">
+        {MASTER_TABS.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-3.5 h-8 rounded-[3px] text-xs font-medium transition inline-flex items-center gap-1.5 ${
+              tab === t.key
+                ? "bg-foreground text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent"
+            }`}
+          >
+            <t.icon className="h-3.5 w-3.5" /> {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Pohon Aset (Customer → Site → Unit) ───────────────── */}
+      {tab === "assets" && (
+        <>
       {/* ─── Header: search + add ─────────────────────────────── */}
       <div className="bg-card p-4 rounded-xl border border-border">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -702,19 +989,28 @@ export function AdminMasterData() {
         </div>
       </div>
 
-      {/* ─── TreeTable (Customer → Site → Unit) ────────────────── */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat data…
+      {/* ─── Card gabungan: Titik Aktif + TreeTable ────────────── */}
+      <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+        <div className="flex items-center justify-end gap-2 px-4 py-3 border-b border-border">
+          <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-muted text-foreground text-xs font-mono uppercase tracking-widest border border-border shadow-sm">
+            <span className="h-1.5 w-1.5 rounded-full bg-success pulse-ring" />
+            {activeCount} Titik Aktif
+          </span>
         </div>
-      ) : paginatedTop.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground rounded-2xl border border-dashed border-border bg-card">
-          <Database className="h-10 w-10 mb-2" />
-          <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>
-          <p className="text-xs mt-1">Gunakan tombol Tambah Customer untuk memulai</p>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
+        {loading ? (
+          <div className="space-y-2 py-4 px-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full rounded-xl" />
+            ))}
+          </div>
+        ) : paginatedTop.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+            <Database className="h-10 w-10 mb-2" />
+            <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>
+            <p className="text-xs mt-1">Gunakan tombol Tambah Customer untuk memulai</p>
+          </div>
+        ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -958,8 +1254,88 @@ export function AdminMasterData() {
               </Pagination>
             </div>
           )}
+          </>
+        )}
         </div>
+      </>
       )}
+
+      {/* ─── Katalog: Kategori Masalah & Akar Masalah ──────────── */}
+      {tab === "categories" && (
+        <CatalogPanel
+          items={cats}
+          loading={catLoading}
+          searchQ={catSearch}
+          onSearch={setCatSearch}
+          page={catPage}
+          setPage={setCatPage}
+          icon={ListTree}
+          iconClass="bg-blue-50 text-blue-600"
+          addLabel="Tambah Kategori Masalah"
+          emptyHint="Gunakan tombol Tambah Kategori Masalah untuk memulai"
+          onAdd={() => setCatDialog({ table: "problem_categories", editingId: null, name: "" })}
+          onEdit={(i) =>
+            setCatDialog({ table: "problem_categories", editingId: i.id, name: i.name })
+          }
+          onArchive={(i) => handleCatalogArchive("problem_categories", i)}
+          onRestore={(i) => handleCatalogRestore("problem_categories", i)}
+        />
+      )}
+      {tab === "rootcauses" && (
+        <CatalogPanel
+          items={roots}
+          loading={catLoading}
+          searchQ={catSearch}
+          onSearch={setCatSearch}
+          page={catPage}
+          setPage={setCatPage}
+          icon={Tags}
+          iconClass="bg-purple-50 text-purple-600"
+          addLabel="Tambah Akar Masalah"
+          emptyHint="Gunakan tombol Tambah Akar Masalah untuk memulai"
+          onAdd={() => setCatDialog({ table: "root_causes", editingId: null, name: "" })}
+          onEdit={(i) => setCatDialog({ table: "root_causes", editingId: i.id, name: i.name })}
+          onArchive={(i) => handleCatalogArchive("root_causes", i)}
+          onRestore={(i) => handleCatalogRestore("root_causes", i)}
+        />
+      )}
+
+      {/* ─── Dialog Katalog (tambah/edit nama) ─────────────────── */}
+      <Dialog open={!!catDialog} onOpenChange={(o) => !o && setCatDialog(null)}>
+        <DialogContent className="sm:max-w-md bg-card p-5 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-foreground">
+              {catDialog?.editingId ? "Edit" : "Tambah"}{" "}
+              {catDialog?.table === "problem_categories" ? "Kategori Masalah" : "Akar Masalah"}
+            </DialogTitle>
+          </DialogHeader>
+          <div>
+            <label className={LABEL_CLASS}>Nama</label>
+            <input
+              value={catDialog?.name || ""}
+              onChange={(e) =>
+                setCatDialog((prev) => (prev ? { ...prev, name: e.target.value } : prev))
+              }
+              className={FIELD_CLASS}
+              placeholder="cth. Mati Total"
+              autoFocus
+            />
+          </div>
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-border">
+            <DialogClose className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
+              Batal
+            </DialogClose>
+            <button
+              onClick={handleCatalogSave}
+              disabled={!catDialog?.name.trim() || catSaving}
+              className="px-5 py-2 rounded-[3px] bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-2"
+            >
+              {catSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Simpan
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ─── Centered Modal (add/edit) ─────────────────────────── */}
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>

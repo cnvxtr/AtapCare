@@ -17,6 +17,7 @@ import { AdminReports } from './pages/Admin/AdminReports'
 
 import Landing from './pages/indexclient'
 import ReportPage from './pages/report'
+import Troubleshoot from './pages/Troubleshoot'
 import TrackPage from './pages/track'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
@@ -70,6 +71,7 @@ function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route path="/report" element={<ReportPage />} />
       <Route path="/track" element={<TrackPage />} />
+      <Route path="/troubleshoot/:scenario" element={<Troubleshoot />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
 

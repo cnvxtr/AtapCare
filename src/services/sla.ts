@@ -30,6 +30,8 @@ export async function fetchSlaRemaining(ticketIds: string[]): Promise<Map<string
   const { data, error } = await supabase.rpc("compute_sla_batch", { p_ids: ticketIds });
   if (error || !data) return m;
   for (const row of data as SlaBatchRow[]) {
+    // NULL = SLA belum mulai (BR-28D: tiket belum pernah masuk status terhitung).
+    if (row.remaining_hours == null) continue;
     m.set(row.ticket_id, Number(row.remaining_hours));
   }
   return m;

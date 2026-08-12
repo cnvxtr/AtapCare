@@ -1,21 +1,20 @@
 import { useState, useEffect } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
+  Building2,
   Users,
   Wrench,
   Clock,
-  Loader2,
 } from "lucide-react";
+import { motion } from "framer-motion";
 import {
-  getAdminRealtimeData,
+  getAdminSystemData,
   getAdminMonthlyData,
   getAdminFrt,
-  type AdminRealtimeData,
+  type AdminSystemData,
   type AdminMonthlyData,
   type AdminFrtData,
 } from "@/services";
-import { PriorityDonut, PriorityLegend } from "@/components/PriorityDonut";
+import AnimatedNumber from "@/components/AnimatedNumber";
 
 const BULAN = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -26,12 +25,16 @@ function KpiCard({
   icon,
   label,
   value,
-  tone,
+  tone = "muted",
+  decimals = 0,
+  suffix,
 }: {
   icon: React.ReactNode;
   label: string;
   value: string | number;
-  tone?: "red" | "green" | "amber";
+  tone?: "red" | "green" | "amber" | "muted";
+  decimals?: number;
+  suffix?: string;
 }) {
   const toneClass =
     tone === "red"
@@ -49,155 +52,147 @@ function KpiCard({
           {label}
         </span>
       </div>
-      <p className="text-3xl font-bold text-foreground mt-3">{value}</p>
+      <p className="text-3xl font-bold text-foreground mt-3">
+        {typeof value === "number" ? <AnimatedNumber value={value} decimals={decimals} /> : value}
+        {typeof value === "number" && suffix && (
+          <span className="text-base font-medium text-muted-foreground">{suffix}</span>
+        )}
+      </p>
     </div>
   );
 }
 
 export function AdminDashboard() {
-  const [rt, setRt] = useState<AdminRealtimeData | null>(null);
+  const [data, setData] = useState<AdminSystemData | null>(null);
   const [monthly, setMonthly] = useState<AdminMonthlyData | null>(null);
   const [frt, setFrt] = useState<AdminFrtData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  async function loadRealtime() {
-    setRt(await getAdminRealtimeData());
-    setLoading(false);
-  }
-
-  async function loadMonthly() {
-    setMonthly(await getAdminMonthlyData());
-    setFrt(await getAdminFrt());
-  }
 
   useEffect(() => {
-    loadRealtime();
-    loadMonthly();
-    const id = setInterval(loadRealtime, 60_000);
-    return () => clearInterval(id);
+    let active = true;
+    async function load() {
+      const [d, m, f] = await Promise.all([
+        getAdminSystemData(),
+        getAdminMonthlyData(),
+        getAdminFrt(),
+      ]);
+      if (active) {
+        setData(d);
+        setMonthly(m);
+        setFrt(f);
+      }
+    }
+    load();
+    const id = setInterval(load, 60_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
   }, []);
 
-  const r = rt || { activeUsers: 0, workOrdersActive: 0, slaOverdue: 0, priorityDist: { P1: 0, P2: 0, P3: 0 } };
+  const d = data || { totalUsers: 0, totalCustomers: 0, totalUnits: 0, unitDist: [] };
   const m = monthly || { ticketsDone: 0, leaderboard: [] };
-
   const bulanIni = BULAN[new Date().getMonth()];
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 text-muted-foreground">
-        <Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat dashboard…
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
           icon={<Users className="h-4 w-4" />}
-          label="User Aktif"
-          value={r.activeUsers}
+          label="Total Pengguna Sistem"
+          value={d.totalUsers}
+        />
+        <KpiCard
+          icon={<Building2 className="h-4 w-4" />}
+          label="Total Pelanggan"
+          value={d.totalCustomers}
         />
         <KpiCard
           icon={<Wrench className="h-4 w-4" />}
-          label="Dikerjakan"
-          value={r.workOrdersActive}
-        />
-        <KpiCard
-          icon={<CheckCircle2 className="h-4 w-4" />}
-          label="Tiket Selesai"
-          value={m.ticketsDone}
+          label="Total Unit Aktif"
+          value={d.totalUnits}
         />
         <KpiCard
           icon={<Clock className="h-4 w-4" />}
-          label={`FRT Rata-rata (${bulanIni})`}
-          value={frt && frt.responded > 0 ? `${frt.avgHours.toFixed(1)} jam` : "—"}
+          label={`FRT Helpdesk (${bulanIni})`}
+          value={frt && frt.responded > 0 ? frt.avgHours : "—"}
+          decimals={1}
+          suffix=" jam"
         />
-        <div className="bg-red-600 border border-red-700 rounded-xl p-5 relative overflow-hidden">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[10px] font-black text-white uppercase tracking-wider flex items-center gap-1">
-                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> SLA Overdue
-              </p>
-              <h3 className="text-3xl font-bold text-white mt-2">{r.slaOverdue}</h3>
-            </div>
-            <span className="p-2 bg-white/20 border border-white/30 rounded-lg">
-              <AlertTriangle className="w-5 h-5 text-white" />
-            </span>
-          </div>
-        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-xl border border-border bg-card">
-          <div className="px-5 py-4 flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                Leaderboard Teknisi ({bulanIni})
-              </h3>
-            </div>
+      <div className="rounded-xl border border-border bg-card">
+        <div className="px-5 py-4">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Building2 className="h-4 w-4" /> Unit per Site
+          </h3>
+        </div>
+        {d.unitDist.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Building2 className="h-10 w-10 mb-2" />
+            <p className="text-sm font-medium">Belum ada data</p>
           </div>
-          {m.leaderboard.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <Clock className="h-10 w-10 mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>
-              <p className="text-xs mt-1">Tidak ada tiket selesai pada periode ini</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-border">
-              {m.leaderboard.map((t, i) => (
-                <div key={t.name} className="flex items-center gap-4 px-5 py-3.5">
-                  <div
-                    className={`h-8 w-8 grid place-items-center rounded-full text-xs font-bold ${
-                      i === 0
-                        ? "bg-amber-100 text-amber-700"
-                        : i === 1
-                          ? "bg-muted text-foreground"
-                          : i === 2
-                            ? "bg-orange-100 text-orange-700"
-                            : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    {i + 1}
+        ) : (
+          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto scrollbar-transparent">
+            {d.unitDist.map((s, i) => (
+              <div key={s.name} className="flex items-center gap-3 px-5 py-3">
+                <span className={`w-6 text-xs font-bold ${i === 0 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
+                    <span className="text-xs font-bold text-muted-foreground ml-2">{s.count}</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">{t.name}</p>
-                    <p className="text-[11px] text-muted-foreground">
-                      {t.completed} tiket · rework {t.rework} ({t.reworkRate}%)
-                    </p>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, (s.count / (d.unitDist[0]?.count || 1)) * 100)}%` }}
+                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 * i }}
+                    />
                   </div>
-                  <div className="flex-1 max-w-[200px] hidden sm:block">
-                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{
-                          width: `${Math.min(100, (t.completed / (m.leaderboard[0]?.completed || 1)) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <span
-                    className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                      t.reworkRate > 15
-                        ? "bg-red-50 text-red-600"
-                        : "bg-muted text-muted-foreground"
-                    }`}
-                  >
-                    FTF {100 - t.reworkRate}%
-                  </span>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="rounded-xl border border-border bg-card p-5 flex flex-col items-center">
-          <div className="flex items-center justify-between w-full mb-4">
-            <h3 className="text-sm font-semibold text-foreground">Distribusi Prioritas</h3>
-            <PriorityLegend />
+              </div>
+            ))}
           </div>
-          <PriorityDonut p1={r.priorityDist.P1} p2={r.priorityDist.P2} p3={r.priorityDist.P3} />
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border bg-card">
+        <div className="px-5 py-4">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Wrench className="h-4 w-4" /> Leaderboard Teknisi ({bulanIni})
+          </h3>
         </div>
+        {m.leaderboard.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Clock className="h-10 w-10 mb-2" />
+            <p className="text-sm font-medium">Belum ada data</p>
+            <p className="text-xs mt-1">Tidak ada tiket selesai pada periode ini</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto scrollbar-transparent">
+            {m.leaderboard.map((t, i) => (
+              <div key={t.name} className="flex items-center gap-4 px-5 py-3.5">
+                <div
+                  className={`h-8 w-8 grid place-items-center rounded-full text-xs font-bold ${
+                    i === 0
+                      ? "bg-amber-100 text-amber-700"
+                      : i === 1
+                        ? "bg-muted text-foreground"
+                        : i === 2
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {i + 1}
+                </div>
+                <p className="text-sm font-semibold text-foreground truncate flex-1">{t.name}</p>
+                <span className="text-xs font-bold text-muted-foreground">{t.completed} tiket</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       </div>
     </div>
   );

@@ -4,14 +4,16 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket, type Priority, type TicketStatus } from '../../context/TicketContext'
 import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, ImagePlus, MapPin, FileText, Info } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
+import SlaBadge from '../../components/SlaBadge'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, parseDescription } from '../../components/TicketDrawer'
 import { waMeLink } from '../../services/wa'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, selectTriggerFilter } from '../../components/ui/select'
 import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
-import { getCustomers, getSites, getUnits, type Customer, type SiteRow, type UnitRow } from '../../services/master-data'
-import { setConfirmSent } from '../../services/ticketService'
+import { getCustomers, getSites, getUnits, problemCategoriesApi, type Customer, type SiteRow, type UnitRow, type CatalogItem } from '../../services/master-data'
+import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
+import { getPendingAlarm } from '../../lib/pendingAlarm'
 
 const MAX_PHOTOS = 5;
 const MAX_TOTAL_SIZE_MB = 10;
@@ -44,6 +46,7 @@ export default function HPInbox() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline' | 'activity'>('detail')
+    const [openCategoryId, setOpenCategoryId] = useState('')
 
     // State Modals
     const [showVoidModal, setShowVoidModal] = useState(false)
@@ -88,6 +91,7 @@ export default function HPInbox() {
     const [mdCustomers, setMdCustomers] = useState<Customer[]>([])
     const [mdSites, setMdSites] = useState<SiteRow[]>([])
     const [mdUnits, setMdUnits] = useState<UnitRow[]>([])
+    const [mdCategories, setMdCategories] = useState<CatalogItem[]>([])
     const [mdLoading, setMdLoading] = useState(true)
 
     // State Alur Buat Tiket Internal
@@ -107,15 +111,20 @@ export default function HPInbox() {
 
     useEffect(() => {
         let alive = true
-        Promise.all([getCustomers(), getSites(), getUnits()]).then(([c, s, u]) => {
+        Promise.all([getCustomers(), getSites(), getUnits(), problemCategoriesApi.getAll()]).then(([c, s, u, cat]) => {
             if (!alive) return
             setMdCustomers(c)
             setMdSites(s)
             setMdUnits(u)
+            setMdCategories(cat)
             setMdLoading(false)
         })
         return () => { alive = false }
     }, [])
+
+    useEffect(() => {
+        setOpenCategoryId(selectedTicket?.categoryId || '')
+    }, [selectedTicket])
 
     // FILTER & SORT LOGIC
     const activeSegmentStatuses = SEGMENTS.find(s => s.key === activeSegment)?.statuses || null
@@ -131,6 +140,7 @@ export default function HPInbox() {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     const kanbanTickets = tickets.filter(t => isActive(t) && matchesPrioritySearch(t))
     const liveTicket = selectedTicket ? (tickets.find(t => t.id === selectedTicket.id) ?? selectedTicket) : null
+    const pendingAlarmCount = tickets.filter(t => t.status === 'PENDING' && getPendingAlarm(t.updatedAt)).length
 
     // ---- HANDLER BUAT TIKET INTERNAL (Alur: Form → Review → Remote/Path/Void) ----
     const doAddTicket = async (initialStatus: TicketStatus, extraDetail?: string) => {
@@ -167,15 +177,27 @@ export default function HPInbox() {
         return false
     }
 
-    const handleValidateOpen = () => {
+    const handleOpenCategory = (v: string) => {
+        setOpenCategoryId(v)
+        if (selectedTicket) setTicketCatalog(selectedTicket.id, v).then(ok => { if (!ok) toast.error('Gagal menyimpan Kategori Masalah.') })
+    }
+
+    const handleValidateOpen = async () => {
         if (!selectedTicket) return
         const wa = parseDescription(selectedTicket.description).waPelapor
+        const waWin = wa ? window.open('', '_blank') : null
+        const ok = await updateTicketStatus(selectedTicket.id, 'OPEN', 'Konfirmasi via WA ke pelapor')
+        if (!ok) {
+            waWin?.close()
+            toast.error('Gagal memperbarui status tiket. Tiket tidak divalidasi.')
+            return
+        }
         if (wa) {
-            window.open(waMeLink(wa, `Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`), '_blank')
+            if (waWin) waWin.location.href = waMeLink(wa, `Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`)
+            else window.open(waMeLink(wa, `Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`), '_blank')
         } else {
             toast.info('Nomor WA pelapor tidak tersedia.')
         }
-        updateTicketStatus(selectedTicket.id, 'OPEN', 'Tiket divalidasi, konfirmasi via WA ke pelapor')
     }
 
     const closeCreateModal = () => {
@@ -289,7 +311,7 @@ export default function HPInbox() {
         setDupError('')
         if (selectedTicket) {
             const targetTicket = tickets.find(t => t.id === duplicateTargetId)
-            updateTicketStatus(selectedTicket.id, 'DUPLICATE', `Duplikat dari tiket ${targetTicket?.code || duplicateTargetId}`)
+            updateTicketStatus(selectedTicket.id, 'DUPLICATE', `Duplikat dari tiket ${targetTicket?.code || duplicateTargetId}`, undefined, undefined, undefined, duplicateTargetId)
             setDuplicateTargetId(''); setShowDuplicateModal(false); setSelectedTicket(null)
         }
     }
@@ -332,7 +354,7 @@ export default function HPInbox() {
     }
 
     return (
-        <div className="space-y-6 flex flex-col h-[calc(100vh-7rem)]">
+        <div className={`space-y-6 flex flex-col ${view === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
             {/* HEADER */}
             <div className="flex justify-end">
                 <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
@@ -386,11 +408,12 @@ export default function HPInbox() {
                                 <button
                                     key={seg.key}
                                     onClick={() => setActiveSegment(seg.key)}
-                                    className={`px-3 py-1.5 rounded-sm text-sm font-medium inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap ${activeSegment === seg.key ? (c ? '' : 'bg-foreground text-primary-foreground') : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                                    className={`px-3 py-1.5 rounded-[5px] text-sm font-medium inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap ${activeSegment === seg.key ? (c ? '' : 'bg-foreground text-primary-foreground') : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                                     style={activeSegment === seg.key && c ? { backgroundColor: c.bg, color: c.text } : undefined}
                                 >
-                                    {seg.label}
-                                    {seg.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">{seg.role}</span>}
+                                                    {seg.label}
+                                                    {seg.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">{seg.role}</span>}
+                                                    {seg.key === 'dijeda' && pendingAlarmCount > 0 && <span className="text-[9px] font-mono bg-amber-100 text-amber-700 px-1 rounded-full">{pendingAlarmCount}</span>}
                                 </button>
                             )
                         })}
@@ -401,12 +424,12 @@ export default function HPInbox() {
             {/* KANBAN / LIST */}
             {view === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
-                    <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-4 xl:grid-cols-7 flex-1 min-h-0">
+                    <div className="flex gap-2 overflow-x-auto flex-1 min-h-0">
                         {KANBAN_COLUMNS.map(col => {
                             const items = kanbanTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className="shrink-0 min-w-[240px] md:min-w-0 md:shrink rounded-lg border border-border bg-card/50 flex flex-col">
+                                <div key={col.key} className="flex-1 min-w-[110px] rounded-lg border border-border bg-card/50 flex flex-col">
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
@@ -414,9 +437,9 @@ export default function HPInbox() {
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
-                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto no-scrollbar">
+                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto scrollbar-transparent max-h-[390px]">
                                         {items.map(t => {
-                                            const isUrgent = t.priority === 'P1'
+                                            const isUrgent = t.priority === 'P1' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             return (
                                                 <div key={t.id} className={`rounded border border-border bg-card p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                 <div className="flex items-center justify-between gap-1 mb-1">
@@ -424,9 +447,19 @@ export default function HPInbox() {
                                                     <Badge type="priority" value={t.priority || '-'} small />
                                                 </div>
                                                 <p className="text-[9px] font-medium truncate">{t.site} - {t.unit}</p>
-                                                <div className="flex items-center gap-1 mt-1 pt-1 border-t border-border min-w-0">
-                                                    <User className="h-2 w-2 shrink-0 text-muted-foreground" />
-                                                    <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
+                                                {t.status === 'PENDING' && getPendingAlarm(t.updatedAt) && (
+                                                    <div className="mt-1 flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold">
+                                                        <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
+                                                    <div className="flex items-center gap-1 min-w-0">
+                                                        <User className="h-2 w-2 shrink-0 text-muted-foreground" />
+                                                        <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
+                                                    </div>
+                                                    {!['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status) && (
+                                                        <SlaBadge remaining={t.slaTimeLeft} />
+                                                    )}
                                                 </div>
                                             </div>
                                             )
@@ -466,12 +499,7 @@ export default function HPInbox() {
                                                 <Badge type="status" value={ticket.status} />
                                             </td>
                                             <td className="p-4">
-                                                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${ticket.slaTimeLeft <= 0 ? 'bg-red-100 text-red-700' :
-                                                    ticket.slaTimeLeft <= 4 ? 'bg-amber-100 text-amber-700' :
-                                                        'bg-emerald-100 text-emerald-700'
-                                                }`}>
-                                                    {ticket.slaTimeLeft <= 0 ? 'Overdue' : `Sisa ${Math.ceil(ticket.slaTimeLeft)} Jam`}
-                                                </span>
+                                                <SlaBadge remaining={ticket.slaTimeLeft} />
                                             </td>
                                         </tr>
                                     ))
@@ -495,31 +523,41 @@ export default function HPInbox() {
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={liveTicket.activities}
+                    duplicateCode={liveTicket.duplicateOf ? (tickets.find(t => t.id === liveTicket.duplicateOf)?.code ?? undefined) : undefined}
                     footer={
                         <>
                             {liveTicket.status === 'NEW' && (
                                 <>
-                                    <button onClick={handleValidateOpen} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold">Validasi & Kirim WA</button>
+                                    <button onClick={handleValidateOpen} className="w-full py-2 bg-foreground text-primary-foreground rounded-[3px] text-sm font-semibold">Validasi & Kirim WA</button>
                                     <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => { setVoidTicketId(liveTicket.id); setVoidError(''); setShowVoidModal(true); }} className="py-2.5 bg-transparent text-red-600 border border-border rounded-[3px] font-medium hover:bg-red-50/60 transition">Batal</button>
-                                        <button onClick={() => { setDupError(''); setShowDuplicateModal(true); }} className="py-2.5 bg-transparent text-amber-600 border border-border rounded-[3px] font-medium hover:bg-amber-50/60 transition">Gabung</button>
+                                        <button onClick={() => { setVoidTicketId(liveTicket.id); setVoidError(''); setShowVoidModal(true); }} className="py-2 bg-transparent text-foreground border border-border rounded-[3px] text-sm font-medium hover:bg-muted transition">Batal</button>
+                                        <button onClick={() => { setDupError(''); setShowDuplicateModal(true); }} className="py-2 bg-transparent text-foreground border border-border rounded-[3px] text-sm font-medium hover:bg-muted transition">Gabung</button>
                                     </div>
                                 </>
                             )}
-                            {liveTicket.status === 'OPEN' && !liveTicket.priority && (
-                                <div className="space-y-2">
-                                    <p className="text-xs font-semibold text-muted-foreground">Pilih prioritas untuk melanjutkan:</p>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        {(['P1', 'P2', 'P3'] as const).map(p => (
-                                            <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-[3px] border font-bold transition ${p === 'P1' ? 'bg-red-600 text-white border-red-600' : p === 'P2' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600'}`}>{p}</button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {liveTicket.status === 'OPEN' && liveTicket.priority && (
+                            {liveTicket.status === 'OPEN' && (
                                 <>
-                                    <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold">Remote Support</button>
-                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} className="w-full py-2.5 bg-transparent text-foreground border border-border rounded-[3px] font-medium hover:bg-muted transition">Eskalasi ke PM</button>
+                                    <div className="space-y-2">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Kategori Masalah</label>
+                                            <Select value={openCategoryId} onValueChange={handleOpenCategory}>
+                                                <SelectTrigger className="w-full px-3 py-2 border-2 border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                                                <SelectContent className="z-[130] border-border bg-card text-foreground">
+                                                    {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Prioritas</label>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {(['P1', 'P2', 'P3'] as const).map(p => (
+                                                    <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-[3px] border font-bold transition ${liveTicket.priority === p ? (p === 'P1' ? 'bg-red-600 text-white border-red-600' : p === 'P2' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600') : 'bg-card border-border hover:border-foreground/40'}`}>{p}</button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} disabled={!liveTicket.priority || !openCategoryId} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold disabled:opacity-40 disabled:cursor-not-allowed">Remote Support</button>
+                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} disabled={!liveTicket.priority || !openCategoryId} className="w-full py-2.5 bg-transparent text-foreground border border-border rounded-[3px] font-medium hover:bg-muted transition disabled:opacity-40 disabled:cursor-not-allowed">Eskalasi ke PM</button>
                                 </>
                             )}
                             {liveTicket.status === 'RESOLVED' && (
@@ -567,7 +605,7 @@ export default function HPInbox() {
                             )}
                         </div>
                     )}
-                    {activeDrawerTab === 'timeline' && <TicketTimeline items={liveTicket.activities} />}
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={liveTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(liveTicket.status)} />}
                     {activeDrawerTab === 'activity' && <TicketActivityLog items={liveTicket.activities} />}
                 </TicketDrawer>
             )}
@@ -599,6 +637,9 @@ export default function HPInbox() {
                             </SelectContent>
                         </Select>
                         <FieldError msg={dupError} />
+                        <p className="mt-4 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-300 rounded px-3 py-2">
+                            Terdapat tiket duplicate terkait. Pastikan pelanggan telah diinformasikan.
+                        </p>
                         <div className="flex gap-3 mt-4">
                             <button onClick={() => { setShowDuplicateModal(false); setDupError('') }} className="flex-1 py-2 bg-muted rounded">Batal</button>
                             <button onClick={handleDuplicate} className="flex-1 py-2 bg-amber-600 text-white rounded font-bold">Tandai</button>
@@ -792,7 +833,7 @@ export default function HPInbox() {
                                                 htmlFor="upload-photo-input"
                                                 onDragOver={(e) => e.preventDefault()}
                                                 onDrop={(e) => { e.preventDefault(); addPhotos(Array.from(e.dataTransfer.files)) }}
-                                                className="group flex flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground hover:border-foreground/50 hover:bg-muted/40 hover:text-foreground transition cursor-pointer"
+                                                className="group flex flex-col items-center gap-1.5 rounded-xl border border-border p-6 text-center text-sm text-muted-foreground hover:border-foreground/50 hover:bg-muted/40 hover:text-foreground transition cursor-pointer"
                                             >
                                                 <span className="inline-flex p-2.5 rounded-full bg-muted group-hover:bg-accent transition"><ImagePlus className="w-5 h-5" /></span>
                                                 <span>Tarik & lepas foto di sini, atau klik untuk memilih</span>

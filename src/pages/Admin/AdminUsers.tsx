@@ -461,11 +461,7 @@ export function AdminUsers() {
       </div>
       </div>
 
-      {loading ? (
-        <div className="flex items-center justify-center py-20 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin mr-2" /> Memuat data…
-        </div>
-      ) : paginated.length === 0 ? (
+      {loading ? null : paginated.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
           <Users className="h-10 w-10 mb-2" />
           <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>

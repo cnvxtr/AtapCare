@@ -1,13 +1,17 @@
-import { useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
+import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
+import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, Inbox, ArrowUpRight, Wrench, Pause, Ban, X } from 'lucide-react'
 import { Badge } from '../../components/Badge'
+import SlaBadge from '../../components/SlaBadge'
 import { FINAL_STATUSES } from '../../lib/status'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
-import { PriorityDonut, PriorityLegend } from '../../components/PriorityDonut'
 import FieldError from '../../components/FieldError'
+import { getPendingAlarm } from '../../lib/pendingAlarm'
+import TrendChart from '../../components/TrendChart'
+import AnimatedNumber from '../../components/AnimatedNumber'
 
 export default function PMDashboard() {
     const navigate = useNavigate()
@@ -22,11 +26,16 @@ export default function PMDashboard() {
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
     const periodLabel = monthStart.toLocaleString('id-ID', { month: 'long', year: 'numeric' })
 
-    // Beban tiket AKTIF per prioritas (real-time) — batang hitam, ujung warna badge asli ukuran tetap
-    const priorityData = ['P1', 'P2', 'P3'].map(p => ({
-        name: p,
-        value: tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.priority === p).length,
-    }))
+    // Distribusi status SAAT INI (real-time, semua tiket — bukan per periode)
+    const statusData = [
+        { name: 'Baru', value: tickets.filter(t => t.status === 'NEW').length, color: '#d4d4d4' },
+        { name: 'Diproses', value: tickets.filter(t => t.status === 'OPEN').length, color: '#a3a3a3' },
+        { name: 'Ditugaskan', value: tickets.filter(t => ['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE'].includes(t.status)).length, color: '#737373' },
+        { name: 'Dikerjakan', value: tickets.filter(t => t.status === 'WORKING').length, color: '#525252' },
+        { name: 'Dijeda', value: tickets.filter(t => t.status === 'PENDING').length, color: '#404040' },
+        { name: 'Selesai', value: tickets.filter(t => t.status === 'RESOLVED').length, color: '#262626' },
+        { name: 'Tutup', value: tickets.filter(t => t.status === 'CLOSED').length, color: '#171717' },
+    ]
 
     // Trend mingguan bulan berjalan: masuk (createdAt) vs selesai (closedAt) — historis, tidak hilang
     const trendData = (() => {
@@ -54,9 +63,10 @@ export default function PMDashboard() {
         .slice(0, 10) // Tampilkan 10 teratas
 
     const fieldCount = tickets.filter(t => t.status === 'WORKING').length
+    const pendingAlarmCount = tickets.filter(t => t.status === 'PENDING' && getPendingAlarm(t.updatedAt)).length
 
-    const slaCritical = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft <= 4)
-    const slaOverdue = slaCritical.filter(t => t.slaTimeLeft <= 0).length
+    const slaCritical = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft != null && t.slaTimeLeft <= 4)
+    const slaOverdue = slaCritical.filter(t => t.slaTimeLeft != null && t.slaTimeLeft <= 0).length
     const slaWarning = slaCritical.length - slaOverdue
 
     const doVeto = () => {
@@ -76,7 +86,7 @@ export default function PMDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Belum Ditugaskan</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('UNASSIGNED')}</h3>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('UNASSIGNED')} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><Inbox className="w-5 h-5 text-foreground" /></div>
                     </div>
@@ -86,19 +96,24 @@ export default function PMDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Dikerjakan</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{fieldCount}</h3>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={fieldCount} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><Wrench className="w-5 h-5 text-foreground" /></div>
                     </div>
                 </div>
-                <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
+                <div className={`group relative rounded-2xl border p-5 overflow-hidden transition ${pendingAlarmCount > 0 ? 'border-amber-300 bg-amber-50/60' : 'border-border bg-card hover:border-foreground/30'}`}>
                     <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Dijeda</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight">{getTicketCount('PENDING')}</h3>
+                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('PENDING')} /></h3>
+                            {pendingAlarmCount > 0 && (
+                                <p className="text-[10px] font-mono text-amber-800 mt-1 flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" /> {pendingAlarmCount} tanpa aktivitas
+                                </p>
+                            )}
                         </div>
-                        <div className="p-2 bg-muted border border-border rounded-lg"><Pause className="w-5 h-5 text-foreground" /></div>
+                        <div className={`p-2 border rounded-lg ${pendingAlarmCount > 0 ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-muted border-border text-foreground'}`}><Pause className="w-5 h-5" /></div>
                     </div>
                 </div>
                 <div className="bg-red-600 border border-red-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-red-400">
@@ -108,7 +123,7 @@ export default function PMDashboard() {
                                 <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> SLA Kritis
                             </p>
                             <h3 className="text-4xl font-display font-black text-white mt-2 tracking-tight">
-                                {slaCritical.length}
+                                <AnimatedNumber value={slaCritical.length} />
                             </h3>
                             <p className="text-[10px] font-mono text-white/80 mt-1">{slaOverdue} Overdue · {slaWarning} Warning</p>
                         </div>
@@ -134,15 +149,21 @@ export default function PMDashboard() {
                 </div>
 
                 <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 transition-all w-full">
-                    <div className="flex items-start justify-between mb-6">
-                        <div>
-                            <h3 className="font-display font-bold text-foreground">Distribusi Prioritas</h3>
-                            <p className="text-xs text-muted-foreground mt-0.5">Tiket aktif · real-time</p>
-                        </div>
-                        <PriorityLegend />
+                    <div>
+                        <h3 className="font-display font-bold text-foreground">Distribusi Status Tiket</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">Status terkini · real-time</p>
                     </div>
-                    <div className="h-64 flex items-center justify-center">
-                        <PriorityDonut p1={priorityData[0].value} p2={priorityData[1].value} p3={priorityData[2].value} />
+                    <div className="h-64 w-full relative mt-4">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={statusData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+                                <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} />
+                                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} width={85} />
+                                <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ backgroundColor: 'black', borderColor: '#333', borderRadius: '8px', fontSize: '12px', color: 'white' }} labelStyle={{ color: 'white' }} itemStyle={{ color: 'white' }} />
+                                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} animationDuration={700} animationEasing="ease-out">
+                                    {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 </div>
             </div>
@@ -178,14 +199,14 @@ export default function PMDashboard() {
                                         </td>
                                         <td className="p-4">
                                             <Badge type="status" value={ticket.status} />
+                                            {ticket.status === 'PENDING' && getPendingAlarm(ticket.updatedAt) && (
+                                                <span className="ml-1.5 inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-[3px] text-[9px] font-bold whitespace-nowrap">
+                                                    <AlertTriangle className="h-2.5 w-2.5" /> {getPendingAlarm(ticket.updatedAt)}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="p-4">
-                                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${ticket.slaTimeLeft <= 0 ? 'bg-red-100 text-red-700' :
-                                                    ticket.slaTimeLeft <= 4 ? 'bg-amber-100 text-amber-700' :
-                                                        'bg-emerald-100 text-emerald-700'
-                                                }`}>
-                                                {ticket.slaTimeLeft <= 0 ? 'Overdue' : `Sisa ${Math.ceil(ticket.slaTimeLeft)} Jam`}
-                                            </span>
+                                            <SlaBadge remaining={ticket.slaTimeLeft} />
                                         </td>
                                     </tr>
                                 ))
@@ -227,6 +248,11 @@ export default function PMDashboard() {
                 >
                     {activeDrawerTab === 'detail' && (
                         <div className="space-y-4">
+                            {selectedTicket.status === 'PENDING' && getPendingAlarm(selectedTicket.updatedAt) && (
+                                <div className="bg-amber-50/60 p-3 rounded-[3px] border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" /> Dijeda {getPendingAlarm(selectedTicket.updatedAt)} tanpa aktivitas
+                                </div>
+                            )}
                             <AssignmentCard items={selectedTicket.activities} />
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
@@ -241,7 +267,7 @@ export default function PMDashboard() {
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}
-                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} />}
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
                     {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
                 </TicketDrawer>
             )}
@@ -270,76 +296,5 @@ export default function PMDashboard() {
                 </div>
             ), document.body)}
     </>
-    )
-}
-
-function TrendChart({ data }: { data: { name: string; masuk: number; selesai: number }[] }) {
-    const [hover, setHover] = useState<number | null>(null)
-    const [tipPos, setTipPos] = useState<{ x: number; y: number; below: boolean } | null>(null)
-    const wrapRef = useRef<HTMLDivElement>(null)
-    const w = 600, h = 200, pad = 20, padB = 32
-    const max = Math.max(1, ...data.flatMap(d => [d.masuk, d.selesai]))
-    const x = (i: number) => pad + (i * (w - pad * 2)) / (data.length - 1)
-    const y = (v: number) => h - padB - (v / max) * (h - pad - padB)
-    const line = (key: 'masuk' | 'selesai') =>
-        data.map((d, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(d[key])}`).join(' ')
-
-    const handleMove = (e: ReactMouseEvent<SVGSVGElement>) => {
-        const svg = e.currentTarget
-        const ctm = svg.getScreenCTM()
-        const wrap = wrapRef.current
-        if (!ctm || !wrap) return
-        const rect = svg.getBoundingClientRect()
-        const px = ((e.clientX - rect.left) / rect.width) * w
-        const idx = Math.max(0, Math.min(data.length - 1, Math.round((px - pad) / ((w - pad * 2) / (data.length - 1)))))
-        const pt = svg.createSVGPoint()
-        pt.x = x(idx)
-        pt.y = y(Math.max(data[idx].masuk, data[idx].selesai))
-        const p = pt.matrixTransform(ctm)
-        const wr = wrap.getBoundingClientRect()
-        const below = p.y <= wr.top + 0.35 * wr.height
-        setHover(idx)
-        setTipPos({ x: p.x, y: p.y, below })
-    }
-
-    const isFirst = hover === 0
-    const isLast = hover === data.length - 1
-
-    return (
-        <div className="relative" ref={wrapRef}>
-            <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-56" onMouseMove={handleMove} onMouseLeave={() => { setHover(null); setTipPos(null) }}>
-                {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-                    <line key={f} x1={pad} x2={w - pad} y1={pad + f * (h - pad - padB)} y2={pad + f * (h - pad - padB)}
-                        stroke="currentColor" strokeOpacity="0.06" />
-                ))}
-                {hover !== null && (
-                    <line x1={x(hover)} x2={x(hover)} y1={pad} y2={h - padB} stroke="currentColor" strokeOpacity="0.15" />
-                )}
-                <path d={`${line('masuk')} L${x(data.length - 1)},${h - padB} L${x(0)},${h - padB} Z`}
-                    fill="currentColor" opacity="0.08" />
-                <path d={line('masuk')} fill="none" stroke="currentColor" strokeWidth="3" />
-                <path d={line('selesai')} fill="none" stroke="currentColor" strokeWidth="2.5" strokeDasharray="4 3" opacity="0.5" />
-                {data.map((d, i) => (
-                    <g key={i}>
-                        <circle cx={x(i)} cy={y(d.masuk)} r={hover === i ? 5 : 4} fill="currentColor" />
-                        <text x={x(i)} y={h - 6} textAnchor="middle" fontSize="14" fill="currentColor" opacity="0.5">M{i + 1}</text>
-                    </g>
-                ))}
-            </svg>
-            {hover !== null && tipPos && createPortal((
-                <div
-                    className="fixed pointer-events-none bg-foreground text-background text-xs rounded px-2 py-1.5 shadow-lg z-50"
-                    style={{
-                        left: tipPos.x,
-                        top: tipPos.y,
-                        transform: `${isFirst ? 'translateX(0)' : isLast ? 'translateX(-100%)' : 'translateX(-50%)'} ${tipPos.below ? 'translateY(8px)' : 'translateY(calc(-100% - 8px))'}`,
-                    }}
-                >
-                    <p className="font-semibold">M{hover + 1}</p>
-                    <p>Masuk: <span className="font-bold">{data[hover].masuk}</span></p>
-                    <p>Selesai: <span className="font-bold">{data[hover].selesai}</span></p>
-                </div>
-            ), document.body)}
-        </div>
     )
 }

@@ -1,7 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getSites, type SiteRow } from "./master-data";
-import { PRIORITY_DEFAULTS } from "./sla";
-import { isSlaOverdue } from "./slaCalc";
 
 export interface ReportFilters {
   from?: string;
@@ -35,6 +33,7 @@ export interface TicketReportRow {
   customer: string;
   site: string;
   unit: string;
+  serial: string;
   priority: string;
   status: string;
   createdAt: string;
@@ -48,6 +47,7 @@ export const TICKET_REPORT_HEADERS = [
   "Pelanggan",
   "Site",
   "Unit",
+  "Serial",
   "Prioritas",
   "Status",
   "Tanggal Masuk",
@@ -55,6 +55,10 @@ export const TICKET_REPORT_HEADERS = [
   "Teknisi",
   "Durasi",
 ];
+
+export const ROOTCAUSE_HEADERS = ["Akar Masalah", "Jumlah", "% Total"];
+
+export const SERIAL_NUMBER_HEADERS = ["ID Tiket", "Teknisi", "Tanggal", "Site", "Serial Number"];
 
 export const KPI_HEADERS = ["Prioritas", "Total", "Terbuka", "Selesai", "Overdue", "FTF (%)"];
 
@@ -85,11 +89,17 @@ function dayEnd(date: string): string {
   return new Date(`${date.slice(0, 10)}T23:59:59`).toISOString();
 }
 
+async function resolveSiteNames(siteIds?: string[]): Promise<string[]> {
+  if (!siteIds?.length) return [];
+  const { data: sites } = await supabase.from("sites").select("name").in("id", siteIds);
+  return (sites || []).map((s) => s.name).filter(Boolean);
+}
+
 async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
-      "id, code, customer, site, unit, priority, status, assigned_to, sla_time_left, rejection_reason, created_at, closed_at",
+      "id, code, customer, site, unit, priority, status, assigned_to, rejection_reason, created_at, closed_at",
     )
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
@@ -99,11 +109,8 @@ async function buildTicketQuery(filters: ReportFilters) {
     if (raws.length) q = q.in("status", raws);
   }
   if (filters.priority?.length) q = q.in("priority", filters.priority);
-  if (filters.siteId?.length) {
-    const { data: sites } = await supabase.from("sites").select("name").in("id", filters.siteId);
-    const names = (sites || []).map((s) => s.name).filter(Boolean);
-    if (names.length) q = q.in("site", names);
-  }
+  const siteNames = await resolveSiteNames(filters.siteId);
+  if (siteNames.length) q = q.in("site", siteNames);
   return q;
 }
 
@@ -120,6 +127,7 @@ function toTicketRow(
     assigned_to: string | null;
   },
   names?: Map<string, string>,
+  serials?: Map<string, string>,
 ): TicketReportRow {
   const start = new Date(t.created_at).getTime();
   const end = t.closed_at ? new Date(t.closed_at).getTime() : Date.now();
@@ -129,6 +137,7 @@ function toTicketRow(
     customer: t.customer,
     site: t.site || "—",
     unit: t.unit || "—",
+    serial: serials?.get(`${t.site ?? ""}|${t.unit ?? ""}`) ?? "—",
     priority: t.priority || "P3",
     status: t.status,
     createdAt: fmt(t.created_at),
@@ -138,36 +147,55 @@ function toTicketRow(
   };
 }
 
+// ponytail: relasi tiket→unit lewat kecocokan nama (site|unit), bukan FK —
+// bertahan karena struktur aset legacy; upgrade ke unit_id FK bila relasi dirapikan.
+async function loadSerialMap(): Promise<Map<string, string>> {
+  const [unitsRes, sitesRes] = await Promise.all([
+    supabase.from("units").select("site_id, name, serial_number"),
+    supabase.from("sites").select("id, name"),
+  ]);
+  const siteNames = new Map((sitesRes.data || []).map((s) => [s.id, s.name]));
+  const map = new Map<string, string>();
+  for (const u of unitsRes.data || []) {
+    if (!u.serial_number) continue;
+    const site = siteNames.get(u.site_id) ?? "";
+    map.set(`${site}|${u.name}`, u.serial_number);
+  }
+  return map;
+}
+
 export async function getTicketReport(filters: ReportFilters): Promise<TicketReportRow[]> {
-  const [res, usersRes] = await Promise.all([
+  const [res, usersRes, serials] = await Promise.all([
     buildTicketQuery(filters),
     supabase.from("users").select("id, full_name"),
+    loadSerialMap(),
   ]);
   const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
-  return (res.data || []).map((t) => toTicketRow(t, names));
+  return (res.data || []).map((t) => toTicketRow(t, names, serials));
 }
 
 export async function getKpiReport(filters: ReportFilters): Promise<Record<string, string | number>[]> {
   const { data } = await buildTicketQuery(filters);
-  const [slaRes, holidaysRes] = await Promise.all([
-    supabase.from("sla_config").select("priority, target_hours"),
-    supabase.from("holidays").select("date").eq("is_active", true),
-  ]);
-  const slaTargets = Object.fromEntries(
-    (slaRes.data || []).map((r) => [r.priority, Number(r.target_hours)]),
-  );
-  const holidays = (holidaysRes.data || []).map((h) => h.date);
   const tickets = data || [];
   const rows: Record<string, string | number>[] = [];
   for (const p of ["P1", "P2", "P3"]) {
     const group = tickets.filter((t) => t.priority === p);
     if (group.length === 0) continue;
-    const closed = group.filter((t) => t.status === "CLOSED" || t.status === "DUPLICATE");
+    const closed = group.filter((t) => ["CLOSED", "VOID", "DUPLICATE"].includes(t.status));
     const active = group.filter((t) => ACTIVE_STATUSES.includes(t.status));
-    const overdue = active.filter((t) => {
-      const target = slaTargets[t.priority] ?? PRIORITY_DEFAULTS[t.priority];
-      return !!target && isSlaOverdue(t.created_at, target, holidays);
-    }).length;
+    // Overdue dihitung server-side (compute_sla_batch) agar selaras dengan
+    // sisa SLA di drawer — target live dari sla_config, hitung dari jam WORKING.
+    let overdue = 0;
+    const activeIds = active.map((t) => t.id);
+    if (activeIds.length) {
+      const { data: sla } = await supabase.rpc("compute_sla_batch", { p_ids: activeIds });
+      const slaRows = (sla || []) as { ticket_id: string; remaining_hours: number | null }[];
+      const remaining = new Map(slaRows.map((r) => [r.ticket_id, r.remaining_hours]));
+      overdue = active.filter((t) => {
+        const rem = remaining.get(t.id);
+        return rem != null && rem <= 0;
+      }).length;
+    }
     const rework = closed.filter((t) => t.rejection_reason).length;
     rows.push({
       priority: p,
@@ -205,3 +233,85 @@ export async function getAuditReport(
 }
 
 export { getSites, type SiteRow };
+
+// ── Top 10 Akar Masalah ──
+export async function getRootCauseReport(
+  filters: ReportFilters,
+): Promise<Record<string, string | number>[]> {
+  let q = supabase
+    .from("tickets")
+    .select("root_cause_id, root_causes(name), created_at, site");
+  if (filters.from) q = q.gte("created_at", dayStart(filters.from));
+  if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
+  const siteNames = await resolveSiteNames(filters.siteId);
+  if (siteNames.length) q = q.in("site", siteNames);
+  const { data } = await q;
+  const rows = data || [];
+
+  const counts = new Map<string, number>();
+  let noCause = 0;
+  for (const t of rows) {
+    const name = (t as { root_causes?: { name?: string } | null }).root_causes?.name;
+    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
+    else noCause++;
+  }
+  const total = rows.length || 1;
+  const top = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([name, count]) => ({
+      "Akar Masalah": name,
+      Jumlah: count,
+      "% Total": Math.round((count / total) * 100),
+    }));
+  if (noCause > 0) {
+    top.push({
+      "Akar Masalah": "Tanpa akar masalah",
+      Jumlah: noCause,
+      "% Total": Math.round((noCause / total) * 100),
+    });
+  }
+  return top;
+}
+
+// ── Riwayat Serial Number (parse dari aktivitas 'Tugas diselesaikan') ──
+// ponytail: serial number tak terstruktur (teks di activity) — parsing teks
+// untuk laporan retroaktif; kolom terstruktur bila butuh inventory/cost.
+// Format lama 'Sparepart:' tetap dibaca agar data historis tidak hilang.
+export async function getSerialNumberReport(
+  filters: ReportFilters,
+): Promise<Record<string, string>[]> {
+  let q = supabase
+    .from("activities")
+    .select("id, created_at, user_name, action, details, ticket_id")
+    .eq("action", "Tugas diselesaikan")
+    .or("details.ilike.%Sparepart:%,details.ilike.%Serial Number:%");
+  if (filters.from) q = q.gte("created_at", dayStart(filters.from));
+  if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
+  const { data } = await q;
+
+  const ids = [...new Set((data || []).map((a) => a.ticket_id).filter(Boolean))];
+  let byId = new Map<string, { code: string; site: string }>();
+  if (ids.length) {
+    const { data: tickets } = await supabase
+      .from("tickets")
+      .select("id, code, site")
+      .in("id", ids);
+    byId = new Map((tickets || []).map((t) => [t.id, t]));
+  }
+
+  return (data || []).flatMap((a) => {
+    const m = a.details.match(/Serial Number:\s*([^|]+)|Sparepart:\s*([^|]+)/);
+    if (!m) return [];
+    const t = byId.get(a.ticket_id);
+    return [
+      {
+        "ID Tiket": t?.code ?? "—",
+        Teknisi: a.user_name ?? "—",
+        Tanggal: fmt(a.created_at),
+        Site: t?.site || "—",
+        "Serial Number": (m[1] ?? m[2]).trim(),
+      },
+    ];
+  });
+}

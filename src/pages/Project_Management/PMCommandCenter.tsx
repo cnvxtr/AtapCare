@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, Table, LayoutGrid, Filter, User, Ban, AlertTriangle, ChevronDown, Check, X } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
+import SlaBadge from '../../components/SlaBadge'
 import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
@@ -11,6 +13,8 @@ import FieldError from '../../components/FieldError'
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover'
 import SchedulePicker from '../../components/SchedulePicker'
 import { getTechnicians } from '../../services/users'
+import { getPendingAlarm, getPendingHours } from '../../lib/pendingAlarm'
+import { getBackupRequest, approveBackup, rejectBackup, type BackupRequest } from '../../services/ticketService'
 
 // SEGMEN STATUS FLOW TIKET (persis helpdesk)
 const SEGMENTS = [
@@ -27,7 +31,7 @@ const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
 
 export default function PMCommandCenter() {
-    const { tickets, updateTicketStatus, assignTicket } = useTickets()
+    const { tickets, updateTicketStatus, assignTicket, refreshTickets } = useTickets()
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
     const [activeSegment, setActiveSegment] = useState('semua')
     const [prioritySel, setPrioritySel] = useState<Record<string, boolean>>({ all: true })
@@ -40,9 +44,11 @@ export default function PMCommandCenter() {
     const [showReassignModal, setShowReassignModal] = useState(false)
     const [showVetoModal, setShowVetoModal] = useState(false)
     const [confirmAssign, setConfirmAssign] = useState<null | { teknisi: string; teknisiId: string; scheduleDate: string; scheduleTime: string; isOvertime: boolean; supportIds: string[] }>(null)
-    const [assignErrors, setAssignErrors] = useState<{ tech?: string; date?: string; time?: string }>({})
+    const [assignErrors, setAssignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string }>({})
     const [reassignErrors, setReassignErrors] = useState<{ tech?: string; reason?: string }>({})
     const [vetoErrors, setVetoErrors] = useState<{ reason?: string }>({})
+    const [backupReq, setBackupReq] = useState<BackupRequest | null>(null)
+    const [backupBusy, setBackupBusy] = useState(false)
 
     // State Form
     const [selectedTech, setSelectedTech] = useState('')
@@ -57,10 +63,68 @@ export default function PMCommandCenter() {
         getTechnicians().then(setTechnicians).catch(() => {})
     }, [])
 
+    useEffect(() => {
+        const t = selectedTicket
+        if (!t) return
+        let active = true
+        getBackupRequest(t.id)
+            .then((r) => { if (active) setBackupReq(r) })
+            .catch(() => { if (active) setBackupReq(null) })
+        return () => { active = false }
+    }, [selectedTicket])
+
+    const handleApproveBackup = async () => {
+        if (!selectedTicket || backupBusy) return
+        setBackupBusy(true)
+        const ok = await approveBackup(selectedTicket.id)
+        setBackupBusy(false)
+        if (ok) {
+            toast.success('Pengalihan disetujui.')
+            setBackupReq(null)
+            await refreshTickets()
+        } else {
+            toast.error('Gagal menyetujui pengalihan.')
+        }
+    }
+
+    const handleRejectBackup = async () => {
+        if (!selectedTicket || backupBusy) return
+        setBackupBusy(true)
+        const ok = await rejectBackup(selectedTicket.id)
+        setBackupBusy(false)
+        if (ok) {
+            toast.success('Pengalihan ditolak.')
+            setBackupReq(null)
+        } else {
+            toast.error('Gagal menolak pengalihan.')
+        }
+    }
+
     const needAssign = tickets.filter(t => t.status === 'UNASSIGNED').length
     const needPending = tickets.filter(t => t.status === 'PENDING').length
-    const cAssign = STATUS_COLORS['UNASSIGNED']
-    const cPending = STATUS_COLORS['PENDING']
+    const pendingAlarmCount = tickets.filter(t => t.status === 'PENDING' && getPendingAlarm(t.updatedAt)).length
+
+    // Beban kerja per teknisi (lead): tiket aktif yang masih berjalan.
+    const workload = useMemo(() => {
+        const map = new Map<string, number>()
+        for (const t of tickets) {
+            if (!['SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING'].includes(t.status)) continue
+            if (!t.assignedTo || t.assignedTo === '-') continue
+            map.set(t.assignedTo, (map.get(t.assignedTo) ?? 0) + 1)
+        }
+        return map
+    }, [tickets])
+
+    // Trafik ringan: 0-2 hijau, 3-4 kuning, 5+ merah (BR beban kerja).
+    const WorkloadBadge = ({ count, selected }: { count: number; selected?: boolean }) => {
+        const dot = count >= 5 ? 'bg-red-500' : count >= 3 ? 'bg-yellow-500' : 'bg-green-500'
+        const text = selected ? 'text-white' : count >= 5 ? 'text-red-600' : count >= 3 ? 'text-yellow-600' : 'text-green-600'
+        return (
+            <span className={`inline-flex items-center gap-1 text-[11px] font-mono ${text}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${dot}`} /> {count} Tiket
+            </span>
+        )
+    }
 
     const baseTickets = useMemo(() => {
         const matchesFilter = (t: Ticket) =>
@@ -89,9 +153,13 @@ export default function PMCommandCenter() {
         if (!selectedTech) errs.tech = 'Mohon pilih teknisi'
         if (!scheduleDate) errs.date = 'Mohon pilih tanggal'
         if (!scheduleTime) errs.time = 'Mohon pilih jam'
+        if (!errs.time && new Date(`${scheduleDate}T${scheduleTime}`).getTime() <= Date.now()) {
+            errs.time = 'Jam tidak boleh di masa lalu'
+            toast.error('Jadwal tidak boleh di masa lalu')
+        }
         if (Object.keys(errs).length) { setAssignErrors(errs); return }
         setAssignErrors({})
-        // Cek Lembur (BR 3.2.2): akhir pekan ATAU jam di luar jam operasional 08.15-17.00 WIB.
+        // Cek Lembur (BR 3.2.2): akhir pekan ATAU jam di luar jam operasional 08.00-17.00 WIB.
         const isOvertime = isScheduleOvertime(`${scheduleDate}T${scheduleTime}`)
         setConfirmAssign({
             teknisi: technicians.find(t => t.id === selectedTech)?.name || 'Teknisi',
@@ -129,18 +197,19 @@ export default function PMCommandCenter() {
     }
 
     return (
-        <div className="space-y-6 flex flex-col h-[calc(100vh-7rem)]">
+        <div className={`space-y-6 flex flex-col ${viewMode === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
             {/* HEADER */}
             <div className="flex justify-end gap-4">
                 <div className="flex gap-2">
-                    <span className="px-3 py-1.5 rounded-sm text-sm font-medium border flex items-center gap-2" style={{ backgroundColor: cAssign.bg, color: cAssign.text, borderColor: cAssign.bg }}>
+                    <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                        {needAssign} Ditugaskan
+                        {needAssign + needPending} Perlu Tindakan
                     </span>
-                    <span className="px-3 py-1.5 rounded-sm text-sm font-medium border flex items-center gap-2" style={{ backgroundColor: cPending.bg, color: cPending.text, borderColor: cPending.bg }}>
-                        <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
-                        {needPending} Dijeda
-                    </span>
+                    {pendingAlarmCount > 0 && (
+                        <span className="px-3 py-1.5 rounded-sm text-sm font-medium border border-amber-300 bg-amber-100 text-amber-800 flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4" /> {pendingAlarmCount} Pending Menggantung
+                        </span>
+                    )}
                 </div>
             </div>
 
@@ -186,11 +255,12 @@ export default function PMCommandCenter() {
                                 <button
                                     key={seg.key}
                                     onClick={() => setActiveSegment(seg.key)}
-                                    className={`px-3 py-1.5 rounded-sm text-sm font-medium inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap ${activeSegment === seg.key ? (c ? '' : 'bg-foreground text-primary-foreground') : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                                    className={`px-3 py-1.5 rounded-[5px] text-sm font-medium inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap ${activeSegment === seg.key ? (c ? '' : 'bg-foreground text-primary-foreground') : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                                     style={activeSegment === seg.key && c ? { backgroundColor: c.bg, color: c.text } : undefined}
                                 >
                                     {seg.label}
                                     {seg.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">{seg.role}</span>}
+                                    {seg.key === 'dijeda' && pendingAlarmCount > 0 && <span className="text-[9px] font-mono bg-amber-100 text-amber-700 px-1 rounded-full">{pendingAlarmCount}</span>}
                                 </button>
                             )
                         })}
@@ -201,12 +271,12 @@ export default function PMCommandCenter() {
             {/* KANBAN / LIST */}
             {viewMode === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
-                    <div className="flex gap-2 overflow-x-auto md:grid md:grid-cols-4 xl:grid-cols-7 flex-1 min-h-0">
+                    <div className="flex gap-2 overflow-x-auto flex-1 min-h-0">
                         {KANBAN_COLUMNS.map(col => {
                             const items = baseTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className="shrink-0 min-w-[240px] md:min-w-0 md:shrink rounded-lg border border-border bg-card/50 flex flex-col">
+                                <div key={col.key} className="flex-1 min-w-[110px] rounded-lg border border-border bg-card/50 flex flex-col">
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
@@ -214,19 +284,30 @@ export default function PMCommandCenter() {
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
-                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto no-scrollbar">
+                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto scrollbar-transparent max-h-[390px]">
                                         {items.map(t => {
-                                            const isUrgent = t.priority === 'P1'
+                                            const isUrgent = t.priority === 'P1' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
+                                            const isPendingCritical = t.status === 'PENDING' && (getPendingHours(t.updatedAt) ?? 0) >= 72
                                             return (
-                                                <div key={t.id} className={`rounded border border-border bg-card p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
+                                                <div key={t.id} className={`rounded border p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${isPendingCritical ? 'bg-red-50 border-red-300' : 'bg-card'}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                     <div className="flex items-center justify-between gap-1 mb-1">
                                                         <span className="font-mono text-[8px] text-muted-foreground truncate">{t.code}</span>
                                                         <Badge type="priority" value={t.priority || '-'} small />
                                                     </div>
                                                     <p className="text-[9px] font-medium truncate">{t.site} - {t.unit}</p>
-                                                    <div className="flex items-center gap-1 mt-1 pt-1 border-t border-border min-w-0">
-                                                        <User className="h-2 w-2 shrink-0 text-muted-foreground" />
-                                                        <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
+                                                    {t.status === 'PENDING' && getPendingAlarm(t.updatedAt) && (
+                                                        <div className={`mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold ${isPendingCritical ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                            <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <User className="h-2 w-2 shrink-0 text-muted-foreground" />
+                                                            <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
+                                                        </div>
+                                                        {!['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status) && (
+                                                            <SlaBadge remaining={t.slaTimeLeft} />
+                                                        )}
                                                     </div>
                                                 </div>
                                             )
@@ -266,12 +347,7 @@ export default function PMCommandCenter() {
                                                     <Badge type="status" value={ticket.status} />
                                                 </td>
                                                 <td className="p-4">
-                                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${ticket.slaTimeLeft <= 0 ? 'bg-red-100 text-red-700' :
-                                                        ticket.slaTimeLeft <= 4 ? 'bg-amber-100 text-amber-700' :
-                                                            'bg-emerald-100 text-emerald-700'
-                                                    }`}>
-                                                        {ticket.slaTimeLeft <= 0 ? 'Overdue' : `Sisa ${Math.ceil(ticket.slaTimeLeft)} Jam`}
-                                                    </span>
+                                                    <SlaBadge remaining={ticket.slaTimeLeft} />
                                                 </td>
                                             </tr>
                                         ))
@@ -288,7 +364,7 @@ export default function PMCommandCenter() {
             {/* ========================================== */}
             {selectedTicket && (
                 <TicketDrawer
-                    onClose={() => setSelectedTicket(null)}
+                    onClose={() => { setSelectedTicket(null); setBackupReq(null) }}
                     code={selectedTicket.code}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
@@ -299,6 +375,33 @@ export default function PMCommandCenter() {
                     activities={selectedTicket.activities}
                     footer={
                         <>
+                            {backupReq && (
+                                <div className="w-full border border-amber-200 bg-amber-50/70 rounded-[3px] p-3 space-y-2 mb-1">
+                                    <p className="text-xs text-amber-800 font-medium flex items-center gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                        Pengalihan diminta oleh <b>{backupReq.requester_name}</b>
+                                        <span className="text-amber-700/70 font-normal">
+                                            ({new Date(backupReq.requested_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })})
+                                        </span>
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleApproveBackup}
+                                            disabled={backupBusy}
+                                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-600 text-white rounded-[3px] font-bold hover:bg-emerald-700 disabled:opacity-50 transition"
+                                        >
+                                            <Check className="w-4 h-4" /> Setujui
+                                        </button>
+                                        <button
+                                            onClick={handleRejectBackup}
+                                            disabled={backupBusy}
+                                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-red-600 text-white rounded-[3px] font-bold hover:bg-red-700 disabled:opacity-50 transition"
+                                        >
+                                            <X className="w-4 h-4" /> Tolak
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                             {selectedTicket.status === 'UNASSIGNED' && (
                                 <button onClick={() => setShowAssignModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold">
                                     <User className="w-4 h-4" /> Tugaskan Teknisi
@@ -322,6 +425,11 @@ export default function PMCommandCenter() {
                 >
                     {activeDrawerTab === 'detail' && (
                         <div className="space-y-4">
+                            {selectedTicket.status === 'PENDING' && getPendingAlarm(selectedTicket.updatedAt) && (
+                                <div className="bg-amber-50/60 p-3 rounded-[3px] border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" /> Dijeda {getPendingAlarm(selectedTicket.updatedAt)} tanpa aktivitas
+                                </div>
+                            )}
                             <AssignmentCard items={selectedTicket.activities} />
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
@@ -336,7 +444,7 @@ export default function PMCommandCenter() {
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}
-                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} />}
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
                     {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
                 </TicketDrawer>
             )}
@@ -367,9 +475,12 @@ export default function PMCommandCenter() {
                                         {technicians.length === 0 ? (
                                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
                                         ) : technicians.map(t => (
-                                            <DropdownMenuItem key={t.id} onSelect={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground focus:bg-foreground focus:text-primary-foreground'}`}>
+                                            <DropdownMenuItem key={t.id} onSelect={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-14 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground focus:bg-foreground focus:text-primary-foreground'}`}>
                                                 <span className="truncate">{t.name}</span>
-                                                {selectedTech === t.id && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                                <span className="absolute right-2 flex items-center gap-1.5">
+                                                    <WorkloadBadge count={workload.get(t.id) ?? 0} selected={selectedTech === t.id} />
+                                                    {selectedTech === t.id && <span className="flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                                </span>
                                             </DropdownMenuItem>
                                         ))}
                                     </DropdownMenuContent>
@@ -395,7 +506,17 @@ export default function PMCommandCenter() {
                                         ) : technicians.filter(t => t.id !== selectedTech).map(t => (
                                             <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${supportSel.includes(t.id) ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
                                                 <input type="checkbox" checked={supportSel.includes(t.id)}
-                                                    onChange={() => setSupportSel(prev => prev.includes(t.id) ? prev.filter(x => x !== t.id) : [...prev, t.id])}
+                                                    onChange={() => {
+                                                        if (supportSel.includes(t.id)) {
+                                                            setSupportSel(prev => prev.filter(x => x !== t.id))
+                                                            setAssignErrors(prev => ({ ...prev, support: undefined }))
+                                                        } else if (supportSel.length >= 1) {
+                                                            setAssignErrors(prev => ({ ...prev, support: 'Maksimal hanya 1 teknisi pendamping' }))
+                                                        } else {
+                                                            setSupportSel(prev => [...prev, t.id])
+                                                            setAssignErrors(prev => ({ ...prev, support: undefined }))
+                                                        }
+                                                    }}
                                                     className="sr-only" />
                                                 <span className="truncate">{t.name}</span>
                                                 {supportSel.includes(t.id) && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
@@ -403,6 +524,7 @@ export default function PMCommandCenter() {
                                         ))}
                                     </DropdownMenuContent>
                                 </DropdownMenu>
+                                <FieldError msg={assignErrors.support} />
                             </div>
                             <div>
                                 <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
@@ -468,7 +590,7 @@ export default function PMCommandCenter() {
                             </div>
                             {confirmAssign.isOvertime && (
                                 <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-200">
-                                    <p className="text-sm text-amber-800 flex items-center gap-2"> <AlertTriangle className="w-4 h-4 shrink-0" /> Berpotensi Lembur: jadwal di luar jam operasional (08.15–17.00) atau akhir pekan.</p>
+                                    <p className="text-sm text-amber-800 flex items-center gap-2"> <AlertTriangle className="w-4 h-4 shrink-0" /> Berpotensi Lembur: jadwal di luar jam operasional (08.00–17.00) atau akhir pekan.</p>
                                 </div>
                             )}
                             <div className="flex gap-3 pt-2">
@@ -502,10 +624,13 @@ export default function PMCommandCenter() {
                                         {technicians.length === 0 ? (
                                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
                                         ) : technicians.map(t => (
-                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-14 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
                                                 <input type="radio" name="reassign-tech" checked={selectedTech === t.id} onChange={() => { setSelectedTech(t.id); setReassignErrors(prev => ({ ...prev, tech: undefined })) }} className="sr-only" />
                                                 <span className="truncate">{t.name}</span>
-                                                {selectedTech === t.id && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                                <span className="absolute right-2 flex items-center gap-1.5">
+                                                    <WorkloadBadge count={workload.get(t.id) ?? 0} selected={selectedTech === t.id} />
+                                                    {selectedTech === t.id && <span className="flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                                </span>
                                             </label>
                                         ))}
                                     </DropdownMenuContent>

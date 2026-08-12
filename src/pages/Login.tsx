@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowRight, Zap, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import logo from '../assets/logo.png'
+import logo from '../assets/logo2.png'
 
 export default function Login() {
   const { login } = useAuth()

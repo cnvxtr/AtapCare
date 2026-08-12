@@ -8,6 +8,14 @@ html, body {
   max-width: 100vw;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+[id] {
+  scroll-margin-top: 4rem;
+}
+
 /* ============================================
    DESIGN SYSTEM: Monochrome Industrial
    ============================================ */
@@ -224,14 +232,29 @@ html, body {
     }
 }
 
-/* Scrollbar tak terlihat (kolom kanban) */
-.no-scrollbar {
+/* Kolom kanban yang scroll internal: jangan reserve ruang scrollbar (thin/4px membuat kartu
+   terdesak dan memunculkan gap di sisi kanan). Konsisten dengan aturan global di bawah. */
+.scrollbar-transparent {
     scrollbar-width: none;
-    -ms-overflow-style: none;
+    scrollbar-color: transparent transparent;
 }
 
-.no-scrollbar::-webkit-scrollbar {
-    display: none;
+.scrollbar-transparent::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+}
+
+.scrollbar-transparent::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.25);
 }
 
 /* Semua scrollbar transparan & tak terlihat */
@@ -242,4 +265,18 @@ html, body {
 
 *::-webkit-scrollbar {
     display: none;
+}
+
+/* Logo: hitam di mode terang, putih (logo2) di mode gelap.
+   CSS polos agar tak bergantung varian Tailwind dark: (media vs class). */
+.logo-white {
+    display: none;
+}
+
+html.dark .logo-black {
+    display: none;
+}
+
+html.dark .logo-white {
+    display: block;
 }

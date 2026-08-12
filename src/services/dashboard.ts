@@ -1,19 +1,21 @@
 import { supabase } from "@/integrations/supabase/client";
-import { PRIORITY_DEFAULTS } from "./sla";
-import { isSlaOverdue } from "./slaCalc";
+import { getCustomers, getSites, getUnits } from "./master-data";
 
-export interface AdminRealtimeData {
-  activeUsers: number;
-  workOrdersActive: number;
-  slaOverdue: number;
-  priorityDist: Record<"P1" | "P2" | "P3", number>;
+export interface AdminActivityRow {
+  waktu: string;
+  user: string;
+  aktivitas: string;
+}
+
+export interface AdminFrtData {
+  avgHours: number;
+  responded: number;
+  total: number;
 }
 
 export interface LeaderboardRow {
   name: string;
   completed: number;
-  rework: number;
-  reworkRate: number;
 }
 
 export interface AdminMonthlyData {
@@ -21,59 +23,86 @@ export interface AdminMonthlyData {
   leaderboard: LeaderboardRow[];
 }
 
-const ACTIVE_STATUSES = [
-  "NEW",
-  "OPEN",
-  "UNASSIGNED",
-  "SCHEDULED",
-  "EN_ROUTE",
-  "WORKING",
-  "PENDING",
-];
-
-export async function getAdminRealtimeData(): Promise<AdminRealtimeData> {
-  const [ticketsRes, usersRes, slaRes, holidaysRes] = await Promise.all([
-    supabase
-      .from("tickets")
-      .select("id, priority, status, created_at"),
-    supabase
-      .from("users")
-      .select("id, status")
-      .eq("is_deleted", false),
-    supabase.from("sla_config").select("priority, target_hours"),
-    supabase.from("holidays").select("date").eq("is_active", true),
-  ]);
-
-  const tickets = ticketsRes.data || [];
-  const users = usersRes.data || [];
-  const slaTargets = Object.fromEntries(
-    (slaRes.data || []).map((r) => [r.priority, Number(r.target_hours)]),
-  );
-  const holidays = (holidaysRes.data || []).map((h) => h.date);
-
-  const activeUsers = users.filter((u) => !u.status || u.status === "aktif").length;
-  const workOrdersActive = tickets.filter((t) => t.status === "WORKING").length;
-
-  const active = tickets.filter((t) => ACTIVE_STATUSES.includes(t.status));
-  const slaOverdue = active.filter((t) => {
-    const target = slaTargets[t.priority] ?? PRIORITY_DEFAULTS[t.priority];
-    return !!target && isSlaOverdue(t.created_at, target, holidays);
-  }).length;
-
-  const priorityDist = { P1: 0, P2: 0, P3: 0 } as Record<"P1" | "P2" | "P3", number>;
-  for (const t of tickets) {
-    if (t.status === "CLOSED") continue;
-    const p = t.priority as "P1" | "P2" | "P3";
-    if (p === "P1" || p === "P2" || p === "P3") priorityDist[p]++;
-  }
-
-  return { activeUsers, workOrdersActive, slaOverdue, priorityDist };
+export interface AdminSystemData {
+  totalUsers: number;
+  totalCustomers: number;
+  totalUnits: number;
+  unitDist: { name: string; count: number }[];
 }
 
-export interface AdminFrtData {
-  avgHours: number;
-  responded: number;
-  total: number;
+const ACTIVITY_LABELS: Record<string, string> = {
+  update_sla: "mengubah target SLA",
+  sync_holidays: "menyinkronkan hari libur",
+  update_user: "memperbarui user",
+  reset_password: "mereset password user",
+  delete_user: "menghapus user",
+  archive_reveal: "membuka arsip",
+  create: "menambah",
+  update: "mengubah",
+  soft_delete: "mengarsipkan",
+  restore: "memulihkan",
+};
+
+const ENTITY_LABELS: Record<string, string> = {
+  customers: "pelanggan",
+  sites: "site",
+  units: "unit",
+  problem_categories: "kategori masalah",
+  root_causes: "akar masalah",
+  sla_config: "SLA",
+  holidays: "hari libur",
+  users: "user",
+};
+
+function fmtWaktu(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("id-ID", { month: "short" })} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function labelActivity(action: string, entityType: string, metadata: Record<string, unknown> | null): string {
+  const verb = ACTIVITY_LABELS[action] || action;
+  const entity = ENTITY_LABELS[entityType] || entityType;
+  const name = typeof metadata?.name === "string" ? metadata.name : undefined;
+  return name ? `${verb} ${entity} "${name}"` : `${verb} ${entity}`;
+}
+
+export async function getAdminSystemData(): Promise<AdminSystemData> {
+  const [usersRes, customers, sites, units] = await Promise.all([
+    supabase.from("users").select("id, status").eq("is_deleted", false),
+    getCustomers(),
+    getSites(),
+    getUnits(),
+  ]);
+
+  const totalUsers = (usersRes.data || []).filter(
+    (u) => !u.status || u.status === "aktif",
+  ).length;
+
+  const siteNameById = new Map(sites.map((s) => [s.id, s.name]));
+  const siteCounts = new Map<string, number>();
+  for (const u of units) {
+    const name = siteNameById.get(u.site_id) || "Tanpa Site";
+    siteCounts.set(name, (siteCounts.get(name) || 0) + 1);
+  }
+  const unitDist = Array.from(siteCounts.entries())
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count);
+
+  return { totalUsers, totalCustomers: customers.length, totalUnits: units.length, unitDist };
+}
+
+export async function getAdminActivities(limit = 10): Promise<AdminActivityRow[]> {
+  const { data } = await supabase
+    .from("audit_logs")
+    .select("created_at, actor_name, action, entity_type, metadata")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  return (data || []).map((r) => ({
+    waktu: fmtWaktu(r.created_at),
+    user: r.actor_name || "—",
+    aktivitas: labelActivity(r.action, r.entity_type, (r.metadata as Record<string, unknown>) || null),
+  }));
 }
 
 export async function getAdminFrt(): Promise<AdminFrtData> {
@@ -91,7 +120,7 @@ export async function getAdminFrt(): Promise<AdminFrtData> {
 
   const respondedAt = new Map<string, number>();
   for (const a of activities) {
-    if (a.action.startsWith("Tiket dibuat")) continue;
+    if (a.action !== "Tiket divalidasi") continue;
     const ms = new Date(a.created_at).getTime() - createdById.get(a.ticket_id)!;
     const prev = respondedAt.get(a.ticket_id);
     if (prev === undefined || ms < prev) respondedAt.set(a.ticket_id, ms);
@@ -110,7 +139,7 @@ export async function getAdminMonthlyData(): Promise<AdminMonthlyData> {
   const [closedRes, usersRes] = await Promise.all([
     supabase
       .from("tickets")
-      .select("id, assigned_to, rejection_reason")
+      .select("id, assigned_to")
       .eq("status", "CLOSED")
       .gte("created_at", monthStart),
     supabase
@@ -123,20 +152,15 @@ export async function getAdminMonthlyData(): Promise<AdminMonthlyData> {
   const users = usersRes.data || [];
   const userNameById = new Map(users.map((u) => [u.id, u.full_name]));
 
-  const byTech = new Map<string, { completed: number; rework: number }>();
+  const counts = new Map<string, number>();
   for (const t of closed) {
     const name = t.assigned_to ? userNameById.get(t.assigned_to) || "Teknisi" : "Unassigned";
-    const cur = byTech.get(name) || { completed: 0, rework: 0 };
-    cur.completed++;
-    if (t.rejection_reason) cur.rework++;
-    byTech.set(name, cur);
+    counts.set(name, (counts.get(name) || 0) + 1);
   }
 
-  const leaderboard = Array.from(byTech.entries()).map(([name, v]) => ({
+  const leaderboard = Array.from(counts.entries()).map(([name, completed]) => ({
     name,
-    completed: v.completed,
-    rework: v.rework,
-    reworkRate: v.completed ? Math.round((v.rework / v.completed) * 100) : 0,
+    completed,
   }));
 
   return { ticketsDone: closed.length, leaderboard };
