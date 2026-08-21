@@ -7,7 +7,6 @@ import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getAdminActivities, getTicketActivities, type AdminActivityRow } from '../services/dashboard'
 import { ROLE_LABELS } from '../services/users'
-import { Badge } from '../components/Badge'
 import { resolvePhotos } from '../services/photoService'
 
 export default function Profile() {
@@ -141,8 +140,13 @@ export default function Profile() {
     const { data: urlData } = await supabase.storage.from('avatars').createSignedUrl(path, 3600 * 24 * 365)
 
     // Update users table
-    const signedPath = urlData?.signedUrl || path
-    await supabase.from('users').update({ avatar_url: path }).eq('id', user.id)
+    const { error: updateError } = await supabase.from('users').update({ avatar_url: path }).eq('id', user.id)
+
+    if (updateError) {
+      setAvatarUploading(false)
+      toast.error('Foto tersimpan, tapi gagal memperbarui profil.')
+      return
+    }
 
     setAvatarUploading(false)
     toast.success('Foto profil berhasil diubah.')
@@ -154,7 +158,7 @@ export default function Profile() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <h1 className="text-2xl font-display font-bold tracking-tight">Profile</h1>
-        <Badge type="priority" value={user?.role === 'admin' ? 'Critical' : 'Medium'} label={roleLabel} />
+        <span className="text-xs text-muted-foreground">{roleLabel}</span>
       </div>
 
       {/* Avatar Card */}
