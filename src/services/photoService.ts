@@ -58,6 +58,13 @@ export async function uploadAttachment(file: File, folder: string): Promise<stri
     return uploadTicketFile(file, folder)
 }
 
+// Resolve avatar path (avatars bucket) → signed URL.
+export async function resolveAvatarUrl(path: string | null | undefined): Promise<string | null> {
+    if (!path) return null
+    const { data } = await supabase.storage.from('avatars').createSignedUrl(path, 3600 * 24 * 365)
+    return data?.signedUrl || null
+}
+
 // Resolve nilai foto/file (data URL → sama; path storage → signed URL) jadi peta nilai→URL.
 export async function resolvePhotos(values: string[]): Promise<Record<string, string>> {
     const map: Record<string, string> = {}

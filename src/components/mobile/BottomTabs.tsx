@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { ROLE_LABELS } from '../../services/users'
-import { resolvePhotos } from '../../services/photoService'
+import { resolveAvatarUrl } from '../../services/photoService'
 import type { LucideIcon } from 'lucide-react'
 
 interface TabItem {
@@ -55,11 +55,7 @@ export default function BottomTabs({ role }: { role: string }) {
 
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
   useEffect(() => {
-    if (user?.avatar_url) {
-      resolvePhotos([user.avatar_url]).then(m => setResolvedAvatar(m[user!.avatar_url!] || null))
-    } else {
-      setResolvedAvatar(null)
-    }
+    resolveAvatarUrl(user?.avatar_url).then(setResolvedAvatar)
   }, [user?.avatar_url])
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()

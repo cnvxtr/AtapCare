@@ -23,7 +23,7 @@ import { getStoredTheme, setTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
 import ErrorBoundary from '../ErrorBoundary'
 import { ROLE_LABELS } from '../../services/users'
-import { resolvePhotos } from '../../services/photoService'
+import { resolveAvatarUrl } from '../../services/photoService'
 
 const roleHome = (role?: string) =>
   role === 'admin' ? '/admin' : role === 'teknisi' ? '/tugas' : role === 'customer' ? '/customer' : role === 'executive' ? '/executive' : '/dashboard'
@@ -131,11 +131,7 @@ export default function MainLayout() {
   // Avatar resolution
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
   useEffect(() => {
-    if (user?.avatar_url) {
-      resolvePhotos([user.avatar_url]).then(m => setResolvedAvatar(m[user!.avatar_url!] || null))
-    } else {
-      setResolvedAvatar(null)
-    }
+    resolveAvatarUrl(user?.avatar_url).then(setResolvedAvatar)
   }, [user?.avatar_url])
 
   const roleList = (user?.roles || user?.role || '').split(',').filter(Boolean)
