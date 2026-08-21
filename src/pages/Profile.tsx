@@ -316,11 +316,11 @@ export default function Profile() {
           </div>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="h-8 w-8 grid place-items-center rounded-[3px] bg-black text-white hover:bg-neutral-800 transition">
+              <button className="h-8 w-8 grid place-items-center rounded-[3px] text-muted-foreground hover:text-foreground hover:bg-accent transition">
                 <Filter className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[160px] bg-card border-border text-card-foreground">
+            <DropdownMenuContent align="end" className="min-w-[160px] bg-card border-border text-card-foreground space-y-0.5">
               {(Object.entries(FILTER_LABELS) as [FilterKey, string][]).map(([key, label]) => (
                 <DropdownMenuItem
                   key={key}
