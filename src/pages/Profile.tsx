@@ -1,17 +1,18 @@
-import { useState, useEffect, useRef } from 'react'
-import { createPortal } from 'react-dom'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, X, Upload } from 'lucide-react'
+import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, X, Filter } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
-import { getAdminActivities, getTicketActivities, type AdminActivityRow } from '../services/dashboard'
 import { ROLE_LABELS } from '../services/users'
 import { resolveAvatarUrl } from '../services/photoService'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/dropdown-menu'
+
+type ActivityRow = { waktu: string; user: string; aktivitas: string; created_at: string }
+type FilterKey = 'all' | 'today' | 'week' | 'month'
+const FILTER_LABELS: Record<FilterKey, string> = { all: 'Semua', today: 'Hari Ini', week: 'Minggu Ini', month: 'Bulan Ini' }
 
 export default function Profile() {
   const { user } = useAuth()
-  const navigate = useNavigate()
 
   // Profile edit state
   const [fullName, setFullName] = useState(user?.full_name || '')
@@ -32,14 +33,69 @@ export default function Profile() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Activities state
-  const [activities, setActivities] = useState<AdminActivityRow[]>([])
+  const [activities, setActivities] = useState<ActivityRow[]>([])
+  const [activityFilter, setActivityFilter] = useState<FilterKey>('all')
 
-  // Load activities
+  // Load activities (raw from both tables)
   useEffect(() => {
     if (!user) return
-    const loader = user.role === 'admin' ? getAdminActivities(20, user.full_name) : getTicketActivities(20, user.full_name)
-    loader.then(setActivities).catch(() => setActivities([]))
+    const load = async () => {
+      const rows: ActivityRow[] = []
+      // ticket activities
+      const { data: ticketData } = await supabase
+        .from('activities')
+        .select('user_name, action, created_at')
+        .eq('user_name', user.full_name)
+        .order('created_at', { ascending: false })
+        .limit(50)
+      for (const r of ticketData || []) {
+        rows.push({
+          waktu: fmtTime(r.created_at),
+          user: r.user_name || '—',
+          aktivitas: r.action,
+          created_at: r.created_at,
+        })
+      }
+      // admin audit logs
+      if (user.role === 'admin') {
+        const { data: auditData } = await supabase
+          .from('audit_logs')
+          .select('created_at, actor_name, action, entity_type, metadata')
+          .eq('actor_name', user.full_name)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        for (const r of auditData || []) {
+          const meta = (r.metadata as Record<string, unknown>) || null
+          rows.push({
+            waktu: fmtTime(r.created_at),
+            user: r.actor_name || '—',
+            aktivitas: labelAct(r.action, r.entity_type, meta),
+            created_at: r.created_at,
+          })
+        }
+      }
+      rows.sort((a, b) => b.created_at.localeCompare(a.created_at))
+      setActivities(rows)
+    }
+    load().catch(() => setActivities([]))
   }, [user])
+
+  // Filtered activities
+  const filteredActivities = useMemo(() => {
+    if (activityFilter === 'all') return activities
+    const now = new Date()
+    let cutoff: Date
+    if (activityFilter === 'today') {
+      cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    } else if (activityFilter === 'week') {
+      const day = now.getDay()
+      cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((day + 6) % 7))
+    } else {
+      cutoff = new Date(now.getFullYear(), now.getMonth(), 1)
+    }
+    const iso = cutoff.toISOString()
+    return activities.filter(a => a.created_at >= iso)
+  }, [activities, activityFilter])
 
   // Resolve avatar URL
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
@@ -253,15 +309,35 @@ export default function Profile() {
 
       {/* Aktivitas Terbaru */}
       <div className="rounded-lg border border-border bg-card p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Shield className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-bold text-foreground">Aktivitas Terbaru</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Shield className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-bold text-foreground">Aktivitas Terbaru</h2>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-8 w-8 grid place-items-center rounded-[3px] bg-black text-white hover:bg-neutral-800 transition">
+                <Filter className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[160px] bg-card border-border text-card-foreground">
+              {(Object.entries(FILTER_LABELS) as [FilterKey, string][]).map(([key, label]) => (
+                <DropdownMenuItem
+                  key={key}
+                  onClick={() => setActivityFilter(key)}
+                  className={`cursor-pointer ${activityFilter === key ? 'bg-black text-white' : 'focus:bg-black focus:text-white'}`}
+                >
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-        <div className="space-y-0 divide-y divide-border">
-          {activities.length === 0 ? (
+        <div className="max-h-[350px] overflow-y-auto space-y-0 divide-y divide-border">
+          {filteredActivities.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Belum ada aktivitas</p>
           ) : (
-            activities.map((a, i) => (
+            filteredActivities.map((a, i) => (
               <div key={i} className="py-3 first:pt-0 last:pb-0">
                 <p className="text-sm text-foreground">
                   <span className="font-semibold">{a.user}</span> {a.aktivitas}
@@ -317,6 +393,38 @@ function PasswordField({ label, value, onChange, show, onToggle }: {
       </div>
     </div>
   )
+}
+
+function fmtTime(iso: string): string {
+  const d = new Date(iso)
+  const now = new Date()
+  const diffMs = now.getTime() - d.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'Baru saja'
+  if (diffMin < 60) return `${diffMin} menit lalu`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH} jam lalu`
+  const diffD = Math.floor(diffH / 24)
+  if (diffD < 7) return `${diffD} hari lalu`
+  return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function labelAct(action: string, entityType: string, meta: Record<string, unknown> | null): string {
+  const ticketCode = (meta?.ticket_code as string) || ''
+  const suffix = ticketCode ? ` (${ticketCode})` : ''
+  const map: Record<string, string> = {
+    create_ticket: `Membuat tiket${suffix}`,
+    status_change: `Mengubah status tiket${suffix} → ${(meta?.new_status as string) || ''}`,
+    assign_teknisi: `Menugaskan teknisi ke tiket${suffix}`,
+    update_ticket: `Memperbarui tiket${suffix}`,
+    add_comment: `Menambahkan komentar${suffix}`,
+    backup_approve: `Menyetujui backup${suffix}`,
+    backup_reject: `Menolak backup${suffix}`,
+    update_user: 'Memperbarui data pengguna',
+    delete_user: 'Menghapus pengguna',
+    create_user: 'Membuat pengguna baru',
+  }
+  return map[action] || `${action} ${entityType}`.trim()
 }
 
 function compressImage(file: File, maxDim: number, quality: number): Promise<Blob> {
