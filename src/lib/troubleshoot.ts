@@ -34,7 +34,7 @@ export const SCENARIOS: TroubleshootScenario[] = [
       },
       {
         title: "Cek Tegangan dengan Avometer",
-        body: "Ukur tegangan masuk 220VAC. Cek output Power Supply: terminal Biru/Hitam harus 24VDC, terminal Abu-abu harus 12VDC. Hasil tidak sesuai (0V atau di bawah toleransi) = PSU bermasalah.",
+        body: "Ukur tegangan masuk 220VAC. Cek output Power Supply: terminal Biru/Hitam harus 24VDC, terminal Abu-abu harus 12VDC. Hasil tidak sesuai (0V atau di bawah toleransi) = PSU berkendala.",
       },
       {
         title: "Restart MCB",
@@ -55,7 +55,7 @@ export const SCENARIOS: TroubleshootScenario[] = [
     steps: [
       {
         title: "Cek Indikator HMI",
-        body: "Lihat indikator di bagian bawah HMI/display: lampu 4G GSM dan Sensor harus menyala HIJAU. Lampu berwarna lain (merah/kuning) atau mati menandakan masalah koneksi/sensor.",
+        body: "Lihat indikator di bagian bawah HMI/display: lampu 4G GSM dan Sensor harus menyala HIJAU. Lampu berwarna lain (merah/kuning) atau mati menandakan kendala koneksi/sensor.",
         image: IlustrasiPanel,
       },
       {

@@ -41,7 +41,6 @@ export interface Ticket {
     rootCauseNote?: string | null
     duplicateOf?: string | null
     updatedAt?: string
-    bappDocumentUrl?: string | null
     rating?: number | null
     review?: string | null
     activities: TicketActivity[]
@@ -112,7 +111,6 @@ function mapTicketRow(t: SupabaseTicketRow): Ticket {
         rootCauseNote: t.root_cause_note,
         duplicateOf: t.duplicate_of ?? null,
         updatedAt: t.updated_at,
-        bappDocumentUrl: t.bapp_document_url ?? null,
         rating: t.rating ?? null,
         review: t.review ?? null,
         activities: (t.activities || [])

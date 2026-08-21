@@ -1,12 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight, Download, FileText, Image, MapPin, X, Upload } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, FileText, Image, MapPin, X } from 'lucide-react'
 import { Badge } from './Badge'
 import { resolvePhotos } from '../services/photoService'
-import { getTicketGps, type GpsPoint, uploadBappDocument } from '../services/ticketService'
+import { getTicketGps, type GpsPoint } from '../services/ticketService'
 import { reverseGeocode } from '../lib/geocode'
 import { OrderTracking } from './ui/order-tracking'
-import { toast } from 'sonner'
 
 const GpsContext = createContext<{ locationNames?: Record<string, string>; gps?: GpsPoint[] }>({})
 
@@ -25,7 +24,6 @@ interface TicketDrawerProps {
     priority?: string
     frtMinutes?: number | null
     createdAt: string
-    bappDocumentUrl?: string | null
     activeTab: DrawerTab
     onTabChange: (t: DrawerTab) => void
     activities?: { timestamp: string; user: string; action: string; details?: string }[]
@@ -34,11 +32,9 @@ interface TicketDrawerProps {
     duplicateCode?: string
 }
 
-export default function TicketDrawer({ onClose, code, ticketId, status, priority, frtMinutes, createdAt, bappDocumentUrl, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
+export default function TicketDrawer({ onClose, code, ticketId, status, priority, frtMinutes, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
     const [gps, setGps] = useState<GpsPoint[]>([])
     const [locationNames, setLocationNames] = useState<Record<string, string>>({})
-    const [bappUploading, setBappUploading] = useState(false)
-    const [localBappUrl, setLocalBappUrl] = useState<string | null>(bappDocumentUrl ?? null)
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
         ? [...(activities ?? [])].reverse().find(a => a.action === 'Tugas diselesaikan')?.timestamp
         : undefined
@@ -128,37 +124,6 @@ export default function TicketDrawer({ onClose, code, ticketId, status, priority
                         {children}
                     </GpsContext.Provider>
                     {activeTab === 'detail' && activities && <PhotoGallery items={activities} status={status} />}
-                    {activeTab === 'detail' && (
-                        <div className="mt-4 rounded-[5px] border border-border bg-muted/40 p-3">
-                            <div className="flex items-center justify-between mb-2">
-                                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
-                                    <FileText className="h-3.5 w-3.5" /> Dokumen BAPP
-                                </div>
-                                {localBappUrl ? (
-                                    <div className="flex items-center gap-2">
-                                        <a href={localBappUrl} target="_blank" rel="noopener" className="text-[10px] text-blue-600 hover:underline font-mono">Lihat BAPP</a>
-                                        <button onClick={() => downloadFromUrl(localBappUrl!, 'BAPP.pdf')} className="text-[10px] text-muted-foreground hover:text-foreground transition" aria-label="Download BAPP"><Download className="h-3 w-3" /></button>
-                                    </div>
-                                ) : ticketId && ['RESOLVED', 'CLOSED'].includes(status) ? (
-                                    <label className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer transition">
-                                        <Upload className="h-3 w-3" />
-                                        {bappUploading ? 'Mengunggah...' : 'Upload BAPP'}
-                                        <input type="file" accept="application/pdf,image/*" className="hidden" disabled={bappUploading}
-                                            onChange={async (e) => {
-                                                const file = e.target.files?.[0]
-                                                if (!file || !ticketId) return
-                                                setBappUploading(true)
-                                                const url = await uploadBappDocument(ticketId, file)
-                                                setBappUploading(false)
-                                                if (url) { setLocalBappUrl(url); toast.success('BAPP berhasil diunggah') }
-                                                else toast.error('Gagal mengunggah BAPP')
-                                            }} />
-                                    </label>
-                                ) : null}
-                            </div>
-                            {!localBappUrl && <p className="text-[10px] text-muted-foreground/60">Belum ada dokumen BAPP</p>}
-                        </div>
-                    )}
                 </div>
 
                 {footer && <div className="sticky bottom-0 z-10 bg-card/80 backdrop-blur-xl border-t border-border p-4 space-y-2.5">{footer}</div>}
@@ -478,7 +443,6 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
     const isSerial = !!completionParts.find(p => p.startsWith('Serial Number:'))
     const sparepart = spareItem ? spareItem.slice(spareItem.indexOf(':') + 1).trim() : undefined
 
-    if (all.length === 0 && (!isClosed || completionParts.length === 0)) return null
     const clientReady = clientPhotos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
     const internalReady = internalPhotos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
     const filesReady = files.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
@@ -505,49 +469,60 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
         </div>
     )
 
+    const hasClient = clientReady.length > 0
+    const hasTeknisi = internalReady.length > 0 || filesReady.length > 0 || catatan || sparepart
+    if (!hasClient && !hasTeknisi) return null
+
     return (
         <>
-            {clientReady.length > 0 && (
-                <div className="mt-5 bg-muted/60 border border-border rounded-lg p-4">
+            {hasClient && (
+                <div className="mt-4 bg-muted/60 border border-border rounded-lg p-4">
                     <div className="flex items-center gap-2 mb-3">
                         <Image className="w-4 h-4 text-muted-foreground" />
-                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Foto ({clientReady.length})</h4>
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Kendala Pelanggan</h4>
                     </div>
                     {thumbs(clientReady, (images, titles) => setPreview({ images, index: 0, titles }))}
                 </div>
             )}
-            {filesReady.length > 0 && (
-                <div className="mt-3 bg-muted/60 border border-border rounded-lg p-4">
+            {hasTeknisi && (
+                <div className={`${hasClient ? 'mt-3' : 'mt-4'} bg-muted/60 border border-border rounded-lg p-4`}>
                     <div className="flex items-center gap-2 mb-3">
                         <FileText className="w-4 h-4 text-muted-foreground" />
-                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">File ({filesReady.length})</h4>
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Dokumentasi</h4>
                     </div>
-                    <div className="grid grid-cols-1 gap-2">
-                        {filesReady.map((p, i) => {
-                            const name = p.src.split('/').pop() ?? 'file'
-                            return (
-                                <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        {getFileIcon(p.src)}
-                                        <span className="text-xs font-mono truncate">{name}</span>
-                                    </div>
-                                    <button onClick={() => downloadFromUrl(p.url!, name)} className="p-1.5 rounded hover:bg-muted transition shrink-0" aria-label={`Download ${name}`}>
-                                        <Download className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                                    </button>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            )}
-            {(internalReady.length > 0 || (isClosed && (catatan || sparepart))) && (
-                <div className="mt-3 bg-emerald-50/60 border border-emerald-200 rounded-lg p-4">
-                    <h4 className="text-[10px] font-mono uppercase tracking-widest text-emerald-700 mb-2">Dokumentasi</h4>
                     {internalReady.length > 0 && (
                         <div className="mb-3">{thumbs(internalReady, (images, titles) => setPreview({ images, index: 0, titles }))}</div>
                     )}
-                    {catatan && <p className="text-sm text-emerald-900 mb-1">{catatan}</p>}
-                    {sparepart && <p className="text-xs text-emerald-800/80">{isSerial ? 'Serial Number' : 'Sparepart'}: {sparepart}</p>}
+                    {filesReady.length > 0 && (
+                        <div className="grid grid-cols-1 gap-2 mb-3">
+                            {filesReady.map((p, i) => {
+                                const name = p.src.split('/').pop() ?? 'file'
+                                return (
+                                    <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            {getFileIcon(p.src)}
+                                            <span className="text-xs font-mono truncate">{name}</span>
+                                        </div>
+                                        <button onClick={() => downloadFromUrl(p.url!, name)} className="p-1.5 rounded hover:bg-muted transition shrink-0" aria-label={`Download ${name}`}>
+                                            <Download className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                        </button>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                    {catatan && (
+                        <div className="bg-background border border-border rounded-lg p-3 mb-2">
+                            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Hasil</p>
+                            <p className="text-sm text-foreground">{catatan}</p>
+                        </div>
+                    )}
+                    {sparepart && (
+                        <div className="bg-background border border-border rounded-lg p-3 mb-2">
+                            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{isSerial ? 'Serial Number' : 'Sparepart'}</p>
+                            <p className="text-sm text-foreground">{sparepart}</p>
+                        </div>
+                    )}
                 </div>
             )}
             {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} titles={preview.titles} />}

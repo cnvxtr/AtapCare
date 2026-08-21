@@ -31,6 +31,7 @@ import CustomerTicketDetail from './pages/Customer/CustomerTicketDetail'
 import ExecutiveDashboard from './pages/Executive/ExecutiveDashboard'
 import ExecutiveInbox from './pages/Executive/ExecutiveInbox'
 import ExecutiveReport from './pages/Executive/ExecutiveReport'
+import Profile from './pages/Profile'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
@@ -134,6 +135,8 @@ function AppRoutes() {
         <Route path="/executive" element={<RoleGate roles={['executive']}><ExecutiveDashboard /></RoleGate>} />
         <Route path="/executive/inbox" element={<RoleGate roles={['executive']}><ExecutiveInbox /></RoleGate>} />
         <Route path="/executive/reports" element={<RoleGate roles={['executive']}><ExecutiveReport /></RoleGate>} />
+
+        <Route path="/profile" element={<Profile />} />
       </Route>
 
       {/* Fallback: tampilkan 404 */}

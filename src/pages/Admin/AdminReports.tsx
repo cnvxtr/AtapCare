@@ -48,11 +48,11 @@ const PRIORITY_OPTIONS = ["Critical", "Medium", "Low"].map((p) => ({ value: p, l
 const DATASETS: Array<{ key: TabKey; label: string }> = [
   { key: "tickets", label: "Tiket & Penanganan" },
   { key: "kpi", label: "KPI Agregat" },
-  { key: "rootcause", label: "Akar Masalah" },
+  { key: "rootcause", label: "Akar Kendala" },
   { key: "sparepart", label: "Serial Number" },
 ];
 
-// Per-role dataset: admin semua; helpdesk tiket + akar masalah.
+// Per-role dataset: admin semua; helpdesk tiket + akar kendala.
 function datasetsFor(mode: "admin" | "helpdesk") {
   return DATASETS.filter((d) =>
     mode === "admin" ? true : d.key === "tickets" || d.key === "rootcause",

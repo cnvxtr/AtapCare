@@ -225,7 +225,6 @@ export default function PMDashboard() {
                     priority={selectedTicket.priority}
                     frtMinutes={selectedTicket.frtMinutes}
                     createdAt={selectedTicket.createdAt}
-                    bappDocumentUrl={selectedTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={selectedTicket.activities}

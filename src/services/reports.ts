@@ -58,7 +58,7 @@ export const TICKET_REPORT_HEADERS = [
   "URL BAPP",
 ];
 
-export const ROOTCAUSE_HEADERS = ["Akar Masalah", "Jumlah", "% Total"];
+export const ROOTCAUSE_HEADERS = ["Akar Kendala", "Jumlah", "% Total"];
 
 export const SERIAL_NUMBER_HEADERS = ["ID Tiket", "Teknisi", "Tanggal", "Site", "Serial Number"];
 
@@ -236,7 +236,7 @@ export async function getAuditReport(
 
 export { getSites, type SiteRow };
 
-// ── Top 10 Akar Masalah ──
+// ── Top 10 Akar Kendala ──
 export async function getRootCauseReport(
   filters: ReportFilters,
 ): Promise<Record<string, string | number>[]> {
@@ -262,13 +262,13 @@ export async function getRootCauseReport(
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([name, count]) => ({
-      "Akar Masalah": name,
+      "Akar Kendala": name,
       Jumlah: count,
       "% Total": Math.round((count / total) * 100),
     }));
   if (noCause > 0) {
     top.push({
-      "Akar Masalah": "Tanpa akar masalah",
+      "Akar Kendala": "Tanpa akar kendala",
       Jumlah: noCause,
       "% Total": Math.round((noCause / total) * 100),
     });

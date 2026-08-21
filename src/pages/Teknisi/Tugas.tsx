@@ -62,7 +62,7 @@ export default function TugasTeknisi() {
             .then(({ data }) => setSupportTickets(new Set((data ?? []).map(d => d.ticket_id))))
     }, [user])
 
-    // Katalog untuk dropdown & label akar masalah/kategori di drawer.
+    // Katalog untuk dropdown & label akar kendala/kategori di drawer.
     useEffect(() => {
         Promise.all([problemCategoriesApi.getAll(), rootCausesApi.getAll()]).then(([c, r]) => {
             setCatalogItems({
@@ -160,7 +160,7 @@ export default function TugasTeknisi() {
     const handleComplete = async () => {
         if (!selectedTicket) return
         if (!completeNote.trim()) { toast.error('Catatan Hasil wajib diisi.'); return }
-        if (!completeRootCause) { toast.error('Akar Masalah wajib diisi.'); return }
+        if (!completeRootCause) { toast.error('Akar Kendala wajib diisi.'); return }
         if (photos.length === 0) { toast.error('Foto & File Dokumentasi wajib diunggah.'); return }
         setSubmitting(true)
         try {
@@ -178,7 +178,7 @@ export default function TugasTeknisi() {
             await handleStatusUpdate(selectedTicket.id, 'RESOLVED', parts.join(' | '))
             if (completeRootCause) {
                 const ok = await setTicketCatalog(selectedTicket.id, null, completeRootCause, completeRootNote.trim() || null)
-                if (!ok) toast.error('Akar masalah gagal disimpan.')
+                if (!ok) toast.error('Akar kendala gagal disimpan.')
             }
         } catch {
             toast.error('Gagal mengunggah foto. Coba lagi.')
@@ -332,7 +332,6 @@ export default function TugasTeknisi() {
                     priority={selectedTicket.priority}
                     frtMinutes={selectedTicket.frtMinutes}
                     createdAt={selectedTicket.createdAt}
-                    bappDocumentUrl={selectedTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={selectedTicket.activities}
@@ -409,7 +408,7 @@ export default function TugasTeknisi() {
                     }
                 >
                     {activeDrawerTab === 'detail' && (
-                        <>
+                        <div className="space-y-3">
                             {jadwal && (
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
                                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Jadwal</p>
@@ -433,18 +432,18 @@ export default function TugasTeknisi() {
                                     <p className="font-medium text-sm">{selectedTicket.categoryId ? catalogItems.categories.get(selectedTicket.categoryId) || '—' : '—'}</p>
                                 </div>
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
-                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Akar Masalah</p>
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Akar Kendala</p>
                                     <p className="font-medium text-sm">{selectedTicket.rootCauseId ? catalogItems.roots.get(selectedTicket.rootCauseId) || '—' : '—'}</p>
                                 </div>
                             </div>
                             {selectedTicket.rootCauseNote && (
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border mt-4">
-                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Akar Masalah</p>
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Akar Kendala</p>
                                     <p className="text-sm text-foreground">{selectedTicket.rootCauseNote}</p>
                                 </div>
                             )}
                             <TicketDescription description={selectedTicket.description} />
-                        </>
+                        </div>
                     )}
 
                     {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
@@ -528,17 +527,17 @@ export default function TugasTeknisi() {
                                     className="input" placeholder="Serial number unit baru..." />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5">Akar Masalah</label>
+                                <label className="block text-xs font-medium mb-1.5">Akar Kendala</label>
                                 <Combobox
                                     options={rootOptions}
                                     value={completeRootCause}
                                     onChange={setCompleteRootCause}
-                                    placeholder="Pilih akar masalah..."
-                                    emptyText="Tidak ada akar masalah"
+                                    placeholder="Pilih akar kendala..."
+                                    emptyText="Tidak ada akar kendala"
                                 />
                                 <input value={completeRootNote} onChange={e => setCompleteRootNote(e.target.value)}
                                     className="input mt-2"
-                                    placeholder="Catatan akar masalah (opsional)" />
+                                    placeholder="Catatan akar kendala (opsional)" />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium mb-1.5">Foto & File Dokumentasi</label>

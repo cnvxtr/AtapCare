@@ -22,7 +22,7 @@ export default function CustomerDashboard() {
             <div className="flex items-center justify-between">
                 <p className="text-2xl font-display font-bold tracking-tight">Selamat datang, {user?.full_name}</p>
                 <button onClick={() => navigate('/customer/report')} className="px-4 py-2.5 bg-foreground text-background rounded-[3px] text-sm font-semibold hover:opacity-90 transition inline-flex items-center gap-2">
-                    <Plus className="h-5 w-5" /> Lapor Masalah
+                    <Plus className="h-5 w-5" /> Lapor Kendala
                 </button>
             </div>
 
@@ -53,7 +53,7 @@ export default function CustomerDashboard() {
                 </div>
                 {myTickets.length === 0 ? (
                     <div className="px-5 py-12 text-center text-sm text-muted-foreground">
-                        Belum ada tiket. Klik "+ Lapor Masalah" untuk membuat tiket baru.
+                        Belum ada tiket. Klik "+ Lapor Kendala" untuk membuat tiket baru.
                     </div>
                 ) : (
                     <div className="divide-y divide-border">

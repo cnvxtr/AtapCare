@@ -16,7 +16,6 @@ export default function Login() {
   const [regName, setRegName] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPhone, setRegPhone] = useState('')
-  const [regCompany, setRegCompany] = useState('')
   const [regPassword, setRegPassword] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -42,7 +41,7 @@ export default function Login() {
       return
     }
     setIsLoading(true)
-    const result = await register(regName, regEmail, regPhone, regCompany, regPassword)
+    const result = await register(regName, regEmail, regPhone, regPassword)
     if (result.error) setError(result.error)
     setIsLoading(false)
   }
@@ -90,7 +89,7 @@ export default function Login() {
         <div className="rounded-2xl border border-white/10 bg-black p-6 md:p-7 w-full max-w-lg relative">
           <div className="relative">
             <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-center mb-6 text-white">
-              {mode === 'login' ? 'Welcome Back' : 'Buat Akun'}
+              {mode === 'login' ? 'Selamat Datang' : 'Buat Akun'}
             </h2>
 
             <div className="flex mb-6 rounded-[3px] overflow-hidden border border-neutral-700">
@@ -156,12 +155,12 @@ export default function Login() {
             ) : (
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-white/70 mb-1.5">Nama Lengkap *</label>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">Nama Lengkap</label>
                 <input required value={regName} onChange={e => setRegName(e.target.value)}
                   className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-white/70 mb-1.5">Email *</label>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">Email</label>
                 <input required type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)}
                   className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
               </div>
@@ -171,12 +170,7 @@ export default function Login() {
                   className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-white/70 mb-1.5">Perusahaan</label>
-                <input value={regCompany} onChange={e => setRegCompany(e.target.value)}
-                  className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-white/70 mb-1.5">Password *</label>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">Password</label>
                 <input required type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} minLength={6}
                   className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
               </div>

@@ -206,7 +206,6 @@ export default function ExecutiveInbox() {
                     priority={liveTicket.priority}
                     frtMinutes={liveTicket.frtMinutes}
                     createdAt={liveTicket.createdAt}
-                    bappDocumentUrl={liveTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={liveTicket.activities}

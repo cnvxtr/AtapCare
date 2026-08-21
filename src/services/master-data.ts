@@ -46,7 +46,7 @@ export interface CatalogItem {
 
 type CatalogTable = "problem_categories" | "root_causes";
 
-// CRUD katalog (Kategori Masalah & Akar Masalah) — satu pola untuk dua tabel.
+// CRUD katalog (Kategori Kendala & Akar Kendala) — satu pola untuk dua tabel.
 function catalogCrud(table: CatalogTable) {
   return {
     getAll: async (includeDeleted = false): Promise<CatalogItem[]> => {

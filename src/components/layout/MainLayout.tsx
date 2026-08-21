@@ -19,11 +19,11 @@ import {
   type NotificationRow
 } from '../../services/notifications'
 import { approveBackup, rejectBackup } from '../../services/ticketService'
-import { getAdminActivities, getTicketActivities, type AdminActivityRow } from '../../services/dashboard'
 import { getStoredTheme, setTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
 import ErrorBoundary from '../ErrorBoundary'
 import { ROLE_LABELS } from '../../services/users'
+import { resolvePhotos } from '../../services/photoService'
 
 const roleHome = (role?: string) =>
   role === 'admin' ? '/admin' : role === 'teknisi' ? '/tugas' : role === 'customer' ? '/customer' : role === 'executive' ? '/executive' : '/dashboard'
@@ -46,7 +46,7 @@ const menuItems = (role?: string) =>
     : role === 'customer'
       ? [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/customer' },
-        { icon: FileBarChart2, label: 'Lapor Masalah', path: '/customer/report' },
+        { icon: FileBarChart2, label: 'Lapor Kendala', path: '/customer/report' },
       ]
     : role === 'executive'
       ? [
@@ -69,11 +69,9 @@ export default function MainLayout() {
   const [hoverLogo, setHoverLogo] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
-  const [showActivities, setShowActivities] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
-  const [activities, setActivities] = useState<AdminActivityRow[]>([])
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
 
@@ -128,14 +126,17 @@ export default function MainLayout() {
     setShowDropdown(!showDropdown)
   }
 
-  const openActivities = () => {
-    setShowActivities(true)
-    const name = user?.full_name
-    const loader = user?.role === 'admin' ? getAdminActivities(10, name) : getTicketActivities(10, name)
-    loader.then(setActivities).catch(() => setActivities([]))
-  }
-
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
+
+  // Avatar resolution
+  const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
+  useEffect(() => {
+    if (user?.avatar_url) {
+      resolvePhotos([user.avatar_url]).then(m => setResolvedAvatar(m[user!.avatar_url!] || null))
+    } else {
+      setResolvedAvatar(null)
+    }
+  }, [user?.avatar_url])
 
   const roleList = (user?.roles || user?.role || '').split(',').filter(Boolean)
   const canSwitchRole = roleList.length > 1
@@ -238,9 +239,13 @@ export default function MainLayout() {
           <button onClick={toggleDropdown} className={`w-full glass rounded-[5px] p-3 relative overflow-hidden text-left hover:opacity-90 transition ${collapsed ? 'grid place-items-center' : ''}`}>
             <div className="absolute -top-6 -right-6 h-16 w-16 rounded-full bg-foreground/5 blur-2xl" />
             <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'}`}>
-              <div className="h-8 w-8 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-xs font-bold shrink-0">
-                {initials}
-              </div>
+              {resolvedAvatar ? (
+                <img src={resolvedAvatar} alt="Avatar" className="h-8 w-8 rounded-full object-cover border border-border shrink-0" />
+              ) : (
+                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-xs font-bold shrink-0">
+                  {initials}
+                </div>
+              )}
               {!collapsed && (
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold truncate text-foreground">{user?.full_name || 'User'}</p>
@@ -283,8 +288,8 @@ export default function MainLayout() {
                   </>
                 )}
                 <div className="border-t border-border" />
-                    <button onClick={() => { setShowDropdown(false); openActivities() }} className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-foreground hover:text-background transition-colors text-left">
-                      <span className="font-medium">Aktivitas Terbaru</span>
+                    <button onClick={() => { setShowDropdown(false); navigate('/profile') }} className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-foreground hover:text-background transition-colors text-left">
+                      <span className="font-medium">Profile</span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </button>
                 <div className="border-t border-border" />
@@ -395,34 +400,6 @@ export default function MainLayout() {
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />
       )}
-
-      {/* MODAL AKTIVITAS */}
-      {showActivities && createPortal((
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowActivities(false)}>
-          <div className="bg-card border border-border w-full max-w-md rounded-lg shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-              <h3 className="text-lg font-display font-bold text-foreground">Aktivitas Terbaru</h3>
-              <button onClick={() => setShowActivities(false)} className="h-7 w-7 grid place-items-center rounded-lg bg-foreground text-primary-foreground hover:opacity-90 transition-opacity">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="max-h-96 overflow-y-auto  divide-y divide-border">
-              {activities.length === 0 ? (
-                <p className="px-5 py-8 text-center text-sm text-muted-foreground">Belum ada aktivitas</p>
-              ) : (
-                activities.map((a, i) => (
-                  <div key={i} className="px-5 py-3">
-                    <p className="text-sm text-foreground">
-                      <span className="font-semibold">{a.user}</span> {a.aktivitas}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{a.waktu}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      ), document.body)}
 
       {/* MODAL LOGOUT */}
       {showLogoutConfirm && createPortal((

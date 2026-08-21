@@ -161,7 +161,7 @@ export default function HPInbox() {
 
     const handleOpenCategory = (v: string) => {
         setOpenCategoryId(v)
-        if (selectedTicket) setTicketCatalog(selectedTicket.id, v).then(ok => { if (!ok) toast.error('Gagal menyimpan Kategori Masalah.') })
+        if (selectedTicket) setTicketCatalog(selectedTicket.id, v).then(ok => { if (!ok) toast.error('Gagal menyimpan Kategori Kendala.') })
     }
 
     const handleValidateOpen = async () => {
@@ -504,7 +504,6 @@ export default function HPInbox() {
                     priority={liveTicket.priority}
                     frtMinutes={liveTicket.frtMinutes}
                     createdAt={liveTicket.createdAt}
-                    bappDocumentUrl={liveTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={liveTicket.activities}
@@ -524,7 +523,7 @@ export default function HPInbox() {
                                 <>
                                     <div className="space-y-2">
                                         <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Kategori Masalah</label>
+                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Kategori Kendala</label>
                                             <Select value={openCategoryId} onValueChange={handleOpenCategory}>
                                                 <SelectTrigger className="w-full px-3 py-2 border border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
                                                 <SelectContent className="z-[130] border-border bg-card text-foreground">

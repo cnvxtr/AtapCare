@@ -11,6 +11,8 @@ export interface UserProfile {
     role: string
     roles: string
     last_login: string | null
+    avatar_url?: string | null
+    wa_number?: string | null
 }
 
 interface AuthContextType {
@@ -19,7 +21,7 @@ interface AuthContextType {
     lastLoginTime: string | null
     loading: boolean
     login: (username: string, password: string) => Promise<{ error: string | null }>
-    register: (name: string, email: string, phone: string, company: string, password: string) => Promise<{ error: string | null; ok?: boolean }>
+    register: (name: string, email: string, phone: string, password: string) => Promise<{ error: string | null; ok?: boolean }>
     logout: () => Promise<void>
     switchRole: (role: string) => Promise<{ error: string | null }>
 }
@@ -142,18 +144,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         navigate('/')
     }
 
-    const register = async (name: string, email: string, phone: string, company: string, password: string) => {
+    const register = async (name: string, email: string, phone: string, password: string) => {
+        // 1. Buat auth user dulu lewat Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+            email,
+            password,
+        })
+        if (authError) return { error: authError.message }
+        if (!authData.user) return { error: 'Gagal membuat akun.' }
+
+        // 2. Insert ke tabel users lewat RPC (pakai auth UUID)
         const { data, error } = await supabase.rpc('register_customer', {
             p_name: name,
             p_email: email,
             p_phone: phone,
-            p_company: company,
-            p_password: password,
+            p_user_id: authData.user.id,
         })
         if (error) return { error: error.message }
-        const res = data as { error?: string; ok?: boolean; user_id?: string }
+        const res = data as { error?: string; ok?: boolean }
         if (res?.error) return { error: res.error }
-        // Auto-login after register
+
+        // 3. Auto-login setelah register
         const loginResult = await login(email, password)
         if (loginResult.error) return { error: null, ok: true }
         return { error: null, ok: true }

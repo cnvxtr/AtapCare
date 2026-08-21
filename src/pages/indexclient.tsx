@@ -58,7 +58,7 @@ const FLOW_STEPS: { n: string; title: string; desc: string; Icon: typeof FileTex
 const FAQ_ITEMS: Array<{ q: string; a: string }> = [
   {
     q: "Bagaimana cara melaporkan kendala?",
-    a: "Buat akun pelanggan melalui halaman Login, lalu masuk dan gunakan form \"Lapor Masalah\" di Dashboard. Isi data site, unit, dan deskripsi masalah.",
+    a: "Buat akun pelanggan melalui halaman Login, lalu masuk dan gunakan form \"Lapor Kendala\" di Dashboard. Isi data site, unit, dan deskripsi kendala.",
   },
   {
     q: "Bagaimana cara melacak status laporan?",
@@ -128,7 +128,7 @@ export default function Landing() {
             to="/login"
             className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] bg-black text-background font-medium hover:bg-black transition-all duration-500 text-sm"
           >
-            <span className="transition-all duration-500 group-hover:pr-1">Lapor Masalah</span>
+            <span className="transition-all duration-500 group-hover:pr-1">Lapor Kendala</span>
             <ArrowRight className="h-4 w-4 text-background transition-all duration-500 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0" />
           </Link>
         </div>

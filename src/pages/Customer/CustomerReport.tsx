@@ -80,7 +80,7 @@ export default function CustomerReport() {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <h1 className="text-2xl font-display font-bold tracking-tight mb-6">Lapor Masalah</h1>
+            <h1 className="text-2xl font-display font-bold tracking-tight mb-6">Lapor Kendala</h1>
             <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-6 space-y-4">
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Perusahaan</label>
@@ -100,10 +100,10 @@ export default function CustomerReport() {
                         disabled={!selectedSiteId} emptyText="Unit tidak ditemukan" />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium mb-1.5">Deskripsi Masalah</label>
+                    <label className="block text-xs font-medium mb-1.5">Deskripsi Kendala</label>
                     <textarea required rows={4} value={description} onChange={e => setDescription(e.target.value)}
                         className="w-full px-3 py-2 rounded-[3px] border border-border bg-background text-sm resize-none"
-                        placeholder="Jelaskan masalah yang Anda alami..." />
+                        placeholder="Jelaskan kendala yang Anda alami..." />
                 </div>
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Foto & File Pendukung (wajib)</label>

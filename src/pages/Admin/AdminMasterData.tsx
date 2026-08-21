@@ -68,8 +68,8 @@ const WIZARD_STEPS: Array<{ n: WizardStep; label: string }> = [
 const MASTER_TABS: Array<{ key: MasterTab; label: string; icon: React.ElementType }> = [
   { key: "assets", label: "Pohon Aset", icon: Building2 },
   { key: "customersites", label: "Peta Site Pelanggan", icon: MapPin },
-  { key: "categories", label: "Kategori Masalah", icon: ListTree },
-  { key: "rootcauses", label: "Akar Masalah", icon: Tags },
+  { key: "categories", label: "Kategori Kendala", icon: ListTree },
+  { key: "rootcauses", label: "Akar Kendala", icon: Tags },
 ];
 
 const ITEMS_PER_PAGE = 20;
@@ -382,7 +382,7 @@ export function AdminMasterData() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // ─── Tab Master Data: Pohon Aset / Kategori Masalah / Akar Masalah ───
+  // ─── Tab Master Data: Pohon Aset / Kategori Kendala / Akar Kendala ───
   const [tab, setTab] = useState<MasterTab>("assets");
   const [cats, setCats] = useState<CatalogItem[]>([]);
   const [roots, setRoots] = useState<CatalogItem[]>([]);
@@ -1311,7 +1311,7 @@ export function AdminMasterData() {
       </>
       )}
 
-      {/* ─── Katalog: Kategori Masalah & Akar Masalah ──────────── */}
+      {/* ─── Katalog: Kategori Kendala & Akar Kendala ──────────── */}
       {tab === "categories" && (
         <CatalogPanel
           items={cats}
@@ -1322,8 +1322,8 @@ export function AdminMasterData() {
           setPage={setCatPage}
           icon={ListTree}
           iconClass="bg-blue-50 text-blue-600"
-          addLabel="Tambah Kategori Masalah"
-          emptyHint="Gunakan tombol Tambah Kategori Masalah untuk memulai"
+          addLabel="Tambah Kategori Kendala"
+          emptyHint="Gunakan tombol Tambah Kategori Kendala untuk memulai"
           onAdd={() => setCatDialog({ table: "problem_categories", editingId: null, name: "" })}
           onEdit={(i) =>
             setCatDialog({ table: "problem_categories", editingId: i.id, name: i.name })
@@ -1342,8 +1342,8 @@ export function AdminMasterData() {
           setPage={setCatPage}
           icon={Tags}
           iconClass="bg-purple-50 text-purple-600"
-          addLabel="Tambah Akar Masalah"
-          emptyHint="Gunakan tombol Tambah Akar Masalah untuk memulai"
+          addLabel="Tambah Akar Kendala"
+          emptyHint="Gunakan tombol Tambah Akar Kendala untuk memulai"
           onAdd={() => setCatDialog({ table: "root_causes", editingId: null, name: "" })}
           onEdit={(i) => setCatDialog({ table: "root_causes", editingId: i.id, name: i.name })}
           onArchive={(i) => handleCatalogArchive("root_causes", i)}
@@ -1357,7 +1357,7 @@ export function AdminMasterData() {
           <DialogHeader className="mb-6">
             <DialogTitle className="text-foreground">
               {catDialog?.editingId ? "Edit" : "Tambah"}{" "}
-              {catDialog?.table === "problem_categories" ? "Kategori Masalah" : "Akar Masalah"}
+              {catDialog?.table === "problem_categories" ? "Kategori Kendala" : "Akar Kendala"}
             </DialogTitle>
           </DialogHeader>
           <div>
