@@ -149,11 +149,7 @@ export default function Profile() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-display font-bold tracking-tight">Profile</h1>
-        <span className="text-xs text-muted-foreground">{roleLabel}</span>
-      </div>
+      <h1 className="text-2xl font-display font-bold tracking-tight">Profile {roleLabel}</h1>
 
       {/* Avatar Card */}
       <div className="rounded-lg border border-border bg-card p-6">
