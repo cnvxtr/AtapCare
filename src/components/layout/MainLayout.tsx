@@ -68,6 +68,7 @@ export default function MainLayout() {
   const [collapsed, setCollapsed] = useState(false)
   const [hoverLogo, setHoverLogo] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
+  const [showAvatarPreview, setShowAvatarPreview] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
@@ -232,24 +233,29 @@ export default function MainLayout() {
 
         {/* Profile widget */}
         <div className="relative p-2 border-t border-border">
-          <button onClick={toggleDropdown} className={`w-full glass rounded-[5px] p-3 relative overflow-hidden text-left hover:opacity-90 transition ${collapsed ? 'grid place-items-center' : ''}`}>
+          <div className={`w-full glass rounded-[5px] p-3 relative overflow-hidden ${collapsed ? 'grid place-items-center' : ''}`}>
             <div className="absolute -top-6 -right-6 h-16 w-16 rounded-full bg-foreground/5 blur-2xl" />
             <div className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'}`}>
-              {resolvedAvatar ? (
-                <img src={resolvedAvatar} alt="Avatar" className="h-8 w-8 rounded-full object-cover border border-border shrink-0" />
-              ) : (
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-xs font-bold shrink-0">
-                  {initials}
-                </div>
-              )}
+              <button onClick={(e) => { e.stopPropagation(); setShowAvatarPreview(true) }} className="shrink-0 focus:outline-none">
+                {resolvedAvatar ? (
+                  <img src={resolvedAvatar} alt="Avatar" className="h-8 w-8 rounded-full object-cover border border-border" />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-xs font-bold">
+                    {initials}
+                  </div>
+                )}
+              </button>
               {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold truncate text-foreground">{user?.full_name || 'User'}</p>
-              <p className="text-[10px] text-muted-foreground">{roleLabel}</p>
+                <button onClick={toggleDropdown} className="min-w-0 flex-1 text-left focus:outline-none">
+                  <p className="text-xs font-semibold truncate text-foreground">{user?.full_name || 'User'}</p>
+                  <p className="text-[10px] text-muted-foreground">{roleLabel}</p>
+                </button>
+              )}
+              {collapsed && (
+                <button onClick={toggleDropdown} className="absolute inset-0 focus:outline-none" aria-label="Menu profil" />
+              )}
             </div>
-          )}
           </div>
-        </button>
 
           {showDropdown && (
             <>
@@ -396,6 +402,21 @@ export default function MainLayout() {
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />
       )}
+
+      {/* MODAL AVATAR PREVIEW */}
+      {showAvatarPreview && createPortal((
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowAvatarPreview(false)}>
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            {resolvedAvatar ? (
+              <img src={resolvedAvatar} alt="Avatar" className="max-h-[60vh] max-w-[80vw] rounded-2xl object-contain shadow-2xl" />
+            ) : (
+              <div className="h-40 w-40 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-6xl font-bold shadow-2xl">
+                {initials}
+              </div>
+            )}
+          </div>
+        </div>
+      ), document.body)}
 
       {/* MODAL LOGOUT */}
       {showLogoutConfirm && createPortal((
