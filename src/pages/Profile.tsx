@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { toast } from 'sonner'
-import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, X, Filter } from 'lucide-react'
+import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, Filter, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { ROLE_LABELS } from '../services/users'
@@ -388,7 +388,7 @@ function PasswordField({ label, value, onChange, show, onToggle }: {
           placeholder={label}
         />
         <button type="button" onClick={onToggle} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition">
-          {show ? <X className="h-3.5 w-3.5" /> : <span className="text-[10px] font-mono">SHOW</span>}
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
       </div>
     </div>
