@@ -39,7 +39,26 @@ export async function uploadTicketPhoto(file: File, folder: string): Promise<str
     return path
 }
 
-// Resolve nilai foto (data URL → sama; path storage → signed URL) jadi peta nilai→URL.
+// Upload file non-image (PDF, DOC, XLSX, dll) tanpa kompresi, preserve extension.
+export async function uploadTicketFile(file: File, folder: string): Promise<string> {
+    const ext = file.name.split('.').pop() || 'bin'
+    const uid = crypto.randomUUID ? crypto.randomUUID() : `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+    const path = `${folder}/${uid}.${ext}`
+    const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+        contentType: file.type || 'application/octet-stream',
+        upsert: false,
+    })
+    if (error) throw new Error(error.message)
+    return path
+}
+
+// Auto-route: image → compress, non-image → upload as-is.
+export async function uploadAttachment(file: File, folder: string): Promise<string> {
+    if (file.type.startsWith('image/')) return uploadTicketPhoto(file, folder)
+    return uploadTicketFile(file, folder)
+}
+
+// Resolve nilai foto/file (data URL → sama; path storage → signed URL) jadi peta nilai→URL.
 export async function resolvePhotos(values: string[]): Promise<Record<string, string>> {
     const map: Record<string, string> = {}
     const paths: string[] = []

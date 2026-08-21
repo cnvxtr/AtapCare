@@ -5,9 +5,8 @@ import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, Inbox, ArrowUpRight, Wrench, ClipboardCheck, X, Copy } from 'lucide-react'
 import { Badge } from '../../components/Badge'
-import SlaBadge from '../../components/SlaBadge'
 import { FINAL_STATUSES, FIELD_STATUSES } from '../../lib/status'
-import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard } from '../../components/TicketDrawer'
 import FieldError from '../../components/FieldError'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
@@ -18,7 +17,7 @@ export default function HPDashboard() {
     const navigate = useNavigate()
     const { tickets, getTicketCount, updateTicketStatus } = useTickets()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
-    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline' | 'activity'>('detail')
+    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
     const [actionModal, setActionModal] = useState<null | { kind: 'void' | 'duplicate' }>(null)
     const [actionInput, setActionInput] = useState('')
     const [actionError, setActionError] = useState('')
@@ -64,7 +63,7 @@ export default function HPDashboard() {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 10) // Tampilkan 10 teratas
 
-    const slaOverdue = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft != null && t.slaTimeLeft <= 0).length
+    const avgFrt = tickets.filter(t => t.frtMinutes != null).reduce((s, t) => s + (t.frtMinutes ?? 0), 0) / (tickets.filter(t => t.frtMinutes != null).length || 1)
 
     const confirmAction = () => {
         if (actionModal?.kind === 'duplicate' && !duplicateTargetId) {
@@ -117,14 +116,14 @@ export default function HPDashboard() {
                         <div className="p-2 bg-muted border border-border rounded-lg"><ClipboardCheck className="w-5 h-5 text-foreground" /></div>
                     </div>
                 </div>
-                <div className="bg-red-600 border border-red-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-red-400">
+                <div className="bg-blue-600 border border-blue-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-blue-400">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-[10px] font-black text-white uppercase tracking-wider flex items-center gap-1">
-                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> SLA Overdue
+                            <p className="text-[10px] font-black text-white uppercase tracking-wider">
+                                Rata-rata FRT
                             </p>
                             <h3 className="text-4xl font-display font-black text-white mt-2 tracking-tight">
-                                <AnimatedNumber value={slaOverdue} />
+                                {Math.round(avgFrt)}m
                             </h3>
                         </div>
                         <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
@@ -169,19 +168,20 @@ export default function HPDashboard() {
             </div>
 
             {/* Tabel Operasional (Tier 2) */}
-            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <div className="rounded-2xl border border-border bg-card">
                 <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <h3 className="font-display font-bold text-foreground">10 Tiket Aktif Terbaru</h3>
                     <button onClick={() => navigate('/inbox')} className="text-xs font-medium hover:underline inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition">
                         Lihat Semua di Inbox <ArrowUpRight className="w-3 h-3" />
                     </button>
                 </div>
-                <div className="min-w-0">
+                <div className="overflow-x-auto">
+                    <div className="min-w-[720px]">
                     <table className="w-full table-fixed text-left">
                         <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                             <tr>
                                 <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
-                                <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">SLA</th>
+                                <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">FRT</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -206,13 +206,14 @@ export default function HPDashboard() {
                                             )}
                                         </td>
                                         <td className="p-4">
-                                            <SlaBadge remaining={ticket.slaTimeLeft} />
+                                            {ticket.frtMinutes != null && <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">{ticket.frtMinutes}m</span>}
                                         </td>
                                     </tr>
                                 ))
                             )}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -222,10 +223,12 @@ export default function HPDashboard() {
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}
                     code={selectedTicket.code}
+                    ticketId={selectedTicket.id}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
-                    slaTimeLeft={selectedTicket.slaTimeLeft}
+                    frtMinutes={selectedTicket.frtMinutes}
                     createdAt={selectedTicket.createdAt}
+                    bappDocumentUrl={selectedTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={selectedTicket.activities}
@@ -269,7 +272,6 @@ export default function HPDashboard() {
                         </div>
                     )}
                     {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
-                    {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
                 </TicketDrawer>
             )}
 
@@ -286,11 +288,11 @@ export default function HPDashboard() {
                         </div>
                         {actionModal.kind === 'void' ? (
                             <textarea value={actionInput} onChange={e => { setActionInput(e.target.value); setActionError('') }}
-                                rows={3} className={`w-full px-3 py-2 border-2 ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`}
+                                rows={3} className={`w-full px-3 py-2 border ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`}
                                 placeholder="Alasan pembatalan (wajib)..." />
                         ) : (
                             <Select value={duplicateTargetId} onValueChange={(v) => { setDuplicateTargetId(v); setActionError('') }}>
-                                <SelectTrigger className={`w-full px-3 py-2 border-2 ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm`}>
+                                <SelectTrigger className={`w-full px-3 py-2 border ${actionError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm`}>
                                     <SelectValue placeholder="Pilih tiket utama..." />
                                 </SelectTrigger>
                                 <SelectContent className="z-[130] border-border bg-card text-foreground">

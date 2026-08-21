@@ -29,8 +29,8 @@ export default function SchedulePicker({ date, time, onDate, onTime }: ScheduleP
   const selected = date ? new Date(`${date}T00:00:00`) : undefined
 
   return (
-    <div className="flex flex-col gap-4 md:flex-row">
-      <div className="flex-1 min-w-0 rounded-lg border-2 border-border bg-card p-3">
+    <div className="flex flex-col gap-4 md:flex-row max-h-[70vh] overflow-y-auto">
+      <div className="flex-1 min-w-0 rounded-lg border border-border bg-card p-3">
         <Calendar
           mode="single"
           selected={selected}
@@ -45,7 +45,7 @@ export default function SchedulePicker({ date, time, onDate, onTime }: ScheduleP
           className="w-full"
         />
       </div>
-      <div className="md:w-48 max-h-56 md:max-h-80 overflow-y-auto rounded-lg border-2 border-border bg-card p-3">
+      <div className="md:w-48 max-h-56 md:max-h-80 overflow-y-auto rounded-lg border border-border bg-card p-3">
         <div className="grid grid-cols-3 gap-1.5 md:grid-cols-1">
           {SLOTS.map((s) => (
             <button

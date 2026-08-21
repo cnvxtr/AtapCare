@@ -1,7 +1,7 @@
 const PRIORITY_STYLES: Record<string, string> = {
-  P1: 'bg-red-600 text-white',
-  P2: 'bg-amber-500 text-white',
-  P3: 'bg-blue-500 text-white',
+  Critical: 'bg-red-600 text-white',
+  Medium: 'bg-amber-500 text-white',
+  Low: 'bg-blue-500 text-white',
 }
 
 export const STATUS_COLORS: Record<string, { bg: string; text: string }> = {
@@ -45,7 +45,7 @@ export function Badge({ type, value, className = '', small, label }: BadgeProps)
   const isStatus = type === 'status'
   const statusColor = isStatus ? STATUS_COLORS[value] : null
   const styles = isStatus ? '' : PRIORITY_STYLES[value]
-  const size = type === 'priority' ? (small ? 'px-1 py-px text-[8px]' : 'px-1.5 py-0.5 text-[10px]') : 'px-2 py-1 text-xs'
+  const size = type === 'priority' ? (small ? 'px-1 py-px text-[8px]' : 'px-1.5 py-0.5 text-[9px] tracking-tight') : 'px-2 py-1 text-xs'
 
   return (
     <span

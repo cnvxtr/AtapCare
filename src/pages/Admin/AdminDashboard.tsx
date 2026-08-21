@@ -133,7 +133,7 @@ export function AdminDashboard() {
             <p className="text-sm font-medium">Belum ada data</p>
           </div>
         ) : (
-          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto scrollbar-transparent">
+          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto ">
             {d.unitDist.map((s, i) => (
               <div key={s.name} className="flex items-center gap-3 px-5 py-3">
                 <span className={`w-6 text-xs font-bold ${i === 0 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
@@ -170,7 +170,7 @@ export function AdminDashboard() {
             <p className="text-xs mt-1">Tidak ada tiket selesai pada periode ini</p>
           </div>
         ) : (
-          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto scrollbar-transparent">
+          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto ">
             {m.leaderboard.map((t, i) => (
               <div key={t.name} className="flex items-center gap-4 px-5 py-3.5">
                 <div

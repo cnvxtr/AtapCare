@@ -11,7 +11,7 @@ import {
   EyeOff,
   MoreHorizontal,
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import type { AppRole, UserStatus } from "@/lib/types";
 import { toast } from "sonner";
 import {
@@ -34,6 +34,8 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "helpdesk", label: "Helpdesk" },
   { value: "pm", label: "Project Manager" },
   { value: "teknisi", label: "Teknisi Lapangan" },
+  { value: "customer", label: "Pelanggan" },
+  { value: "executive", label: "Executive" },
 ];
 
 const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
@@ -47,6 +49,8 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
   helpdesk: "bg-neutral-800 text-white",
   pm: "bg-neutral-600 text-white",
   teknisi: "bg-neutral-300 text-neutral-900",
+  customer: "bg-emerald-100 text-emerald-800",
+  executive: "bg-purple-100 text-purple-800",
 };
 
 interface UserRow {
@@ -63,6 +67,18 @@ interface UserRow {
 }
 
 const ITEMS_PER_PAGE = 10;
+
+async function getAuthHeaders(): Promise<Record<string, string> | null> {
+  const { VITE_SUPABASE_ANON_KEY } = import.meta.env;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData.session?.access_token;
+  if (!token) return null;
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+    apikey: VITE_SUPABASE_ANON_KEY,
+  };
+}
 
 export function AdminUsers() {
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -285,9 +301,18 @@ export function AdminUsers() {
       }
     } else {
       const newPassword = formPassword.trim();
+      const { VITE_SUPABASE_URL } = import.meta.env;
+      const headers = await getAuthHeaders();
+      if (!headers) {
+        toast.error("Sesi berakhir, silakan login ulang");
+        setSaving(false);
+        return;
+      }
       try {
-        const { data, error } = await supabase.functions.invoke("admin-create-user", {
-          body: {
+        const res = await fetch(`${VITE_SUPABASE_URL}/functions/v1/admin-create-user`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
             username,
             password: newPassword,
             name: formName.trim(),
@@ -295,32 +320,21 @@ export function AdminUsers() {
             role: primaryRole,
             roles: allRoles.join(","),
             status: formStatus,
-          },
+          }),
         });
-        if (error) {
-          console.error("[admin-create-user] invoke error:", error);
-          let msg = error.message || "gagal memanggil fungsi";
-          try {
-            const ctx = (error as { context?: Response }).context;
-            if (ctx) {
-              const body = await ctx.json();
-              if (body?.error) msg = body.error;
-            }
-          } catch {
-            /* body bukan JSON */
-          }
-          toast.error("Gagal membuat user: " + msg);
+        if (!res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
+          toast.error("Gagal membuat user: " + (data.error || "Edge Function belum di-deploy"));
           setSaving(false);
           return;
         }
-        const result = (data || {}) as { userId?: string; error?: string };
+        const result = (await res.json().catch(() => ({}))) as { userId?: string; error?: string };
         if (result.error) {
           toast.error("Gagal membuat user: " + result.error);
           setSaving(false);
           return;
         }
         if (!result.userId) {
-          console.error("[admin-create-user] respon tanpa userId:", data);
           toast.error("Gagal membuat user: respon server tidak valid");
           setSaving(false);
           return;
@@ -345,16 +359,17 @@ export function AdminUsers() {
     if (!deleteTarget) return;
     setDeleting(true);
 
-    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const bearer = sessionData.session?.access_token || VITE_SUPABASE_ANON_KEY;
+    const { VITE_SUPABASE_URL } = import.meta.env;
+    const headers = await getAuthHeaders();
+    if (!headers) {
+      toast.error("Sesi berakhir, silakan login ulang");
+      setDeleting(false);
+      return;
+    }
     try {
       const res = await fetch(`${VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${bearer}`,
-        },
+        headers,
         body: JSON.stringify({ userId: deleteTarget.id }),
       });
       if (!res.ok) {
@@ -381,16 +396,16 @@ export function AdminUsers() {
   }
 
   async function resetPassword(userId: string, newPassword: string): Promise<boolean> {
-    const { VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY } = import.meta.env;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const bearer = sessionData.session?.access_token || VITE_SUPABASE_ANON_KEY;
+    const { VITE_SUPABASE_URL } = import.meta.env;
+    const headers = await getAuthHeaders();
+    if (!headers) {
+      toast.error("Sesi berakhir, silakan login ulang");
+      return false;
+    }
     try {
       const res = await fetch(`${VITE_SUPABASE_URL}/functions/v1/admin-reset-password`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${bearer}`,
-        },
+        headers,
         body: JSON.stringify({ userId, newPassword }),
       });
       if (!res.ok) {
@@ -436,19 +451,19 @@ export function AdminUsers() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-card p-4 rounded-xl border border-border">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="relative">
-          <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <input
-            value={searchQ}
-            onChange={(e) => {
-              setSearchQ(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Cari nama atau username…"
-            className="pl-9 pr-4 h-9 rounded-[3px] border border-border bg-card text-sm outline-none focus:border-ring transition w-64 text-foreground"
-          />
+  <div className="bg-card p-4 rounded-xl border border-border">
+    <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="relative flex-1 min-w-0">
+      <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+      <input
+        value={searchQ}
+        onChange={(e) => {
+          setSearchQ(e.target.value);
+          setPage(1);
+        }}
+        placeholder="Cari nama atau username…"
+        className="pl-9 pr-4 h-9 rounded-lg border border-border bg-card text-sm outline-none focus:ring-2 focus:ring-foreground/20 transition w-full text-foreground"
+      />
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -472,6 +487,7 @@ export function AdminUsers() {
       ) : (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
+            <div className="min-w-[640px]">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border">
@@ -599,6 +615,7 @@ export function AdminUsers() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
           {totalPages > 1 && (
             <div className="px-4 py-3 border-t border-border">

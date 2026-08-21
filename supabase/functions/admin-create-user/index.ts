@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
       password,
       email_confirm: true,
     });
-    if (createError && createError.code !== "user_already_exists") {
+    if (createError && !createError.message?.includes("already")) {
       return json({ error: createError.message }, 500);
     }
     if (created?.user) {

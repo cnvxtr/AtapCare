@@ -17,8 +17,9 @@ interface AuthContextType {
     isAuthenticated: boolean
     user: UserProfile | null
     lastLoginTime: string | null
-    loading: boolean // <-- PERBAIKAN: Ditambahkan ke interface
+    loading: boolean
     login: (username: string, password: string) => Promise<{ error: string | null }>
+    register: (name: string, email: string, phone: string, company: string, password: string) => Promise<{ error: string | null; ok?: boolean }>
     logout: () => Promise<void>
     switchRole: (role: string) => Promise<{ error: string | null }>
 }
@@ -84,11 +85,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => subscription.unsubscribe()
     }, [])
 
-    const formatLoginTime = () => {
-        const now = new Date()
-        return `${now.getDate()} ${now.toLocaleString('id-ID', { month: 'short' })} ${now.getFullYear()}, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    }
-
     const login = async (username: string, password: string) => {
         // Lookup email by username lewat RPC SECURITY DEFINER (anon tak bisa
         // baca kolom username setelah RLS 03).
@@ -120,7 +116,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         if (data.user) {
-            const timeString = formatLoginTime()
+            const now = new Date()
+            const timeString = `${now.getDate()} ${now.toLocaleString('id-ID', { month: 'short' })} ${now.getFullYear()}, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
             await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', data.user.id)
 
             setLastLoginTime(timeString)
@@ -128,6 +125,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (profile) setAuditActor(profile.full_name)
             if (profile?.role === 'admin') navigate('/admin')
             else if (profile?.role === 'teknisi') navigate('/tugas')
+            else if (profile?.role === 'customer') navigate('/customer')
+            else if (profile?.role === 'executive') navigate('/executive')
             else navigate('/dashboard')
             return { error: null }
         }
@@ -140,7 +139,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setAuditActor(null)
         setIsAuthenticated(false)
         setLastLoginTime(null)
-        navigate('/login')
+        navigate('/')
+    }
+
+    const register = async (name: string, email: string, phone: string, company: string, password: string) => {
+        const { data, error } = await supabase.rpc('register_customer', {
+            p_name: name,
+            p_email: email,
+            p_phone: phone,
+            p_company: company,
+            p_password: password,
+        })
+        if (error) return { error: error.message }
+        const res = data as { error?: string; ok?: boolean; user_id?: string }
+        if (res?.error) return { error: res.error }
+        // Auto-login after register
+        const loginResult = await login(email, password)
+        if (loginResult.error) return { error: null, ok: true }
+        return { error: null, ok: true }
     }
 
     const switchRole = async (role: string) => {
@@ -162,7 +178,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, logout, switchRole }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole }}>
             {children}
         </AuthContext.Provider>
     )

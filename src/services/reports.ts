@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { getSites, type SiteRow } from "./master-data";
 
 export interface ReportFilters {
@@ -34,12 +34,13 @@ export interface TicketReportRow {
   site: string;
   unit: string;
   serial: string;
+  category: string;
   priority: string;
   status: string;
-  createdAt: string;
-  closedAt: string;
   assignee: string;
-  duration: string;
+  createdAt: string;
+  frtMinutes: number | null;
+  bappUrl: string;
 }
 
 export const TICKET_REPORT_HEADERS = [
@@ -47,13 +48,14 @@ export const TICKET_REPORT_HEADERS = [
   "Pelanggan",
   "Site",
   "Unit",
-  "Serial",
+  "Serial Number",
+  "Kategori",
   "Prioritas",
   "Status",
-  "Tanggal Masuk",
-  "Tanggal Selesai",
   "Teknisi",
-  "Durasi",
+  "Tanggal Masuk",
+  "FRT (jam)",
+  "URL BAPP",
 ];
 
 export const ROOTCAUSE_HEADERS = ["Akar Masalah", "Jumlah", "% Total"];
@@ -99,7 +101,7 @@ async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
-      "id, code, customer, site, unit, priority, status, assigned_to, rejection_reason, created_at, closed_at",
+      "id, code, customer, site, unit, category, priority, status, assigned_to, rejection_reason, created_at, frt_minutes, bapp_document_url",
     )
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
@@ -120,30 +122,30 @@ function toTicketRow(
     customer: string;
     site: string;
     unit: string;
+    category?: string | null;
     priority: string;
     status: string;
     created_at: string;
-    closed_at: string | null;
     assigned_to: string | null;
+    frt_minutes?: number | null;
+    bapp_document_url?: string | null;
   },
   names?: Map<string, string>,
   serials?: Map<string, string>,
 ): TicketReportRow {
-  const start = new Date(t.created_at).getTime();
-  const end = t.closed_at ? new Date(t.closed_at).getTime() : Date.now();
-  const hours = Math.max(0, Math.round(((end - start) / 3600000) * 10) / 10);
   return {
     code: t.code,
     customer: t.customer,
     site: t.site || "—",
     unit: t.unit || "—",
     serial: serials?.get(`${t.site ?? ""}|${t.unit ?? ""}`) ?? "—",
-    priority: t.priority || "P3",
+    category: t.category || "—",
+    priority: t.priority || "Low",
     status: t.status,
-    createdAt: fmt(t.created_at),
-    closedAt: t.closed_at ? fmt(t.closed_at) : "—",
     assignee: t.assigned_to ? names?.get(t.assigned_to) ?? "—" : "—",
-    duration: `${hours} jam`,
+    createdAt: fmt(t.created_at),
+    frtMinutes: t.frt_minutes ?? null,
+    bappUrl: t.bapp_document_url || "—",
   };
 }
 
@@ -178,7 +180,7 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
   const { data } = await buildTicketQuery(filters);
   const tickets = data || [];
   const rows: Record<string, string | number>[] = [];
-  for (const p of ["P1", "P2", "P3"]) {
+  for (const p of ["Critical", "Medium", "Low"]) {
     const group = tickets.filter((t) => t.priority === p);
     if (group.length === 0) continue;
     const closed = group.filter((t) => ["CLOSED", "VOID", "DUPLICATE"].includes(t.status));

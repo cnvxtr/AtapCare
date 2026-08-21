@@ -4,8 +4,7 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket, type Priority, type TicketStatus } from '../../context/TicketContext'
 import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, ImagePlus, MapPin, FileText, Info } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import SlaBadge from '../../components/SlaBadge'
-import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, parseDescription } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, parseDescription } from '../../components/TicketDrawer'
 import { waMeLink } from '../../services/wa'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, selectTriggerFilter } from '../../components/ui/select'
 import { Combobox } from '../../components/ui/combobox'
@@ -15,20 +14,7 @@ import { getCustomers, getSites, getUnits, problemCategoriesApi, type Customer, 
 import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 
-const MAX_PHOTOS = 5;
-const MAX_TOTAL_SIZE_MB = 10;
-
-// SEGMEN STATUS FLOW TIKET
-const SEGMENTS = [
-    { key: 'semua', label: 'Semua', role: '', statuses: null },
-    { key: 'baru', label: 'Baru', role: 'HP', statuses: ['NEW'] },
-    { key: 'diproses', label: 'Diproses', role: 'HP', statuses: ['OPEN'] },
-    { key: 'ditugaskan', label: 'Ditugaskan', role: 'PM', statuses: ['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE'] },
-    { key: 'dikerjakan', label: 'Dikerjakan', role: 'TEK', statuses: ['WORKING'] },
-    { key: 'dijeda', label: 'Dijeda', role: 'PM', statuses: ['PENDING'] },
-    { key: 'selesai', label: 'Selesai', role: 'HP', statuses: ['RESOLVED'] },
-    { key: 'tutup', label: 'Tutup', role: '', statuses: ['CLOSED'] },
-]
+import { SEGMENTS } from '../../lib/constants'
 
 // KOLOM KANBAN = grup segmen alur status (tanpa 'Semua')
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
@@ -45,7 +31,7 @@ export default function HPInbox() {
     const [searchTerm, setSearchTerm] = useState('')
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
-    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline' | 'activity'>('detail')
+    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
     const [openCategoryId, setOpenCategoryId] = useState('')
 
     // State Modals
@@ -79,13 +65,7 @@ export default function HPInbox() {
     })
     const [photos, setPhotos] = useState<File[]>([])
     const addPhotos = (incoming: File[]) => {
-        setPhotos(prev => {
-            const merged = [...prev, ...incoming];
-            if (merged.length > MAX_PHOTOS) { toast.error(`Maksimal ${MAX_PHOTOS} foto.`); return prev; }
-            const totalSize = merged.reduce((s, f) => s + f.size, 0);
-            if (totalSize > MAX_TOTAL_SIZE_MB * 1024 * 1024) { toast.error(`Total ukuran foto maks ${MAX_TOTAL_SIZE_MB} MB.`); return prev; }
-            return merged;
-        });
+        setPhotos(prev => [...prev, ...incoming]);
     }
     // State Master Data (real, dari Supabase)
     const [mdCustomers, setMdCustomers] = useState<Customer[]>([])
@@ -99,7 +79,7 @@ export default function HPInbox() {
     const [submitting, setSubmitting] = useState(false)
     const [newVoidReason, setNewVoidReason] = useState('')
     const [newTicketId, setNewTicketId] = useState<string | null>(null)
-    const [formErrors, setFormErrors] = useState<{ reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string; priority?: string }>({})
+    const [formErrors, setFormErrors] = useState<{ reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string; priority?: string; photos?: string }>({})
     const [remoteCreateErrors, setRemoteCreateErrors] = useState<{ result?: string; duration?: string }>({})
     const [voidCreateError, setVoidCreateError] = useState('')
 
@@ -134,7 +114,8 @@ export default function HPInbox() {
         (searchTerm === '' ||
             t.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
             t.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (t.site && t.site.toLowerCase().includes(searchTerm.toLowerCase())))
+            (t.site && t.site.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase())))
     const filteredTickets = tickets
         .filter(t => isActive(t) && (!activeSegmentStatuses || activeSegmentStatuses.includes(t.status)) && matchesPrioritySearch(t))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -166,6 +147,7 @@ export default function HPInbox() {
         if (!formData.site) errs.site = 'Mohon pilih Site'
         if (!formData.unit) errs.unit = 'Mohon pilih Unit / Perangkat'
         if (!formData.description.trim()) errs.description = 'Mohon isi Deskripsi Kendala'
+        if (photos.length === 0) errs.photos = 'Foto & File wajib diunggah.'
         setFormErrors(errs)
         return Object.keys(errs).length === 0
     }
@@ -368,7 +350,7 @@ export default function HPInbox() {
                 <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-                        <input type="text" placeholder="Cari kode, pelanggan, atau site..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
+                        <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
                     </div>
                     <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
                         <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
@@ -383,11 +365,11 @@ export default function HPInbox() {
                         <MultiSelectFilter
                             label="Semua Prioritas"
                             selected={prioritySel}
-                            onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['P1', 'P2', 'P3']))}
+                            onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['Critical', 'Medium', 'Low']))}
                             options={[
-                                { value: 'P1', label: 'P1 (Kritis)' },
-                                { value: 'P2', label: 'P2 (Medium)' },
-                                { value: 'P3', label: 'P3 (Low)' },
+                                { value: 'Critical', label: 'Critical' },
+                                { value: 'Medium', label: 'Medium' },
+                                { value: 'Low', label: 'Low' },
                             ]}
                             className={selectTriggerFilter}
                         />
@@ -411,9 +393,9 @@ export default function HPInbox() {
                                     className={`px-3 py-1.5 rounded-[5px] text-sm font-medium inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap ${activeSegment === seg.key ? (c ? '' : 'bg-foreground text-primary-foreground') : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
                                     style={activeSegment === seg.key && c ? { backgroundColor: c.bg, color: c.text } : undefined}
                                 >
-                                                    {seg.label}
-                                                    {seg.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">{seg.role}</span>}
-                                                    {seg.key === 'dijeda' && pendingAlarmCount > 0 && <span className="text-[9px] font-mono bg-amber-100 text-amber-700 px-1 rounded-full">{pendingAlarmCount}</span>}
+                                    {seg.label}
+                                    {seg.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">{seg.role}</span>}
+                                    {seg.key === 'dijeda' && pendingAlarmCount > 0 && <span className="text-[9px] font-mono bg-amber-100 text-amber-700 px-1 rounded-full">{pendingAlarmCount}</span>}
                                 </button>
                             )
                         })}
@@ -437,9 +419,9 @@ export default function HPInbox() {
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
-                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto scrollbar-transparent max-h-[390px]">
+                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto  max-h-[390px]">
                                         {items.map(t => {
-                                            const isUrgent = t.priority === 'P1' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
+                                            const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             return (
                                                 <div key={t.id} className={`rounded border border-border bg-card p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                 <div className="flex items-center justify-between gap-1 mb-1">
@@ -457,10 +439,11 @@ export default function HPInbox() {
                                                         <User className="h-2 w-2 shrink-0 text-muted-foreground" />
                                                         <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
                                                     </div>
-                                                    {!['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status) && (
-                                                        <SlaBadge remaining={t.slaTimeLeft} />
-                                                    )}
-                                                </div>
+                                                     {!['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status) && t.frtMinutes != null && (
+                                                         <span className="text-[8px] font-mono text-blue-600 bg-blue-50 px-1 rounded border border-blue-200">{t.frtMinutes}m</span>
+                                            )}
+                                            {formErrors.photos && <p className="text-[11px] text-red-500 mt-1.5">{formErrors.photos}</p>}
+                                        </div>
                                             </div>
                                             )
                                         })}
@@ -479,7 +462,7 @@ export default function HPInbox() {
                             <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                                 <tr>
                                     <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
-                                    <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">SLA</th>
+                                    <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">FRT</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
@@ -498,9 +481,9 @@ export default function HPInbox() {
                                             <td className="p-4">
                                                 <Badge type="status" value={ticket.status} />
                                             </td>
-                                            <td className="p-4">
-                                                <SlaBadge remaining={ticket.slaTimeLeft} />
-                                            </td>
+                                             <td className="p-4">
+                                                 {ticket.frtMinutes != null && <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">{ticket.frtMinutes}m</span>}
+                                             </td>
                                         </tr>
                                     ))
                                 )}
@@ -516,10 +499,12 @@ export default function HPInbox() {
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}
                     code={liveTicket.code}
+                    ticketId={liveTicket.id}
                     status={liveTicket.status}
                     priority={liveTicket.priority}
-                    slaTimeLeft={liveTicket.slaTimeLeft}
+                    frtMinutes={liveTicket.frtMinutes}
                     createdAt={liveTicket.createdAt}
+                    bappDocumentUrl={liveTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={liveTicket.activities}
@@ -541,7 +526,7 @@ export default function HPInbox() {
                                         <div>
                                             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Kategori Masalah</label>
                                             <Select value={openCategoryId} onValueChange={handleOpenCategory}>
-                                                <SelectTrigger className="w-full px-3 py-2 border-2 border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                                                <SelectTrigger className="w-full px-3 py-2 border border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
                                                 <SelectContent className="z-[130] border-border bg-card text-foreground">
                                                     {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
                                                 </SelectContent>
@@ -550,9 +535,9 @@ export default function HPInbox() {
                                         <div>
                                             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Prioritas</label>
                                             <div className="grid grid-cols-3 gap-3">
-                                                {(['P1', 'P2', 'P3'] as const).map(p => (
-                                                    <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-[3px] border font-bold transition ${liveTicket.priority === p ? (p === 'P1' ? 'bg-red-600 text-white border-red-600' : p === 'P2' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600') : 'bg-card border-border hover:border-foreground/40'}`}>{p}</button>
-                                                ))}
+                                                 {(['Critical', 'Medium', 'Low'] as const).map(p => (
+                                                     <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-[3px] border font-bold transition ${liveTicket.priority === p ? (p === 'Critical' ? 'bg-red-600 text-white border-red-600' : p === 'Medium' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600') : 'bg-card border-border hover:border-foreground/40'}`}>{p}</button>
+                                                 ))}
                                             </div>
                                         </div>
                                     </div>
@@ -606,7 +591,6 @@ export default function HPInbox() {
                         </div>
                     )}
                     {activeDrawerTab === 'timeline' && <TicketTimeline items={liveTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(liveTicket.status)} />}
-                    {activeDrawerTab === 'activity' && <TicketActivityLog items={liveTicket.activities} />}
                 </TicketDrawer>
             )}
 
@@ -615,7 +599,7 @@ export default function HPInbox() {
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4 text-red-600">VOID Tiket (Permanen)</h3>
-                        <textarea value={voidReason} onChange={e => { setVoidReason(e.target.value); setVoidError('') }} placeholder="Alasan wajib..." rows={3} className={`w-full px-3 py-2 border-2 ${voidError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea>
+                        <textarea value={voidReason} onChange={e => { setVoidReason(e.target.value); setVoidError('') }} placeholder="Alasan wajib..." rows={3} className={`w-full px-3 py-2 border ${voidError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea>
                         <FieldError msg={voidError} />
                         <div className="flex gap-3 mt-4">
                             <button onClick={() => { setShowVoidModal(false); setVoidError('') }} className="flex-1 py-2 bg-muted rounded">Batal</button>
@@ -629,7 +613,7 @@ export default function HPInbox() {
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4 text-amber-600">Tandai Duplikat</h3>
                         <Select value={duplicateTargetId} onValueChange={(v) => { setDuplicateTargetId(v); setDupError('') }}>
-                            <SelectTrigger className={`w-full px-3 py-2 border-2 ${dupError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}><SelectValue placeholder="Pilih Tiket Utama..." /></SelectTrigger>
+                            <SelectTrigger className={`w-full px-3 py-2 border ${dupError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}><SelectValue placeholder="Pilih Tiket Utama..." /></SelectTrigger>
                             <SelectContent className="z-[130] border-border bg-card text-foreground">
                                 {tickets.filter(t => t.id !== selectedTicket?.id && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)).map(t => (
                                     <SelectItem key={t.id} value={t.id} className="focus:bg-foreground focus:text-background">{t.code} - {t.customer}</SelectItem>
@@ -653,8 +637,8 @@ export default function HPInbox() {
                         <h3 className="text-lg font-bold mb-4">Remote Support</h3>
                         <div className="space-y-4">
                             <div><label className="text-xs font-semibold text-muted-foreground">Media</label><div className="flex gap-2 mt-1">{['WA', 'Telepon', 'VC'].map(m => (<button key={m} onClick={() => setRemoteMedia(m)} className={`flex-1 py-2 rounded border text-sm ${remoteMedia === m ? 'bg-foreground text-primary-foreground border-foreground' : 'bg-card border-border'}`}>{m}</button>))}</div></div>
-                            <div><label className="text-xs font-semibold text-muted-foreground">Durasi (Menit)</label><input type="number" value={remoteDuration} onChange={e => setRemoteDuration(e.target.value)} className="w-full mt-1 px-3 py-2 border-2 border-border rounded" /></div>
-                            <div><label className="text-xs font-semibold text-muted-foreground">Catatan</label><textarea value={remoteNotes} onChange={e => setRemoteNotes(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border-2 border-border rounded"></textarea></div>
+                            <div><label className="text-xs font-semibold text-muted-foreground">Durasi (Menit)</label><input type="number" value={remoteDuration} onChange={e => setRemoteDuration(e.target.value)} className="w-full mt-1 px-3 py-2 border border-border rounded" /></div>
+                            <div><label className="text-xs font-semibold text-muted-foreground">Catatan</label><textarea value={remoteNotes} onChange={e => setRemoteNotes(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border rounded"></textarea></div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Hasil</label><div className="grid grid-cols-2 gap-2 mt-1"><button onClick={() => { setRemoteResult('success'); setRemoteError('') }} className={`py-2 rounded border text-sm ${remoteResult === 'success' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-card border-border'}`}>Berhasil</button><button onClick={() => { setRemoteResult('fail'); setRemoteError('') }} className={`py-2 rounded border text-sm ${remoteResult === 'fail' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-card border-border'}`}>Gagal</button></div><FieldError msg={remoteError} /></div>
                             <div className="flex gap-3 pt-2"><button onClick={() => { setShowRemoteModal(false); setRemoteError('') }} className="flex-1 py-2 bg-muted rounded">Batal</button><button onClick={handleRemoteSubmit} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Simpan</button></div>
                         </div>
@@ -666,8 +650,8 @@ export default function HPInbox() {
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-2">Remote Berhasil! Pilih Jalur:</h3>
                         <div className="space-y-3 mt-4">
-                            <button onClick={handleConfirmPathA} className="w-full p-4 text-left border-2 border-border rounded hover:border-foreground"><p className="font-bold text-foreground">Jalur A: Konfirmasi Langsung</p><p className="text-xs text-muted-foreground">Pelanggan sudah konfirmasi. Langsung tutup.</p></button>
-                            <button onClick={handleConfirmPathB} className="w-full p-4 text-left border-2 border-border rounded hover:border-blue-500"><p className="font-bold text-foreground">Jalur B: Kirim WA</p><p className="text-xs text-muted-foreground">Kirim template WA. Auto-close 24 jam.</p></button>
+                            <button onClick={handleConfirmPathA} className="w-full p-4 text-left border border-border rounded hover:border-foreground"><p className="font-bold text-foreground">Jalur A: Konfirmasi Langsung</p><p className="text-xs text-muted-foreground">Pelanggan sudah konfirmasi. Langsung tutup.</p></button>
+                            <button onClick={handleConfirmPathB} className="w-full p-4 text-left border border-border rounded hover:border-blue-500"><p className="font-bold text-foreground">Jalur B: Kirim WA</p><p className="text-xs text-muted-foreground">Kirim template WA. Auto-close 24 jam.</p></button>
                         </div>
                         <button onClick={() => setShowConfirmPath(false)} className="w-full mt-4 py-2 text-sm text-muted-foreground">Batal</button>
                     </div>
@@ -679,7 +663,7 @@ export default function HPInbox() {
                         <h3 className="text-lg font-bold mb-4">Validasi Penyelesaian</h3>
                         <div className="space-y-4">
                             <div className="grid grid-cols-2 gap-2"><button onClick={() => setValidationAction('close')} className={`py-3 rounded border font-medium ${validationAction === 'close' ? 'bg-emerald-100 border-emerald-500 text-emerald-700' : 'bg-card border-border'}`}>Close Ticket</button><button onClick={() => setValidationAction('rework')} className={`py-3 rounded border font-medium ${validationAction === 'rework' ? 'bg-amber-100 border-amber-500 text-amber-700' : 'bg-card border-border'}`}>Return Rework</button></div>
-                            {validationAction === 'rework' && <div><label className="text-xs font-semibold text-muted-foreground">Alasan Rework</label><textarea value={reworkReason} onChange={e => { setReworkReason(e.target.value); setReworkError('') }} rows={2} className={`w-full mt-1 px-3 py-2 border-2 ${reworkError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea><FieldError msg={reworkError} /></div>}
+                            {validationAction === 'rework' && <div><label className="text-xs font-semibold text-muted-foreground">Alasan Rework</label><textarea value={reworkReason} onChange={e => { setReworkReason(e.target.value); setReworkError('') }} rows={2} className={`w-full mt-1 px-3 py-2 border ${reworkError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea><FieldError msg={reworkError} /></div>}
                             <div className="flex gap-3 pt-2"><button onClick={() => { setShowValidationModal(false); setReworkError('') }} className="flex-1 py-2 bg-muted rounded">Batal</button><button onClick={handleValidationSubmit} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Proses</button></div>
                         </div>
                     </div>
@@ -808,9 +792,9 @@ export default function HPInbox() {
                                         <div>
                                             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Prioritas</label>
                                             <div className="grid grid-cols-3 gap-2">
-                                                {([['P1', 'Kritis', 'bg-red-600 border-red-600', 'bg-red-600'],
-                                                    ['P2', 'Medium', 'bg-amber-500 border-amber-500', 'bg-amber-500'],
-                                                    ['P3', 'Low', 'bg-blue-600 border-blue-600', 'bg-blue-600']] as const).map(([v, sub, active, dot]) => {
+                                                 {([['Critical', 'Critical', 'bg-red-600 border-red-600', 'bg-red-600'],
+                                                     ['Medium', 'Medium', 'bg-amber-500 border-amber-500', 'bg-amber-500'],
+                                                     ['Low', 'Low', 'bg-blue-600 border-blue-600', 'bg-blue-600']] as const).map(([v, sub, active, dot]) => {
                                                     const on = formData.priority === v
                                                     return (
                                                         <button key={v} onClick={() => { setFormData({ ...formData, priority: v }); setFormErrors(prev => ({ ...prev, priority: undefined })) }}
@@ -828,7 +812,7 @@ export default function HPInbox() {
                                             )}
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Upload Foto ({photos.length}/{MAX_PHOTOS})</label>
+                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Upload Foto & File (wajib)</label>
                                             <label
                                                 htmlFor="upload-photo-input"
                                                 onDragOver={(e) => e.preventDefault()}
@@ -836,14 +820,14 @@ export default function HPInbox() {
                                                 className="group flex flex-col items-center gap-1.5 rounded-xl border border-border p-6 text-center text-sm text-muted-foreground hover:border-foreground/50 hover:bg-muted/40 hover:text-foreground transition cursor-pointer"
                                             >
                                                 <span className="inline-flex p-2.5 rounded-full bg-muted group-hover:bg-accent transition"><ImagePlus className="w-5 h-5" /></span>
-                                                <span>Tarik & lepas foto di sini, atau klik untuk memilih</span>
-                                                <input id="upload-photo-input" type="file" accept="image/*" multiple className="sr-only" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
+                                                <span>Tarik & lepas foto atau file di sini, atau klik untuk memilih</span>
+                                                <input id="upload-photo-input" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple className="sr-only" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
                                             </label>
                                             {photos.length > 0 && (
                                                 <div className="mt-2.5 flex flex-wrap gap-2">
                                                     {photos.map((p, i) => (
                                                         <span key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-muted border border-border rounded-full text-[10px] font-mono text-muted-foreground">
-                                                            {p.name}
+                                                            {p.type.startsWith('image/') ? '📷' : '📄'} {p.name}
                                                             <button type="button" onClick={() => setPhotos(photos.filter((_, idx) => idx !== i))} className="p-0.5 rounded-full text-red-500 hover:text-red-700 hover:bg-red-500/10"><X className="w-3 h-3" /></button>
                                                         </span>
                                                     ))}

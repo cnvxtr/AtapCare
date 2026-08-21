@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Calendar as CalendarIcon } from "lucide-react";
-import { CalendarDate, getLocalTimeZone, today } from "@internationalized/date";
+import { CalendarDate } from "@internationalized/date";
 import { I18nProvider } from "react-aria-components";
 import type { DateRange } from "react-aria-components";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -27,7 +27,6 @@ export default function DateRangePicker({
   onChange: (from?: string, to?: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const now = today(getLocalTimeZone());
 
   const value = useMemo<DateRange | null>(
     () => {
@@ -49,11 +48,6 @@ export default function DateRangePicker({
     setOpen(false);
   };
 
-  const preset = (days: number) => {
-    const start = now.subtract({ days });
-    apply({ start, end: now });
-  };
-
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -68,25 +62,14 @@ export default function DateRangePicker({
       <PopoverContent align="start" className="z-[130] w-auto bg-transparent border-transparent p-0">
         <I18nProvider locale="id-ID">
           <div className="rounded-xl border border-border bg-card p-3 select-none shadow-xl">
-            <div className="flex items-center justify-between mb-2 px-1">
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="font-mono text-muted-foreground">
-                  Dari <span className="text-foreground">{from ? fmt(from) : "—"}</span>
-                </span>
-                <span className="text-muted-foreground">·</span>
-                <span className="font-mono text-muted-foreground">
-                  Sampai <span className="text-foreground">{to ? fmt(to) : "—"}</span>
-                </span>
-              </div>
-              {(from || to) && (
-                <button
-                  type="button"
-                  onClick={() => apply(null)}
-                  className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2"
-                >
-                  Hapus
-                </button>
-              )}
+            <div className="flex items-center gap-2 text-[11px] px-1 mb-2">
+              <span className="font-mono text-muted-foreground">
+                Dari <span className="text-foreground">{from ? fmt(from) : "—"}</span>
+              </span>
+              <span className="text-muted-foreground">·</span>
+              <span className="font-mono text-muted-foreground">
+                Sampai <span className="text-foreground">{to ? fmt(to) : "—"}</span>
+              </span>
             </div>
 
             <RangeCalendar
@@ -95,27 +78,17 @@ export default function DateRangePicker({
               onChange={apply}
             />
 
-            <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border">
-              {[0, 6, 29].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => preset(n)}
-                  className="flex-1 rounded border border-border px-1 py-1 text-[11px] text-muted-foreground hover:bg-foreground hover:text-primary-foreground transition-colors"
-                >
-                  {n === 0 ? "Hari Ini" : n === 6 ? "7 Hari" : "30 Hari"}
-                </button>
-              ))}
-              {!from && !to && (
+            {(from || to) && (
+              <div className="flex justify-end mt-3 pt-3 border-t border-border">
                 <button
                   type="button"
                   onClick={() => apply(null)}
-                  className="px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                  className="rounded border border-border px-3 py-1 text-[11px] text-muted-foreground hover:bg-foreground hover:text-primary-foreground transition-colors"
                 >
                   Reset
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         </I18nProvider>
       </PopoverContent>

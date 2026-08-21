@@ -4,8 +4,7 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, Table, LayoutGrid, Filter, User, Ban, AlertTriangle, ChevronDown, Check, X } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import SlaBadge from '../../components/SlaBadge'
-import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
@@ -14,19 +13,10 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/pop
 import SchedulePicker from '../../components/SchedulePicker'
 import { getTechnicians } from '../../services/users'
 import { getPendingAlarm, getPendingHours } from '../../lib/pendingAlarm'
-import { getBackupRequest, approveBackup, rejectBackup, type BackupRequest } from '../../services/ticketService'
+import { getBackupRequest, approveBackup, rejectBackup, getSupportMemberIds, type BackupRequest } from '../../services/ticketService'
+import { SEGMENTS } from '../../lib/constants'
 
 // SEGMEN STATUS FLOW TIKET (persis helpdesk)
-const SEGMENTS = [
-    { key: 'semua', label: 'Semua', role: '', statuses: null },
-    { key: 'baru', label: 'Baru', role: 'HP', statuses: ['NEW'] },
-    { key: 'diproses', label: 'Diproses', role: 'HP', statuses: ['OPEN'] },
-    { key: 'ditugaskan', label: 'Ditugaskan', role: 'PM', statuses: ['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE'] },
-    { key: 'dikerjakan', label: 'Dikerjakan', role: 'TEK', statuses: ['WORKING'] },
-    { key: 'dijeda', label: 'Dijeda', role: 'PM', statuses: ['PENDING'] },
-    { key: 'selesai', label: 'Selesai', role: 'HP', statuses: ['RESOLVED'] },
-    { key: 'tutup', label: 'Tutup', role: '', statuses: ['CLOSED'] },
-]
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
 
@@ -39,13 +29,13 @@ export default function PMCommandCenter() {
 
     // State untuk Drawer & Modals
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
-    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline' | 'activity'>('detail')
+    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [showReassignModal, setShowReassignModal] = useState(false)
     const [showVetoModal, setShowVetoModal] = useState(false)
     const [confirmAssign, setConfirmAssign] = useState<null | { teknisi: string; teknisiId: string; scheduleDate: string; scheduleTime: string; isOvertime: boolean; supportIds: string[] }>(null)
     const [assignErrors, setAssignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string }>({})
-    const [reassignErrors, setReassignErrors] = useState<{ tech?: string; reason?: string }>({})
+    const [reassignErrors, setReassignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string; reason?: string }>({})
     const [vetoErrors, setVetoErrors] = useState<{ reason?: string }>({})
     const [backupReq, setBackupReq] = useState<BackupRequest | null>(null)
     const [backupBusy, setBackupBusy] = useState(false)
@@ -132,7 +122,8 @@ export default function PMCommandCenter() {
             (searchTerm === '' ||
                 t.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 t.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                (t.site && t.site.toLowerCase().includes(searchTerm.toLowerCase())))
+                (t.site && t.site.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase())))
         return tickets
             .filter(t => ALL_STATUSES.includes(t.status) && matchesFilter(t))
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -171,15 +162,35 @@ export default function PMCommandCenter() {
         })
     }
 
+    // Prefill form ganti teknisi dari data penugasan saat ini (lead + support + jadwal),
+    // biar PM tinggal mengubah yang perlu diubah.
+    const openReassignModal = () => {
+        const t = selectedTicket
+        if (!t) return
+        const leadId = technicians.some(x => x.id === t.assignedTo) ? (t.assignedTo ?? '') : ''
+        const { jadwal } = getAssignmentInfo(t.activities)
+        const [date, time] = (jadwal || '').split(' ')
+        setSelectedTech(leadId)
+        setScheduleDate(date || '')
+        setScheduleTime(time || '')
+        setActionReason('')
+        setReassignErrors({})
+        getSupportMemberIds(t.id)
+            .then(ids => setSupportSel(ids.filter(id => id !== t.assignedTo)))
+            .catch(() => setSupportSel([]))
+        setShowReassignModal(true)
+    }
+
     const handleReassign = () => {
-        const errs: { tech?: string; reason?: string } = {}
+        const errs: { tech?: string; date?: string; time?: string; reason?: string } = {}
         if (!selectedTech) errs.tech = 'Mohon pilih teknisi baru'
+        if (!scheduleDate) errs.date = 'Mohon pilih tanggal'
+        if (!scheduleTime) errs.time = 'Mohon pilih jam'
         if (!actionReason.trim()) errs.reason = 'Mohon isi alasan pergantian teknisi'
         if (Object.keys(errs).length) { setReassignErrors(errs); return }
         setReassignErrors({})
-        const namaBaru = technicians.find(t => t.id === selectedTech)?.name
-        const { jadwal } = selectedTicket ? getAssignmentInfo(selectedTicket.activities) : {}
-        assignTicket(selectedTicket!.id, selectedTech, namaBaru, `${jadwal ? 'Jadwal: ' + jadwal + '. ' : ''}Alasan: ${actionReason}`)
+        const namaBaru = technicians.find(t => t.id === selectedTech)?.name || 'Teknisi'
+        assignTicket(selectedTicket!.id, selectedTech, namaBaru, `Jadwal: ${scheduleDate} ${scheduleTime}. Alasan: ${actionReason}`, supportSel)
         closeModals()
     }
 
@@ -218,7 +229,7 @@ export default function PMCommandCenter() {
                 <div className="flex flex-col sm:flex-row gap-3">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-                        <input type="text" placeholder="Cari kode, pelanggan, atau site..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
+                        <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
                     </div>
                     <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
                         <button onClick={() => setViewMode('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
@@ -233,11 +244,11 @@ export default function PMCommandCenter() {
                         <MultiSelectFilter
                             label="Semua Prioritas"
                             selected={prioritySel}
-                            onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['P1', 'P2', 'P3']))}
+                            onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['Critical', 'Medium', 'Low']))}
                             options={[
-                                { value: 'P1', label: 'P1 (Kritis)' },
-                                { value: 'P2', label: 'P2 (Medium)' },
-                                { value: 'P3', label: 'P3 (Low)' },
+                                { value: 'Critical', label: 'Critical' },
+                                { value: 'Medium', label: 'Medium' },
+                                { value: 'Low', label: 'Low' },
                             ]}
                             className={selectTriggerFilter}
                         />
@@ -284,9 +295,9 @@ export default function PMCommandCenter() {
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
-                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto scrollbar-transparent max-h-[390px]">
+                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto  max-h-[390px]">
                                         {items.map(t => {
-                                            const isUrgent = t.priority === 'P1' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
+                                            const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             const isPendingCritical = t.status === 'PENDING' && (getPendingHours(t.updatedAt) ?? 0) >= 72
                                             return (
                                                 <div key={t.id} className={`rounded border p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${isPendingCritical ? 'bg-red-50 border-red-300' : 'bg-card'}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
@@ -305,8 +316,8 @@ export default function PMCommandCenter() {
                                                             <User className="h-2 w-2 shrink-0 text-muted-foreground" />
                                                             <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
                                                         </div>
-                                                        {!['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status) && (
-                                                            <SlaBadge remaining={t.slaTimeLeft} />
+                                                        {!['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status) && t.frtMinutes != null && (
+                                                            <span className="text-[8px] font-mono text-blue-600 bg-blue-50 px-1 rounded border border-blue-200">{t.frtMinutes}m</span>
                                                         )}
                                                     </div>
                                                 </div>
@@ -347,7 +358,7 @@ export default function PMCommandCenter() {
                                                     <Badge type="status" value={ticket.status} />
                                                 </td>
                                                 <td className="p-4">
-                                                    <SlaBadge remaining={ticket.slaTimeLeft} />
+                                                    {ticket.frtMinutes != null && <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">{ticket.frtMinutes}m</span>}
                                                 </td>
                                             </tr>
                                         ))
@@ -366,10 +377,12 @@ export default function PMCommandCenter() {
                 <TicketDrawer
                     onClose={() => { setSelectedTicket(null); setBackupReq(null) }}
                     code={selectedTicket.code}
+                    ticketId={selectedTicket.id}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
-                    slaTimeLeft={selectedTicket.slaTimeLeft}
+                    frtMinutes={selectedTicket.frtMinutes}
                     createdAt={selectedTicket.createdAt}
+                    bappDocumentUrl={selectedTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={selectedTicket.activities}
@@ -408,7 +421,7 @@ export default function PMCommandCenter() {
                                 </button>
                             )}
                             {(selectedTicket.status === 'SCHEDULED' || selectedTicket.status === 'EN_ROUTE') && (
-                                <button onClick={() => setShowReassignModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-700 text-white rounded-[3px] font-bold hover:bg-neutral-800 transition">
+                                <button onClick={openReassignModal} className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-700 text-white rounded-[3px] font-bold hover:bg-neutral-800 transition">
                                     <User className="w-4 h-4" /> Ganti Teknisi
                                 </button>
                             )}
@@ -445,7 +458,6 @@ export default function PMCommandCenter() {
                         </div>
                     )}
                     {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
-                    {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
                 </TicketDrawer>
             )}
 
@@ -466,7 +478,7 @@ export default function PMCommandCenter() {
                                 <label className="text-xs font-semibold text-foreground">Pilih Teknisi</label>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <button type="button" className={`w-full mt-1 px-3 py-2 border-2 ${assignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                        <button type="button" className={`w-full mt-1 px-3 py-2 border ${assignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
                                             <span className={`truncate ${selectedTech ? 'text-foreground' : 'text-muted-foreground'}`}>{selectedTech ? technicians.find(t => t.id === selectedTech)?.name : '-- Pilih Teknisi --'}</span>
                                             <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                                         </button>
@@ -475,7 +487,7 @@ export default function PMCommandCenter() {
                                         {technicians.length === 0 ? (
                                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
                                         ) : technicians.map(t => (
-                                            <DropdownMenuItem key={t.id} onSelect={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-14 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground focus:bg-foreground focus:text-primary-foreground'}`}>
+                                            <DropdownMenuItem key={t.id} onSelect={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setSupportSel(prev => prev.filter(id => id !== t.id)); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-14 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground focus:bg-foreground focus:text-primary-foreground'}`}>
                                                 <span className="truncate">{t.name}</span>
                                                 <span className="absolute right-2 flex items-center gap-1.5">
                                                     <WorkloadBadge count={workload.get(t.id) ?? 0} selected={selectedTech === t.id} />
@@ -491,7 +503,7 @@ export default function PMCommandCenter() {
                                 <label className="text-xs font-semibold text-foreground">Teknisi Pendukung</label>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <button type="button" className="w-full mt-1 px-3 py-2 border-2 border-border focus:border-foreground rounded text-sm flex items-center justify-between gap-1 outline-none">
+                                        <button type="button" className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm flex items-center justify-between gap-1 outline-none">
                                             <span className={`truncate ${supportSel.length ? 'text-foreground' : 'text-muted-foreground'}`}>
                                                 {supportSel.length
                                                     ? supportSel.map(id => technicians.find(t => t.id === id)?.name || id).join(', ')
@@ -504,14 +516,12 @@ export default function PMCommandCenter() {
                                         {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
                                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Tidak ada teknisi lain</p>
                                         ) : technicians.filter(t => t.id !== selectedTech).map(t => (
-                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${supportSel.includes(t.id) ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors mb-px ${supportSel.includes(t.id) ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
                                                 <input type="checkbox" checked={supportSel.includes(t.id)}
                                                     onChange={() => {
                                                         if (supportSel.includes(t.id)) {
                                                             setSupportSel(prev => prev.filter(x => x !== t.id))
                                                             setAssignErrors(prev => ({ ...prev, support: undefined }))
-                                                        } else if (supportSel.length >= 1) {
-                                                            setAssignErrors(prev => ({ ...prev, support: 'Maksimal hanya 1 teknisi pendamping' }))
                                                         } else {
                                                             setSupportSel(prev => [...prev, t.id])
                                                             setAssignErrors(prev => ({ ...prev, support: undefined }))
@@ -530,7 +540,7 @@ export default function PMCommandCenter() {
                                 <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
                                 <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
                                     <PopoverTrigger asChild>
-                                        <button type="button" className={`w-full mt-1 px-3 py-2 border-2 ${assignErrors.date || assignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                        <button type="button" className={`w-full mt-1 px-3 py-2 border ${assignErrors.date || assignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
                                             <span className={`truncate ${scheduleDate && scheduleTime ? 'text-foreground' : 'text-muted-foreground'}`}>
                                                 {scheduleDate && scheduleTime
                                                     ? `${new Date(`${scheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${scheduleTime} WIB`
@@ -539,7 +549,7 @@ export default function PMCommandCenter() {
                                             <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                                         </button>
                                     </PopoverTrigger>
-                                    <PopoverContent align="start" className="z-[130] w-auto p-3 border-border bg-card">
+                                    <PopoverContent align="start" collisionPadding={8} className="z-[130] w-auto p-3 border-border bg-card">
                                         <SchedulePicker
                                             date={scheduleDate}
                                             time={scheduleTime}
@@ -605,17 +615,17 @@ export default function PMCommandCenter() {
             {/* 2. MODAL GANTI TEKNISI */}
             {showReassignModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
-                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
                         <div className="flex items-start justify-between gap-4 mb-4">
                             <h3 className="text-lg font-bold flex items-center gap-2 text-neutral-700"><AlertTriangle className="w-5 h-5" /> Ganti Teknisi</h3>
                             <button onClick={() => setShowReassignModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Pilih Teknisi Baru</label>
+                                <label className="text-xs font-semibold text-foreground">Pilih Teknisi Baru</label>
                                 <DropdownMenu>
                                     <DropdownMenuTrigger asChild>
-                                        <button type="button" className={`w-full mt-1 px-3 py-2 border-2 ${reassignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                        <button type="button" className={`w-full mt-1 px-3 py-2 border ${reassignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
                                             <span className={`truncate ${selectedTech ? 'text-foreground' : 'text-muted-foreground'}`}>{selectedTech ? technicians.find(t => t.id === selectedTech)?.name : '-- Pilih Teknisi --'}</span>
                                             <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                                         </button>
@@ -625,7 +635,7 @@ export default function PMCommandCenter() {
                                             <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
                                         ) : technicians.map(t => (
                                             <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-14 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
-                                                <input type="radio" name="reassign-tech" checked={selectedTech === t.id} onChange={() => { setSelectedTech(t.id); setReassignErrors(prev => ({ ...prev, tech: undefined })) }} className="sr-only" />
+                                                <input type="radio" name="reassign-tech" checked={selectedTech === t.id} onChange={() => { setSelectedTech(t.id); setSupportSel(prev => prev.filter(id => id !== t.id)); setReassignErrors(prev => ({ ...prev, tech: undefined })) }} className="sr-only" />
                                                 <span className="truncate">{t.name}</span>
                                                 <span className="absolute right-2 flex items-center gap-1.5">
                                                     <WorkloadBadge count={workload.get(t.id) ?? 0} selected={selectedTech === t.id} />
@@ -638,8 +648,69 @@ export default function PMCommandCenter() {
                                 <FieldError msg={reassignErrors.tech} />
                             </div>
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Alasan Ganti Teknisi (Wajib)</label>
-                                <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setReassignErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border-2 ${reassignErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Teknisi sakit, alat tidak lengkap, dll"></textarea>
+                                <label className="text-xs font-semibold text-foreground">Teknisi Pendukung</label>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button type="button" className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm flex items-center justify-between gap-1 outline-none">
+                                            <span className={`truncate ${supportSel.length ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {supportSel.length
+                                                    ? supportSel.map(id => technicians.find(t => t.id === id)?.name || id).join(', ')
+                                                    : '-- Pilih Teknisi Pendukung --'}
+                                            </span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="z-[130] border-border bg-card text-foreground p-1.5 min-w-[240px] max-h-72 overflow-y-auto">
+                                        {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
+                                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Tidak ada teknisi lain</p>
+                                        ) : technicians.filter(t => t.id !== selectedTech).map(t => (
+                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors mb-px ${supportSel.includes(t.id) ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                                <input type="checkbox" checked={supportSel.includes(t.id)}
+                                                    onChange={() => {
+                                                        if (supportSel.includes(t.id)) {
+                                                            setSupportSel(prev => prev.filter(x => x !== t.id))
+                                                            setReassignErrors(prev => ({ ...prev, support: undefined }))
+                                                        } else {
+                                                            setSupportSel(prev => [...prev, t.id])
+                                                            setReassignErrors(prev => ({ ...prev, support: undefined }))
+                                                        }
+                                                    }}
+                                                    className="sr-only" />
+                                                <span className="truncate">{t.name}</span>
+                                                {supportSel.includes(t.id) && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                            </label>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <FieldError msg={reassignErrors.support} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
+                                <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                                    <PopoverTrigger asChild>
+                                        <button type="button" className={`w-full mt-1 px-3 py-2 border ${reassignErrors.date || reassignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                            <span className={`truncate ${scheduleDate && scheduleTime ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {scheduleDate && scheduleTime
+                                                    ? `${new Date(`${scheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${scheduleTime} WIB`
+                                                    : 'Pilih Tanggal & Jam'}
+                                            </span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent align="start" collisionPadding={8} className="z-[130] w-auto p-3 border-border bg-card">
+                                        <SchedulePicker
+                                            date={scheduleDate}
+                                            time={scheduleTime}
+                                            onDate={d => { setScheduleDate(d); setReassignErrors(prev => ({ ...prev, date: undefined })) }}
+                                            onTime={t => { setScheduleTime(t); setReassignErrors(prev => ({ ...prev, time: undefined })); setCalendarOpen(false) }}
+                                        />
+                                    </PopoverContent>
+                                </Popover>
+                                <FieldError msg={reassignErrors.date || reassignErrors.time} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Alasan Ganti Teknisi (Wajib)</label>
+                                <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setReassignErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border ${reassignErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Teknisi sakit, alat tidak lengkap, dll"></textarea>
                                 <FieldError msg={reassignErrors.reason} />
                             </div>
                             <div className="flex gap-3 pt-2">
@@ -660,7 +731,7 @@ export default function PMCommandCenter() {
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Alasan Veto (Wajib)</label>
-                                <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setVetoErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border-2 ${vetoErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Alasan pending tidak valid, segera lanjutkan pekerjaan"></textarea>
+                                <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setVetoErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border ${vetoErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Alasan pending tidak valid, segera lanjutkan pekerjaan"></textarea>
                                 <FieldError msg={vetoErrors.reason} />
                             </div>
                             <div className="flex gap-3 pt-2">

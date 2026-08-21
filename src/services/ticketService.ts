@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase'
-import { uploadTicketPhoto } from '@/services/photoService'
+import { uploadAttachment } from '@/services/photoService'
 
 export function generateTicketCode(): string {
   const now = new Date()
@@ -28,7 +28,7 @@ export async function createTicket(data: CreateTicketPayload) {
     // Foto portal → Storage (bukan data URL) agar kolom DB tidak membengkak (K2).
     const folder = `ticket-photos/guest/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
     try {
-      photos = await Promise.all(data.photos.map((f) => uploadTicketPhoto(f, folder)))
+      photos = await Promise.all(data.photos.map((f) => uploadAttachment(f, folder)))
     } catch {
       return { error: 'Gagal mengunggah foto. Silakan coba lagi.' }
     }
@@ -122,6 +122,17 @@ export async function rejectBackup(ticketId: string): Promise<boolean> {
   return !error
 }
 
+// Teknisi pendukung (role 'teknisi' di ticket_assignments) yang sedang ditugaskan.
+// Dipakai prefill form ganti teknisi; lead ada di tickets.assigned_to.
+export async function getSupportMemberIds(ticketId: string): Promise<string[]> {
+  const { data } = await supabase
+    .from("ticket_assignments")
+    .select("user_id")
+    .eq("ticket_id", ticketId)
+    .eq("role", "teknisi")
+  return (data ?? []).map((r) => r.user_id)
+}
+
 // Isi kategori/akar masalah tiket (RPC terpisah dari transisi status).
 export async function setTicketCatalog(
   ticketId: string,
@@ -193,4 +204,16 @@ export interface PublicTimelineItem {
 export async function getPublicTimeline(code: string): Promise<PublicTimelineItem[]> {
   const { data } = await supabase.rpc("get_public_timeline", { p_code: code })
   return (data ?? []) as PublicTimelineItem[]
+}
+
+export async function uploadBappDocument(ticketId: string, file: File): Promise<string | null> {
+  const ext = file.name.split('.').pop() || 'pdf'
+  const path = `bapp/${ticketId}.${ext}`
+  const { error: upErr } = await supabase.storage.from('ticket-photos').upload(path, file, { upsert: true })
+  if (upErr) return null
+  const { data: urlData } = supabase.storage.from('ticket-photos').getPublicUrl(path)
+  const publicUrl = urlData?.publicUrl
+  if (!publicUrl) return null
+  await supabase.from('tickets').update({ bapp_document_url: publicUrl }).eq('id', ticketId)
+  return publicUrl
 }

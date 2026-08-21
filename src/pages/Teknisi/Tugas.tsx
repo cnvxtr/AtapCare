@@ -8,16 +8,16 @@ import { supabase } from '../../lib/supabase'
 import {
     X, MapPin, Camera, ChevronRight,
     Clock, CheckCircle2, Pause, PauseCircle,
-    ClipboardList, Wrench, Archive, AlertTriangle, UserPlus
+    ClipboardList, Wrench, Archive, AlertTriangle, UserPlus, FileText
 } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import { Combobox } from '../../components/ui/combobox'
-import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard, getAssignmentInfo, isScheduleOvertime, formatJadwal } from '../../components/TicketDrawer'
-import { uploadTicketPhoto } from '../../services/photoService'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime, formatJadwal } from '../../components/TicketDrawer'
+import { uploadAttachment } from '../../services/photoService'
 import { recordGps, requestBackup, setTicketCatalog } from '../../services/ticketService'
 import { problemCategoriesApi, rootCausesApi } from '../../services/master-data'
 
-type TabType = 'detail' | 'timeline' | 'activity'
+type TabType = 'detail' | 'timeline'
 
 const TABS = [
     { key: 'masuk', icon: ClipboardList, label: 'Masuk', color: 'text-black', statuses: ['SCHEDULED', 'EN_ROUTE'] },
@@ -138,11 +138,12 @@ export default function TugasTeknisi() {
 
     const handlePending = async () => {
         if (!pendingReason.trim() || !selectedTicket) return
+        if (pendingPhotos.length === 0) { toast.error('Foto & File Bukti wajib diunggah.'); return }
         setPendingSubmitting(true)
         try {
             let details = `Ditunda: ${pendingReason.trim()}`
             if (pendingPhotos.length) {
-                const paths = await Promise.all(pendingPhotos.map((f) => uploadTicketPhoto(f, selectedTicket.code)))
+                const paths = await Promise.all(pendingPhotos.map((f) => uploadAttachment(f, selectedTicket.code)))
                 details += ` | Foto (${paths.length}):\n${paths.join('\n')}`
             }
             await handleStatusUpdate(selectedTicket.id, 'PENDING', details)
@@ -158,13 +159,12 @@ export default function TugasTeknisi() {
 
     const handleComplete = async () => {
         if (!selectedTicket) return
-        if (photos.length === 0) {
-            toast.error('Minimal 1 foto dokumentasi wajib diunggah.')
-            return
-        }
+        if (!completeNote.trim()) { toast.error('Catatan Hasil wajib diisi.'); return }
+        if (!completeRootCause) { toast.error('Akar Masalah wajib diisi.'); return }
+        if (photos.length === 0) { toast.error('Foto & File Dokumentasi wajib diunggah.'); return }
         setSubmitting(true)
         try {
-            const paths = await Promise.all(photos.map((f) => uploadTicketPhoto(f, selectedTicket.code)))
+            const paths = await Promise.all(photos.map((f) => uploadAttachment(f, selectedTicket.code)))
             const parts = [`Selesai${completeNote ? ': ' + completeNote : ''}`]
             if (serialNumber.trim()) parts.push(`Serial Number: ${serialNumber.trim()}`)
             if (paths.length) parts.push(`Foto (${paths.length}):\n${paths.join('\n')}`)
@@ -209,13 +209,13 @@ export default function TugasTeknisi() {
     }
 
     const renderCard = (ticket: Ticket) => {
-        const isP1 = ticket.priority === 'P1' && ticket.status !== 'CLOSED'
+        const isCritical = ticket.priority === 'Critical' && ticket.status !== 'CLOSED'
         const { jadwal } = getAssignmentInfo(ticket.activities)
         const isOvertime = ticket.status === 'SCHEDULED' && isScheduleOvertime(jadwal)
 
         return (
             <div key={ticket.id}
-                className={`bg-card border-2 rounded-lg p-4 shadow-sm hover:shadow-md transition-all cursor-pointer ${isP1 ? 'border-red-200 hover:border-red-300 pulse-ring' : 'border-border hover:border-border'}`}
+                className={`bg-card border-2 rounded-lg p-4 shadow-sm hover:shadow-md transition-all cursor-pointer ${isCritical ? 'border-red-200 hover:border-red-300 pulse-ring' : 'border-border hover:border-border'}`}
                 onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}
             >
                 <div className="flex items-start justify-between gap-3">
@@ -327,10 +327,12 @@ export default function TugasTeknisi() {
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}
                     code={selectedTicket.code}
+                    ticketId={selectedTicket.id}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
-                    slaTimeLeft={selectedTicket.slaTimeLeft}
+                    frtMinutes={selectedTicket.frtMinutes}
                     createdAt={selectedTicket.createdAt}
+                    bappDocumentUrl={selectedTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={selectedTicket.activities}
@@ -446,8 +448,6 @@ export default function TugasTeknisi() {
                     )}
 
                     {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
-
-                    {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
                 </TicketDrawer>
             )}
 
@@ -465,29 +465,29 @@ export default function TugasTeknisi() {
                             placeholder="Alasan pending (wajib)..."
                             rows={3} className="input resize-none mb-4" />
                         <div className="mb-4">
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto Bukti ({pendingPhotos.length}/5) <span className="text-muted-foreground">(opsional)</span></label>
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto & File Bukti</label>
                             <div className="border border-border rounded-lg p-4 text-center hover:border-foreground transition-colors cursor-pointer"
                                 onClick={() => document.getElementById('pending-foto-upload')?.click()}>
                                 <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                                <p className="text-xs text-muted-foreground">Ketuk untuk upload foto</p>
-                                <p className="text-[10px] text-muted-foreground">Hanya jika butuh bukti visual (ban bocor, akses terhambat, dll.)</p>
-                                <input id="pending-foto-upload" type="file" accept="image/*" capture="environment" multiple
+                                <p className="text-xs text-muted-foreground">Ketuk untuk upload foto atau file</p>
+                                <input id="pending-foto-upload" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" capture="environment" multiple
                                     className="hidden" onChange={e => {
                                         const files = Array.from(e.target.files || [])
-                                        setPendingPhotos(prev => {
-                                            const merged = [...prev, ...files]
-                                            if (merged.length > 5) { toast.error('Maksimal 5 foto.'); return prev }
-                                            const totalSize = merged.reduce((s, f) => s + f.size, 0)
-                                            if (totalSize > 10 * 1024 * 1024) { toast.error('Total ukuran foto maks 10 MB.'); return prev }
-                                            return merged
-                                        })
+                                        setPendingPhotos(prev => [...prev, ...files])
                                     }} />
                             </div>
                             {pendingPhotos.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-2">
                                     {pendingPhotos.map((f, i) => (
                                         <div key={i} className="relative">
-                                            <span className="text-[10px] bg-muted px-2 py-1 rounded border border-border">{f.name.slice(0, 15)}...</span>
+                                            {f.type.startsWith('image/') ? (
+                                                <img src={URL.createObjectURL(f)} alt={f.name} className="w-16 h-16 object-cover rounded border border-border" />
+                                            ) : (
+                                                <div className="w-16 h-16 flex flex-col items-center justify-center rounded border border-border bg-muted">
+                                                    <FileText className="w-5 h-5 text-muted-foreground mb-0.5" />
+                                                    <span className="text-[8px] font-mono text-muted-foreground truncate max-w-[50px]">{f.name.split('.').pop()?.toUpperCase()}</span>
+                                                </div>
+                                            )}
                                             <button onClick={() => setPendingPhotos(pendingPhotos.filter((_, j) => j !== i))}
                                                 className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center">✕</button>
                                         </div>
@@ -499,7 +499,7 @@ export default function TugasTeknisi() {
                             <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]) }}
                                 disabled={pendingSubmitting}
                                 className="flex-1 py-2 bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
-                            <button onClick={handlePending} disabled={!pendingReason.trim() || pendingSubmitting}
+                            <button onClick={handlePending} disabled={!pendingReason.trim() || pendingPhotos.length === 0 || pendingSubmitting}
                                 className="flex-1 py-2 bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{pendingSubmitting ? 'Memproses...' : 'Simpan'}</button>
                         </div>
                     </div>
@@ -528,7 +528,7 @@ export default function TugasTeknisi() {
                                     className="input" placeholder="Serial number unit baru..." />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5">Akar Masalah (opsional)</label>
+                                <label className="block text-xs font-medium mb-1.5">Akar Masalah</label>
                                 <Combobox
                                     options={rootOptions}
                                     value={completeRootCause}
@@ -541,28 +541,29 @@ export default function TugasTeknisi() {
                                     placeholder="Catatan akar masalah (opsional)" />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5">Foto Dokumentasi ({photos.length}/5) <span className="text-red-600">(min. 1)</span></label>
+                                <label className="block text-xs font-medium mb-1.5">Foto & File Dokumentasi</label>
                                 <div className="border border-border rounded-lg p-4 text-center hover:border-foreground transition-colors cursor-pointer"
                                     onClick={() => document.getElementById('foto-upload')?.click()}>
                                     <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                                    <p className="text-xs text-muted-foreground">Ketuk untuk upload foto</p>
-                                    <input id="foto-upload" type="file" accept="image/*" capture="environment" multiple
+                                    <p className="text-xs text-muted-foreground">Ketuk untuk upload foto atau file</p>
+                                    <input id="foto-upload" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" capture="environment" multiple
                                         className="hidden" onChange={e => {
                                             const files = Array.from(e.target.files || [])
-                                            setPhotos(prev => {
-                                                const merged = [...prev, ...files]
-                                                if (merged.length > 5) { toast.error('Maksimal 5 foto.'); return prev }
-                                                const totalSize = merged.reduce((s, f) => s + f.size, 0)
-                                                if (totalSize > 10 * 1024 * 1024) { toast.error('Total ukuran foto maks 10 MB.'); return prev }
-                                                return merged
-                                            })
+                                            setPhotos(prev => [...prev, ...files])
                                         }} />
                                 </div>
                                 {photos.length > 0 && (
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         {photos.map((f, i) => (
                                             <div key={i} className="relative">
-                                                <span className="text-[10px] bg-muted px-2 py-1 rounded border border-border">{f.name.slice(0, 15)}...</span>
+                                                {f.type.startsWith('image/') ? (
+                                                    <img src={URL.createObjectURL(f)} alt={f.name} className="w-16 h-16 object-cover rounded border border-border" />
+                                                ) : (
+                                                    <div className="w-16 h-16 flex flex-col items-center justify-center rounded border border-border bg-muted">
+                                                        <FileText className="w-5 h-5 text-muted-foreground mb-0.5" />
+                                                        <span className="text-[8px] font-mono text-muted-foreground truncate max-w-[50px]">{f.name.split('.').pop()?.toUpperCase()}</span>
+                                                    </div>
+                                                )}
                                                 <button onClick={() => setPhotos(photos.filter((_, j) => j !== i))}
                                                     className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center">✕</button>
                                             </div>
@@ -575,7 +576,7 @@ export default function TugasTeknisi() {
                             <button onClick={() => { setShowCompleteModal(false); setCompleteNote(''); setSerialNumber(''); setCompleteRootCause(''); setCompleteRootNote(''); setPhotos([]) }}
                                 disabled={submitting}
                                 className="flex-1 py-2 bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
-                            <button onClick={handleComplete} disabled={submitting || photos.length === 0}
+                            <button onClick={handleComplete} disabled={submitting || !completeNote.trim() || !completeRootCause || photos.length === 0}
                                 className="flex-1 py-2 bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{submitting ? 'Memproses...' : 'Ya, Selesaikan'}</button>
                         </div>
                     </div>

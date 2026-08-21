@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { getCustomers, getSites, getUnits } from "./master-data";
 
 export interface AdminActivityRow {
@@ -91,17 +91,36 @@ export async function getAdminSystemData(): Promise<AdminSystemData> {
   return { totalUsers, totalCustomers: customers.length, totalUnits: units.length, unitDist };
 }
 
-export async function getAdminActivities(limit = 10): Promise<AdminActivityRow[]> {
-  const { data } = await supabase
+export async function getAdminActivities(limit = 10, userName?: string): Promise<AdminActivityRow[]> {
+  let query = supabase
     .from("audit_logs")
     .select("created_at, actor_name, action, entity_type, metadata")
     .order("created_at", { ascending: false })
     .limit(limit);
+  if (userName) query = query.eq("actor_name", userName);
+  const { data } = await query;
 
   return (data || []).map((r) => ({
     waktu: fmtWaktu(r.created_at),
     user: r.actor_name || "—",
     aktivitas: labelActivity(r.action, r.entity_type, (r.metadata as Record<string, unknown>) || null),
+  }));
+}
+
+// Feed aktivitas tiket untuk semua role. Filter per user.
+export async function getTicketActivities(limit = 10, userName?: string): Promise<AdminActivityRow[]> {
+  let query = supabase
+    .from("activities")
+    .select("user_name, action, created_at")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (userName) query = query.eq("user_name", userName);
+  const { data } = await query;
+
+  return (data || []).map((r) => ({
+    waktu: fmtWaktu(r.created_at),
+    user: r.user_name || "—",
+    aktivitas: r.action,
   }));
 }
 

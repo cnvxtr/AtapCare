@@ -137,7 +137,7 @@ export async function exportStyledXlsx({
   ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: lastCol } };
 
   // Data
-  const priorityFills: Record<string, string> = { P1: "DC2626", P2: "F59E0B", P3: "3B82F6" };
+  const priorityFills: Record<string, string> = { Critical: "DC2626", Medium: "F59E0B", Low: "3B82F6" };
   rows.forEach((r, idx) => {
     const row = ws.getRow(idx + 5);
     row.height = 18;

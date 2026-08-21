@@ -16,6 +16,7 @@ export function Combobox({
   placeholder = "Pilih…",
   disabled = false,
   emptyText = "Tidak ada hasil",
+  minChars = 0,
 }: {
   options: ComboboxOption[];
   value: string;
@@ -23,6 +24,7 @@ export function Combobox({
   placeholder?: string;
   disabled?: boolean;
   emptyText?: string;
+  minChars?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -89,7 +91,7 @@ export function Combobox({
           )}
         />
       </div>
-      {open && !disabled && (
+      {open && !disabled && query.length >= minChars && (
         <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-xl">
           {filtered.length === 0 ? (
             <div className="px-3 py-2 text-xs text-muted-foreground">{emptyText}</div>

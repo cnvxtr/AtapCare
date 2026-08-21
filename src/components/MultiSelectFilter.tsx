@@ -39,7 +39,7 @@ export default function MultiSelectFilter({
     const row = (key: string, text: string, checked: boolean) => (
         <label
             key={key}
-            className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors ${checked ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}
+            className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors mb-px ${checked ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}
         >
             <input type="checkbox" checked={checked} onChange={() => onToggle(key)} className="sr-only" />
             <span className="truncate">{text}</span>

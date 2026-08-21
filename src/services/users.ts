@@ -1,10 +1,11 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 
 export const ROLE_LABELS: Record<string, string> = {
-  admin: "Admin",
+  admin: "Administrator",
   helpdesk: "Helpdesk",
   pm: "Project Manager",
   teknisi: "Teknisi Lapangan",
+  executive: "Executive",
 };
 
 export async function getTechnicians(): Promise<Array<{ id: string; name: string }>> {

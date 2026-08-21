@@ -1,4 +1,4 @@
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/lib/supabase";
 import { logActivity } from "./master-data";
 
 export interface SlaPreset {
@@ -15,7 +15,7 @@ export interface HolidayRow {
   kind: string; // 'holiday' (nasional) | 'leave' (cuti bersama)
 }
 
-export const PRIORITY_DEFAULTS: Record<string, number> = { P1: 4, P2: 24, P3: 72 };
+export const PRIORITY_DEFAULTS: Record<string, number> = { Critical: 4, Medium: 24, Low: 72 };
 
 interface SlaBatchRow {
   ticket_id: string;

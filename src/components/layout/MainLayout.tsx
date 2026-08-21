@@ -19,20 +19,14 @@ import {
   type NotificationRow
 } from '../../services/notifications'
 import { approveBackup, rejectBackup } from '../../services/ticketService'
-import { getAdminActivities, type AdminActivityRow } from '../../services/dashboard'
+import { getAdminActivities, getTicketActivities, type AdminActivityRow } from '../../services/dashboard'
 import { getStoredTheme, setTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
 import ErrorBoundary from '../ErrorBoundary'
-
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Administrator',
-  helpdesk: 'Helpdesk',
-  pm: 'Project Manager',
-  teknisi: 'Teknisi Lapangan',
-}
+import { ROLE_LABELS } from '../../services/users'
 
 const roleHome = (role?: string) =>
-  role === 'admin' ? '/admin' : role === 'teknisi' ? '/tugas' : '/dashboard'
+  role === 'admin' ? '/admin' : role === 'teknisi' ? '/tugas' : role === 'customer' ? '/customer' : role === 'executive' ? '/executive' : '/dashboard'
 
 const menuItems = (role?: string) =>
   role === 'teknisi'
@@ -48,8 +42,18 @@ const menuItems = (role?: string) =>
         { icon: Users, label: 'Manajemen Pengguna', path: '/admin/users' },
         { icon: Building2, label: 'Master Data', path: '/admin/master-data' },
         { icon: FileBarChart2, label: 'Laporan', path: '/admin/reports' },
-        { icon: Timer, label: 'Konfigurasi SLA', path: '/admin/sla' },
       ]
+    : role === 'customer'
+      ? [
+        { icon: LayoutDashboard, label: 'Dashboard', path: '/customer' },
+        { icon: FileBarChart2, label: 'Lapor Masalah', path: '/customer/report' },
+      ]
+    : role === 'executive'
+      ? [
+          { icon: LayoutDashboard, label: 'Dashboard', path: '/executive' },
+          { icon: Inbox, label: 'Tiket', path: '/executive/inbox' },
+          { icon: FileBarChart2, label: 'Laporan', path: '/executive/reports' },
+        ]
       : [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
         { icon: Inbox, label: 'Tiket', path: '/inbox' },
@@ -105,6 +109,8 @@ export default function MainLayout() {
   const roleLabel = user?.role === 'teknisi' ? 'Teknisi'
     : user?.role === 'pm' ? 'Project Manager'
     : user?.role === 'admin' ? 'Administrator'
+    : user?.role === 'customer' ? 'Pelanggan'
+    : user?.role === 'executive' ? 'Executive'
     : 'Helpdesk'
 
   const pathname = location.pathname
@@ -124,9 +130,9 @@ export default function MainLayout() {
 
   const openActivities = () => {
     setShowActivities(true)
-    if (user?.role === 'admin') {
-      getAdminActivities(10).then(setActivities).catch(() => setActivities([]))
-    }
+    const name = user?.full_name
+    const loader = user?.role === 'admin' ? getAdminActivities(10, name) : getTicketActivities(10, name)
+    loader.then(setActivities).catch(() => setActivities([]))
   }
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
@@ -196,7 +202,7 @@ export default function MainLayout() {
         <TooltipProvider>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           <div className={`px-2 pb-2 pt-1 text-[10px] uppercase tracking-widest text-muted-foreground ${collapsed ? 'hidden' : ''}`}>
-            {user?.role === 'teknisi' ? 'Tugas' : user?.role === 'admin' ? 'Administrasi' : 'Workspace'}
+            {user?.role === 'teknisi' ? 'Tugas' : user?.role === 'admin' ? 'Administrasi' : user?.role === 'customer' ? 'Layanan' : user?.role === 'executive' ? 'Executive' : 'Workspace'}
           </div>
           {nav.map((item) => {
             const active = pathname === item.path
@@ -276,15 +282,11 @@ export default function MainLayout() {
                     <div className="border-t border-border" />
                   </>
                 )}
-                {user?.role === 'admin' && (
-                  <>
-                    <div className="border-t border-border" />
+                <div className="border-t border-border" />
                     <button onClick={() => { setShowDropdown(false); openActivities() }} className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-foreground hover:text-background transition-colors text-left">
                       <span className="font-medium">Aktivitas Terbaru</span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </button>
-                  </>
-                )}
                 <div className="border-t border-border" />
                 <button onClick={() => { setShowDropdown(false); setShowLogoutConfirm(true) }} className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500 hover:bg-red-100 hover:text-red-500 transition-colors text-left font-semibold">
                   <LogOut className="h-4 w-4" /> Keluar
@@ -404,7 +406,7 @@ export default function MainLayout() {
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="max-h-96 overflow-y-auto scrollbar-transparent divide-y divide-border">
+            <div className="max-h-96 overflow-y-auto  divide-y divide-border">
               {activities.length === 0 ? (
                 <p className="px-5 py-8 text-center text-sm text-muted-foreground">Belum ada aktivitas</p>
               ) : (

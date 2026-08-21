@@ -38,7 +38,7 @@ export function TroubleshootCards() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Kendala Anda tidak ada di pilihan atas?{" "}
-        <Link to="/report" className="text-foreground font-medium underline underline-offset-2 hover:no-underline">
+        <Link to="/login" className="text-foreground font-medium underline underline-offset-2 hover:no-underline">
           Langsung Buat Laporan Manual Tanpa Panduan →
         </Link>
       </p>

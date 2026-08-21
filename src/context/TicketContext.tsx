@@ -4,11 +4,10 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
 import { STATUS_LABELS } from '../components/Badge'
 import { generateTicketCode } from '../services/ticketService'
-import { fetchSlaRemaining } from '../services/sla'
-import { uploadTicketPhoto } from '../services/photoService'
+import { uploadAttachment } from '../services/photoService'
 
 export type TicketStatus = 'NEW' | 'OPEN' | 'UNASSIGNED' | 'SCHEDULED' | 'EN_ROUTE' | 'WORKING' | 'PENDING' | 'RESOLVED' | 'CLOSED' | 'VOID' | 'DUPLICATE' | 'REJECTED'
-export type Priority = 'P1' | 'P2' | 'P3'
+export type Priority = 'Critical' | 'Medium' | 'Low'
 
 export interface TicketActivity {
     id: string
@@ -28,7 +27,7 @@ export interface Ticket {
     assignedTo?: string
     status: TicketStatus
     priority?: Priority
-    slaTimeLeft: number | null
+    frtMinutes: number | null
     createdAt: string
     closedAt?: string
     photoUrl?: string
@@ -42,6 +41,9 @@ export interface Ticket {
     rootCauseNote?: string | null
     duplicateOf?: string | null
     updatedAt?: string
+    bappDocumentUrl?: string | null
+    rating?: number | null
+    review?: string | null
     activities: TicketActivity[]
 }
 
@@ -68,7 +70,12 @@ interface SupabaseTicketRow {
     root_cause_note?: string | null
     duplicate_of?: string | null
     created_by?: string
+    created_by_user_id?: string | null
     updated_at?: string
+    frt_minutes?: number | null
+    bapp_document_url?: string | null
+    rating?: number | null
+    review?: string | null
     activities?: SupabaseActivityRow[]
 }
 
@@ -80,12 +87,7 @@ interface SupabaseActivityRow {
     details?: string
 }
 
-const FINAL_STATUSES = ['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'] as const
-
-function mapTicketRow(t: SupabaseTicketRow, slaRemaining: Map<string, number>): Ticket {
-    // Tiket final tidak menampilkan countdown SLA → null (belum mulai). Sama seperti
-    // tiket yang SLA-nya belum pernah berjalan (BR-28D: NEW/OPEN/UNASSIGNED/SCHEDULED/EN_ROUTE).
-    const final = FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number])
+function mapTicketRow(t: SupabaseTicketRow): Ticket {
     return {
         id: t.id,
         code: t.code,
@@ -96,7 +98,7 @@ function mapTicketRow(t: SupabaseTicketRow, slaRemaining: Map<string, number>): 
         assignedTo: t.assigned_to || '-',
         status: t.status,
         priority: t.priority,
-        slaTimeLeft: final ? null : (slaRemaining.get(t.id) ?? null),
+        frtMinutes: t.frt_minutes ?? null,
         createdAt: t.created_at,
         closedAt: t.closed_at,
         photoUrl: t.photo_url,
@@ -110,6 +112,9 @@ function mapTicketRow(t: SupabaseTicketRow, slaRemaining: Map<string, number>): 
         rootCauseNote: t.root_cause_note,
         duplicateOf: t.duplicate_of ?? null,
         updatedAt: t.updated_at,
+        bappDocumentUrl: t.bapp_document_url ?? null,
+        rating: t.rating ?? null,
+        review: t.review ?? null,
         activities: (t.activities || [])
             .slice()
             .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
@@ -165,9 +170,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error fetching tickets:', error)
         } else {
             const rows = (data || []) as SupabaseTicketRow[]
-            // Sisa SLA dihitung server-side (compute_sla_batch) sekali per fetch.
-            const slaRemaining = await fetchSlaRemaining(rows.map((r) => r.id))
-            setTickets(rows.map((r) => mapTicketRow(r, slaRemaining)))
+            setTickets(rows.map((r) => mapTicketRow(r)))
         }
         setLoading(false)
     }, [])
@@ -213,7 +216,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
         if (data.photos?.length) {
             try {
-                const paths = await Promise.all(data.photos.map((f) => uploadTicketPhoto(f, code)))
+                const paths = await Promise.all(data.photos.map((f) => uploadAttachment(f, code)))
                 const photoBlock = `Foto keluhan (${paths.length}):\n${paths.join('\n')}`
                 details = details ? `${details}\n${photoBlock}` : photoBlock
             } catch {
@@ -243,8 +246,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             return null
         } else {
             await fetchTickets()
-            const slaRemaining = await fetchSlaRemaining([newTicket.id])
-            return mapTicketRow(newTicket as SupabaseTicketRow, slaRemaining)
+            return mapTicketRow(newTicket as SupabaseTicketRow)
         }
     }
 
@@ -321,7 +323,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (loading) {
-        return <div className="flex h-screen items-center justify-center bg-muted">Memuat data tiket...</div>
+        return <div className="flex h-screen items-center justify-center bg-muted">Memuat sistem...</div>
     }
 
     return (

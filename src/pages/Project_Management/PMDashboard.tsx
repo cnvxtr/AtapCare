@@ -5,9 +5,8 @@ import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, Inbox, ArrowUpRight, Wrench, Pause, Ban, X } from 'lucide-react'
 import { Badge } from '../../components/Badge'
-import SlaBadge from '../../components/SlaBadge'
 import { FINAL_STATUSES } from '../../lib/status'
-import TicketDrawer, { TicketTimeline, TicketDescription, TicketActivityLog, AssignmentCard } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard } from '../../components/TicketDrawer'
 import FieldError from '../../components/FieldError'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 import TrendChart from '../../components/TrendChart'
@@ -17,7 +16,7 @@ export default function PMDashboard() {
     const navigate = useNavigate()
     const { tickets, getTicketCount, updateTicketStatus } = useTickets()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
-    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline' | 'activity'>('detail')
+    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
     const [showVetoModal, setShowVetoModal] = useState(false)
     const [vetoReason, setVetoReason] = useState('')
     const [vetoError, setVetoError] = useState('')
@@ -65,9 +64,7 @@ export default function PMDashboard() {
     const fieldCount = tickets.filter(t => t.status === 'WORKING').length
     const pendingAlarmCount = tickets.filter(t => t.status === 'PENDING' && getPendingAlarm(t.updatedAt)).length
 
-    const slaCritical = tickets.filter(t => !FINAL_STATUSES.includes(t.status as (typeof FINAL_STATUSES)[number]) && t.slaTimeLeft != null && t.slaTimeLeft <= 4)
-    const slaOverdue = slaCritical.filter(t => t.slaTimeLeft != null && t.slaTimeLeft <= 0).length
-    const slaWarning = slaCritical.length - slaOverdue
+    const avgFrt = tickets.filter(t => t.frtMinutes != null).reduce((s, t) => s + (t.frtMinutes ?? 0), 0) / (tickets.filter(t => t.frtMinutes != null).length || 1)
 
     const doVeto = () => {
         if (!vetoReason.trim()) { setVetoError('Mohon isi alasan veto'); return }
@@ -116,16 +113,15 @@ export default function PMDashboard() {
                         <div className={`p-2 border rounded-lg ${pendingAlarmCount > 0 ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-muted border-border text-foreground'}`}><Pause className="w-5 h-5" /></div>
                     </div>
                 </div>
-                <div className="bg-red-600 border border-red-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-red-400">
+                <div className="bg-blue-600 border border-blue-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-blue-400">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-[10px] font-black text-white uppercase tracking-wider flex items-center gap-1">
-                                <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span> SLA Kritis
+                            <p className="text-[10px] font-black text-white uppercase tracking-wider">
+                                Rata-rata FRT
                             </p>
                             <h3 className="text-4xl font-display font-black text-white mt-2 tracking-tight">
-                                <AnimatedNumber value={slaCritical.length} />
+                                {Math.round(avgFrt)}m
                             </h3>
-                            <p className="text-[10px] font-mono text-white/80 mt-1">{slaOverdue} Overdue · {slaWarning} Warning</p>
                         </div>
                         <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
                     </div>
@@ -169,19 +165,20 @@ export default function PMDashboard() {
             </div>
 
             {/* Tabel Operasional (Tier 2) */}
-            <div className="rounded-2xl border border-border bg-card overflow-hidden">
+            <div className="rounded-2xl border border-border bg-card">
                 <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <h3 className="font-display font-bold text-foreground">10 Tiket Aktif Terbaru</h3>
                     <button onClick={() => navigate('/command-center')} className="text-xs font-medium hover:underline inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition">
                         Buka Command Center <ArrowUpRight className="w-3 h-3" />
                     </button>
                 </div>
-                <div className="min-w-0">
+                <div className="overflow-x-auto">
+                    <div className="min-w-[720px]">
                     <table className="w-full table-fixed text-left">
                         <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                             <tr>
                                 <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
-                                <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">SLA</th>
+                                <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">FRT</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -206,13 +203,14 @@ export default function PMDashboard() {
                                             )}
                                         </td>
                                         <td className="p-4">
-                                            <SlaBadge remaining={ticket.slaTimeLeft} />
+                                            {ticket.frtMinutes != null && <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">{ticket.frtMinutes}m</span>}
                                         </td>
                                     </tr>
                                 ))
                             )}
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -222,10 +220,12 @@ export default function PMDashboard() {
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}
                     code={selectedTicket.code}
+                    ticketId={selectedTicket.id}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
-                    slaTimeLeft={selectedTicket.slaTimeLeft}
+                    frtMinutes={selectedTicket.frtMinutes}
                     createdAt={selectedTicket.createdAt}
+                    bappDocumentUrl={selectedTicket.bappDocumentUrl}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
                     activities={selectedTicket.activities}
@@ -268,7 +268,6 @@ export default function PMDashboard() {
                         </div>
                     )}
                     {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
-                    {activeDrawerTab === 'activity' && <TicketActivityLog items={selectedTicket.activities} />}
                 </TicketDrawer>
             )}
 
@@ -284,7 +283,7 @@ export default function PMDashboard() {
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Alasan Veto (Wajib)</label>
-                                <textarea value={vetoReason} onChange={e => { setVetoReason(e.target.value); setVetoError('') }} rows={3} className={`w-full mt-1 px-3 py-2 border-2 ${vetoError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Alasan pending tidak valid, segera lanjutkan pekerjaan"></textarea>
+                                <textarea value={vetoReason} onChange={e => { setVetoReason(e.target.value); setVetoError('') }} rows={3} className={`w-full mt-1 px-3 py-2 border ${vetoError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Alasan pending tidak valid, segera lanjutkan pekerjaan"></textarea>
                                 <FieldError msg={vetoError} />
                             </div>
                             <div className="flex gap-3 pt-2">

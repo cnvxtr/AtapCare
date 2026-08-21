@@ -20,7 +20,7 @@ STABLE
 SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at), '[]'::json)
+  SELECT COALESCE(json_agg(row_to_json(t) ORDER BY t.created_at DESC), '[]'::json)
   FROM (
     SELECT CASE WHEN a.action LIKE 'Tiket ditugaskan ke%'
                 THEN 'Tiket ditugaskan ke teknisi'

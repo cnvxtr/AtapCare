@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
+import SiteFooter from "@/components/SiteFooter";
 
 export default function Terms() {
   return (
@@ -143,8 +144,8 @@ export default function Terms() {
             <SubSection title="9.2 Batasan Kerugian">
               <p>Sejauh diizinkan oleh hukum yang berlaku, PT Atap Teknologi Indonesia tidak bertanggung jawab atas: kerugian tidak langsung, insidental, khusus, atau konsekuensial yang timbul dari penggunaan layanan; keterlambatan penanganan keluhan yang disebabkan oleh force majeure; kerugian akibat informasi yang tidak akurat yang diberikan oleh pelanggan dalam formulir pelaporan.</p>
             </SubSection>
-            <SubSection title="9.3 Service Level Agreement (SLA)">
-              <p>Target SLA yang ditampilkan dalam sistem (P1: 4 jam, P2: 24 jam, P3: 72 jam) merupakan target operasional internal dan bukan jaminan kontraktual, kecuali diatur secara khusus dalam perjanjian tertulis dengan perusahaan klien.</p>
+            <SubSection title="9.3 First Response Time (FRT)">
+              <p>FRT (First Response Time) yang ditampilkan dalam sistem merupakan pengukuran waktu respons internal dari saat tiket dibuka hingga ditangani oleh tim Helpdesk. FRT dihitung hanya pada jam kerja (Senin–Jumat, 08.00–17.00 WIB) dan bukan jaminan kontraktual, kecuali diatur secara khusus dalam perjanjian tertulis dengan perusahaan klien.</p>
             </SubSection>
           </Section>
 
@@ -199,21 +200,5 @@ function SubSection({ title, children }: { title: string; children: React.ReactN
       <h3 className="text-sm font-display font-semibold mb-2">{title}</h3>
       <div className="space-y-3 text-muted-foreground">{children}</div>
     </div>
-  );
-}
-
-function SiteFooter() {
-  return (
-    <footer className="border-t border-border">
-      <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-muted-foreground">
-        <p>&copy; 2026 PT Atap Teknologi Indonesia. Semua hak dilindungi.</p>
-        <span className="hidden sm:inline">·</span>
-        <div className="flex items-center gap-2">
-          <Link to="/privacy" className="hover:text-foreground transition underline underline-offset-2">Privacy Policy</Link>
-          <span>|</span>
-          <Link to="/terms" className="hover:text-foreground transition underline underline-offset-2">Terms of Service</Link>
-        </div>
-      </div>
-    </footer>
   );
 }

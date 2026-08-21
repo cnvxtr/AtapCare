@@ -1,13 +1,16 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { ChevronLeft, ChevronRight, Image, MapPin, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Download, FileText, Image, MapPin, X, Upload } from 'lucide-react'
 import { Badge } from './Badge'
-import SlaBadge from './SlaBadge'
 import { resolvePhotos } from '../services/photoService'
-import { getTicketGps, type GpsPoint } from '../services/ticketService'
+import { getTicketGps, type GpsPoint, uploadBappDocument } from '../services/ticketService'
+import { reverseGeocode } from '../lib/geocode'
 import { OrderTracking } from './ui/order-tracking'
+import { toast } from 'sonner'
 
-export type DrawerTab = 'detail' | 'timeline' | 'activity'
+const GpsContext = createContext<{ locationNames?: Record<string, string>; gps?: GpsPoint[] }>({})
+
+export type DrawerTab = 'detail' | 'timeline'
 
 const TABS: { id: DrawerTab; label: string }[] = [
     { id: 'detail', label: 'Detail' },
@@ -17,10 +20,12 @@ const TABS: { id: DrawerTab; label: string }[] = [
 interface TicketDrawerProps {
     onClose: () => void
     code: string
+    ticketId?: string
     status: string
     priority?: string
-    slaTimeLeft?: number | null
+    frtMinutes?: number | null
     createdAt: string
+    bappDocumentUrl?: string | null
     activeTab: DrawerTab
     onTabChange: (t: DrawerTab) => void
     activities?: { timestamp: string; user: string; action: string; details?: string }[]
@@ -29,8 +34,11 @@ interface TicketDrawerProps {
     duplicateCode?: string
 }
 
-export default function TicketDrawer({ onClose, code, status, priority, slaTimeLeft, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
+export default function TicketDrawer({ onClose, code, ticketId, status, priority, frtMinutes, createdAt, bappDocumentUrl, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
     const [gps, setGps] = useState<GpsPoint[]>([])
+    const [locationNames, setLocationNames] = useState<Record<string, string>>({})
+    const [bappUploading, setBappUploading] = useState(false)
+    const [localBappUrl, setLocalBappUrl] = useState<string | null>(bappDocumentUrl ?? null)
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
         ? [...(activities ?? [])].reverse().find(a => a.action === 'Tugas diselesaikan')?.timestamp
         : undefined
@@ -43,6 +51,18 @@ export default function TicketDrawer({ onClose, code, status, priority, slaTimeL
             .catch(() => {})
         return () => { mounted = false }
     }, [activeTab, code])
+
+    useEffect(() => {
+        if (!gps.length) return
+        let mounted = true
+        ;(async () => {
+            for (const p of gps) {
+                const name = await reverseGeocode(p.lat, p.lon)
+                if (mounted) setLocationNames(prev => ({ ...prev, [p.phase]: name }))
+            }
+        })()
+        return () => { mounted = false }
+    }, [gps])
     return createPortal(
         <div className="fixed inset-0 bg-black/80 z-[100] flex justify-end animate-[fade-in_0.2s_ease]" onClick={onClose}>
             <div className="w-full max-w-2xl h-full bg-card/95 backdrop-blur-xl border-l border-border shadow-2xl flex flex-col drawer-enter" onClick={(e) => e.stopPropagation()}>
@@ -57,7 +77,9 @@ export default function TicketDrawer({ onClose, code, status, priority, slaTimeL
                                 {duplicateCode && (
                                     <span className="px-1.5 py-0.5 rounded-[5px] bg-amber-100 text-amber-700 text-[10px] font-bold whitespace-nowrap">Duplikat dari {duplicateCode}</span>
                                 )}
-                                <SlaBadge remaining={slaTimeLeft ?? null} size="md" />
+                                {frtMinutes != null && (
+                                    <span className="px-1.5 py-0.5 rounded-[5px] bg-blue-50 text-blue-700 text-[10px] font-bold whitespace-nowrap border border-blue-200">FRT: {frtMinutes}m</span>
+                                )}
                             </div>
                             <p className="mt-1 font-mono text-[11px] text-muted-foreground">
                                 {resolvedAt ? `${formatWIB(createdAt)} - ${formatWIB(resolvedAt)}` : formatWIB(createdAt)}
@@ -90,18 +112,53 @@ export default function TicketDrawer({ onClose, code, status, priority, slaTimeL
                                 const p = gps.find((g) => g.phase === phase)
                                 if (!p) return null
                                 return (
-                                    <div key={phase} className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
-                                        <MapPin className="h-3.5 w-3.5 shrink-0" />
-                                        <span className="uppercase">{phase === 'start' ? 'Mulai' : 'Selesai'}:</span>
-                                        <span className="text-foreground">{p.lat.toFixed(5)}, {p.lon.toFixed(5)}</span>
-                                        <span>· {formatWIB(p.captured_at)}</span>
+                                    <div key={phase} className="flex items-start gap-2 text-xs text-muted-foreground">
+                                        <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                                        <div>
+                                            <span className="uppercase font-mono">{phase === 'start' ? 'Mulai' : 'Selesai'}:</span>
+                                            <span className="text-foreground ml-1">{locationNames[phase] ?? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`}</span>
+                                            <span className="ml-1">· {formatWIB(p.captured_at)}</span>
+                                        </div>
                                     </div>
                                 )
                             })}
                         </div>
                     )}
-                    {children}
+                    <GpsContext.Provider value={{ locationNames, gps }}>
+                        {children}
+                    </GpsContext.Provider>
                     {activeTab === 'detail' && activities && <PhotoGallery items={activities} status={status} />}
+                    {activeTab === 'detail' && (
+                        <div className="mt-4 rounded-[5px] border border-border bg-muted/40 p-3">
+                            <div className="flex items-center justify-between mb-2">
+                                <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+                                    <FileText className="h-3.5 w-3.5" /> Dokumen BAPP
+                                </div>
+                                {localBappUrl ? (
+                                    <div className="flex items-center gap-2">
+                                        <a href={localBappUrl} target="_blank" rel="noopener" className="text-[10px] text-blue-600 hover:underline font-mono">Lihat BAPP</a>
+                                        <button onClick={() => downloadFromUrl(localBappUrl!, 'BAPP.pdf')} className="text-[10px] text-muted-foreground hover:text-foreground transition" aria-label="Download BAPP"><Download className="h-3 w-3" /></button>
+                                    </div>
+                                ) : ticketId && ['RESOLVED', 'CLOSED'].includes(status) ? (
+                                    <label className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground cursor-pointer transition">
+                                        <Upload className="h-3 w-3" />
+                                        {bappUploading ? 'Mengunggah...' : 'Upload BAPP'}
+                                        <input type="file" accept="application/pdf,image/*" className="hidden" disabled={bappUploading}
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0]
+                                                if (!file || !ticketId) return
+                                                setBappUploading(true)
+                                                const url = await uploadBappDocument(ticketId, file)
+                                                setBappUploading(false)
+                                                if (url) { setLocalBappUrl(url); toast.success('BAPP berhasil diunggah') }
+                                                else toast.error('Gagal mengunggah BAPP')
+                                            }} />
+                                    </label>
+                                ) : null}
+                            </div>
+                            {!localBappUrl && <p className="text-[10px] text-muted-foreground/60">Belum ada dokumen BAPP</p>}
+                        </div>
+                    )}
                 </div>
 
                 {footer && <div className="sticky bottom-0 z-10 bg-card/80 backdrop-blur-xl border-t border-border p-4 space-y-2.5">{footer}</div>}
@@ -111,11 +168,12 @@ export default function TicketDrawer({ onClose, code, status, priority, slaTimeL
     )
 }
 
-function PhotoLightbox({ images, index, onClose }: { images: string[]; index: number; onClose: () => void }) {
+function PhotoLightbox({ images, index, onClose, titles }: { images: string[]; index: number; onClose: () => void; titles?: string[] }) {
     const [current, setCurrent] = useState(index)
     const hasPrev = current > 0
     const hasNext = current < images.length - 1
     const multiple = images.length > 1
+    const currentTitle = titles?.[current]
 
     useEffect(() => {
         const onKey = (e: KeyboardEvent) => {
@@ -129,23 +187,30 @@ function PhotoLightbox({ images, index, onClose }: { images: string[]; index: nu
 
     return createPortal(
         <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4 animate-[fade-in_0.2s_ease]" onClick={onClose}>
-            <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-[5px] bg-foreground text-background hover:opacity-80 transition z-10" aria-label="Tutup">
-                <X className="w-5 h-5" />
+            <button onClick={(e) => { e.stopPropagation(); downloadFromUrl(images[current], currentTitle || `foto-${current + 1}.jpg`) }} className="absolute top-4 right-4 p-2 rounded-[5px] bg-foreground text-background hover:opacity-80 transition z-10" aria-label="Download">
+                <Download className="w-5 h-5" />
             </button>
             {multiple && hasPrev && (
-                <button onClick={(e) => { e.stopPropagation(); setCurrent(i => i - 1) }} className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-foreground/80 text-primary-foreground hover:bg-foreground transition z-10" aria-label="Foto sebelumnya">
+                <button onClick={(e) => { e.stopPropagation(); setCurrent(i => i - 1) }} className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 p-2.5 rounded-[5px] bg-foreground/80 text-primary-foreground hover:bg-foreground transition z-10" aria-label="Foto sebelumnya">
                     <ChevronLeft className="w-5 h-5" />
                 </button>
             )}
             {multiple && hasNext && (
-                <button onClick={(e) => { e.stopPropagation(); setCurrent(i => i + 1) }} className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-full bg-foreground/80 text-primary-foreground hover:bg-foreground transition z-10" aria-label="Foto berikutnya">
+                <button onClick={(e) => { e.stopPropagation(); setCurrent(i => i + 1) }} className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 p-2.5 rounded-[5px] bg-foreground/80 text-primary-foreground hover:bg-foreground transition z-10" aria-label="Foto berikutnya">
                     <ChevronRight className="w-5 h-5" />
                 </button>
             )}
-            <img src={images[current]} alt={`Preview foto ${current + 1}`} className="max-w-full max-h-[85vh] rounded-lg shadow-2xl border border-border select-none" onClick={(e) => e.stopPropagation()} />
-            {multiple && (
-                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-foreground/80 text-primary-foreground font-mono text-xs">
-                    {current + 1} / {images.length}
+            <div className="relative inline-block" onClick={(e) => e.stopPropagation()}>
+                <img src={images[current]} alt={currentTitle || `Preview foto ${current + 1}`} className="max-w-full max-h-[85vh] rounded-lg shadow-2xl border border-border select-none" />
+                <button onClick={onClose} className="absolute top-2 right-2 p-2 rounded-[5px] bg-foreground text-background hover:opacity-80 transition z-10" aria-label="Tutup">
+                    <X className="w-4 h-4" />
+                </button>
+            </div>
+            {(multiple || currentTitle) && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-foreground/80 text-primary-foreground font-mono text-xs flex items-center gap-2">
+                    {currentTitle && <span className="truncate max-w-[200px]">{currentTitle}</span>}
+                    {currentTitle && multiple && <span>·</span>}
+                    {multiple && <span>{current + 1} / {images.length}</span>}
                 </div>
             )}
         </div>,
@@ -153,12 +218,49 @@ function PhotoLightbox({ images, index, onClose }: { images: string[]; index: nu
     )
 }
 
-// Data URL (portal & foto lama) atau path storage (ticket-photos/guest/... untuk portal,
-// {kode tiket}/{uid}.jpg untuk helpdesk & teknisi).
-const PHOTO_TOKEN_RE = /(data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|(?:ticket-photos\/)?[A-Za-z0-9-]+\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9-]+)?\.(?:jpe?g|png|webp))/g
+// Data URL (portal) atau path storage (ticket-photos/guest/... / {kode tiket}/{uid}.{ext}).
+const FILE_TOKEN_RE = /(data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|(?:ticket-photos\/)?[A-Za-z0-9-]+\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9-]+)?\.\w+)/g
+const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp'])
 
-export function isPhotoToken(s: string): boolean {
-    return /^(?:data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|(?:ticket-photos\/)?[A-Za-z0-9-]+\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9-]+)?\.(?:jpe?g|png|webp))$/.test(s)
+async function downloadFromUrl(url: string, filename: string) {
+    try {
+        const res = await fetch(url)
+        const blob = await res.blob()
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = filename
+        a.click()
+        URL.revokeObjectURL(a.href)
+    } catch { window.open(url, '_blank') }
+}
+
+export function isFileToken(s: string): boolean {
+    return /^(?:data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|(?:ticket-photos\/)?[A-Za-z0-9-]+\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9-]+)?\.\w+)$/.test(s)
+}
+
+export function isImageFileByPath(path: string): boolean {
+    if (path.startsWith('data:image')) return true
+    const ext = path.split('.').pop()?.toLowerCase() ?? ''
+    return IMAGE_EXTS.has(ext)
+}
+
+export function getFileExtLabel(path: string): string {
+    if (path.startsWith('data:image')) return 'Gambar'
+    const ext = path.split('.').pop()?.toLowerCase() ?? ''
+    const labels: Record<string, string> = { pdf: 'PDF', doc: 'DOC', docx: 'DOCX', xls: 'XLS', xlsx: 'XLSX', ppt: 'PPT', pptx: 'PPTX', txt: 'TXT', csv: 'CSV', zip: 'ZIP', rar: 'RAR', mp4: 'MP4', mov: 'MOV', webm: 'WebM' }
+    return labels[ext] ?? (ext.toUpperCase() || 'File')
+}
+
+function getFileIcon(path: string): React.ReactNode {
+    const ext = path.split('.').pop()?.toLowerCase() ?? ''
+    if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return <Image className="h-6 w-6 text-blue-500" />
+    if (ext === 'pdf') return <FileText className="h-6 w-6 text-red-500" />
+    if (['doc', 'docx'].includes(ext)) return <FileText className="h-6 w-6 text-blue-600" />
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileText className="h-6 w-6 text-green-600" />
+    if (['ppt', 'pptx'].includes(ext)) return <FileText className="h-6 w-6 text-orange-500" />
+    if (['zip', 'rar'].includes(ext)) return <FileText className="h-6 w-6 text-purple-500" />
+    if (['mp4', 'mov', 'webm'].includes(ext)) return <FileText className="h-6 w-6 text-pink-500" />
+    return <FileText className="h-6 w-6 text-muted-foreground" />
 }
 
 // Resolusi satu batch nilai foto → URL tampil (data URL tetap; path jadi signed URL).
@@ -176,69 +278,54 @@ function usePhotoResolver(tokens: string[]): Record<string, string> {
 // Di Timeline & Activity, foto ditampilkan sebagai label yang bisa diklik (bukan <img> inline)
 // agar baris tetap ringan; foto penuh muncul lewat lightbox saat diklik.
 export function DetailsText({ text }: { text?: string }) {
-    const [preview, setPreview] = useState<{ images: string[]; index: number } | null>(null)
-    const parts = useMemo(() => text?.split(PHOTO_TOKEN_RE) ?? [], [text])
-    const tokens = parts.filter(isPhotoToken)
+    const [preview, setPreview] = useState<{ images: string[]; index: number; titles?: string[] } | null>(null)
+    const parts = useMemo(() => text?.split(FILE_TOKEN_RE) ?? [], [text])
+    const tokens = parts.filter(isFileToken)
     const resolved = usePhotoResolver(tokens)
     if (!text) return null
+    const imageTokens = tokens.filter(t => isImageFileByPath(t))
     const allUrls = tokens.map(t => resolved[t]).filter(Boolean) as string[]
     let count = 0
     return (
         <>
             <span className="break-words">
                 {parts.map((p, i) =>
-                    isPhotoToken(p)
-                        ? <button key={i} type="button" onClick={() => { const u = resolved[p]; if (u) setPreview({ images: allUrls, index: allUrls.indexOf(u) }) }} className="mt-1 mr-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition"><Image className="w-3 h-3" />Foto {++count}</button>
+                    isFileToken(p)
+                        ? isImageFileByPath(p)
+                            ? <button key={i} type="button" onClick={() => { const u = resolved[p]; if (u) setPreview({ images: imageTokens.map(t => resolved[t]).filter(Boolean) as string[], index: imageTokens.map(t => resolved[t]).filter(Boolean).indexOf(u) as number }) }} className="mt-1 mr-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition"><Image className="w-3 h-3" />Foto {++count}</button>
+                            : (() => { const u = resolved[p]; const name = p.split('/').pop() ?? 'file'; return u ? <a key={i} href={u} target="_blank" rel="noopener" className="mt-1 mr-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition">{getFileIcon(p)}{name}</a> : null })()
                         : <span key={i}>{p}</span>
                 )}
             </span>
-            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} />}
+            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} titles={preview.titles} />}
         </>
     )
 }
 
-export function TicketActivityLog({ items }: { items: { timestamp: string; user?: string; action: string; details?: string }[] }) {
+export function TicketTimeline({ items, isFinal }: { items: { timestamp: string; action: string; details?: string }[]; isFinal?: boolean }) {
+    const { locationNames, gps } = useContext(GpsContext)
     if (items.length === 0) {
         return <p className="text-sm text-muted-foreground italic">Belum ada aktivitas.</p>
     }
     const sorted = items.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-    return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-left min-w-[420px]">
-                <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
-                    <tr>
-                        <th className="py-2 pr-3 font-medium">Waktu</th>
-                        <th className="py-2 pr-3 font-medium">Pengguna</th>
-                        <th className="py-2 pr-3 font-medium">Aksi</th>
-                        <th className="py-2 font-medium">Detail</th>
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                    {sorted.map((act, idx) => (
-                        <tr key={idx}>
-                            <td className="py-2 pr-3 font-mono text-[11px] text-muted-foreground whitespace-nowrap">{formatWIB(act.timestamp)}</td>
-                            <td className="py-2 pr-3 text-xs text-foreground whitespace-nowrap">{act.user || 'Sistem'}</td>
-                            <td className="py-2 pr-3 text-xs font-medium">{act.action}</td>
-                            <td className="py-2 text-xs text-muted-foreground">{act.details ? <DetailsText text={act.details} /> : '-'}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    )
-}
-
-export function TicketTimeline({ items, isFinal }: { items: { timestamp: string; action: string; details?: string }[]; isFinal?: boolean }) {
-    if (items.length === 0) {
-        return <p className="text-sm text-muted-foreground italic">Belum ada aktivitas.</p>
-    }
-    const sorted = items.slice().sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
     const steps = sorted.map((act, idx) => {
-        const { action, details } = sanitizeTimeline(act.action, act.details)
+        let { action, details } = sanitizeTimeline(act.action, act.details)
+        if (locationNames && gps) {
+            if (action === 'Pekerjaan dimulai') {
+                const p = gps.find(g => g.phase === 'start')
+                const loc = locationNames['start']
+                if (p && loc) details = `lokasi: ${loc}\n(${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})`
+            }
+            if (action === 'Tugas diselesaikan') {
+                const p = gps.find(g => g.phase === 'end')
+                const loc = locationNames['end']
+                if (p && loc) details = `lokasi: ${loc}\n(${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})`
+            }
+        }
         return {
             name: action,
             timestamp: formatWIB(act.timestamp),
-            isCompleted: idx < sorted.length - 1 || !!isFinal,
+            isCompleted: idx > 0 || !!isFinal,
             details: details && <DetailsText text={details} />,
         }
     })
@@ -272,14 +359,11 @@ export function parseDescription(desc?: string): { jabatan?: string; waPelapor?:
 }
 
 export function formatWIB(iso: string): string {
-    const d = new Date(iso)
-    const wib = new Date(d.getTime() + 7 * 60 * 60 * 1000)
-    const dd = String(wib.getUTCDate()).padStart(2, '0')
-    const mm = wib.toLocaleString('id-ID', { month: 'short', timeZone: 'UTC' })
-    const yyyy = wib.getUTCFullYear()
-    const hh = String(wib.getUTCHours()).padStart(2, '0')
-    const min = String(wib.getUTCMinutes()).padStart(2, '0')
-    return `${dd} ${mm} ${yyyy}, ${hh}:${min} WIB`
+    return new Intl.DateTimeFormat('id-ID', {
+        day: 'numeric', month: 'short', year: 'numeric',
+        hour: '2-digit', minute: '2-digit',
+        timeZone: 'Asia/Jakarta',
+    }).format(new Date(iso)) + ' WIB'
 }
 
 // ponytail: jam operasional 08.00–17.00 WIB hardcode; sumber konfigurasi SLA Admin belum ada,
@@ -359,25 +443,28 @@ export function AssignmentCard({ items }: { items: { action: string; details?: s
     )
 }
 
-const PHOTO_SRC_RE = PHOTO_TOKEN_RE
+const PHOTO_SRC_RE = FILE_TOKEN_RE
 
-function extractPhotos(items: { timestamp: string; action: string; details?: string }[]): { src: string; when: string }[] {
-    const photos: { src: string; when: string }[] = []
+function extractAttachments(items: { timestamp: string; action: string; details?: string }[]): { src: string; when: string }[] {
+    const all: { src: string; when: string }[] = []
     for (const act of items) {
         if (!act.details) continue
         for (const m of act.details.matchAll(PHOTO_SRC_RE)) {
-            photos.push({ src: m[0], when: act.timestamp })
+            all.push({ src: m[0], when: act.timestamp })
         }
     }
-    return photos
+    return all
 }
 
-// Foto (portal client = data URL, internal/teknisi = path storage) tersimpan di detail aktivitas,
-// jadi galeri cukup memindai aktivitas tiket sekali dan tampil untuk semua role.
+// Galeri lampiran: foto (data URL / path gambar) ditampilkan sebagai thumbnail grid
+// yang bisa diklik via lightbox; file non-gambar ditampilkan sebagai kartu dengan
+// nama file & tombol download. Semua lampiran dipindai dari detail aktivitas tiket.
 export function PhotoGallery({ items, status }: { items: { timestamp: string; action: string; details?: string }[]; status?: string }) {
-    const photos = extractPhotos(items)
-    const resolved = usePhotoResolver(photos.map((p) => p.src))
-    const [preview, setPreview] = useState<{ images: string[]; index: number } | null>(null)
+    const all = extractAttachments(items)
+    const photos = all.filter(p => isImageFileByPath(p.src))
+    const files = all.filter(p => !isImageFileByPath(p.src))
+    const resolved = usePhotoResolver(all.map((p) => p.src))
+    const [preview, setPreview] = useState<{ images: string[]; index: number; titles?: string[] } | null>(null)
 
     const isClientPhoto = (src: string) => src.startsWith('data:image') || src.startsWith('ticket-photos/guest/')
     const clientPhotos = photos.filter((p) => isClientPhoto(p.src))
@@ -391,23 +478,30 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
     const isSerial = !!completionParts.find(p => p.startsWith('Serial Number:'))
     const sparepart = spareItem ? spareItem.slice(spareItem.indexOf(':') + 1).trim() : undefined
 
-    if (photos.length === 0 && (!isClosed || completionParts.length === 0)) return null
+    if (all.length === 0 && (!isClosed || completionParts.length === 0)) return null
     const clientReady = clientPhotos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
     const internalReady = internalPhotos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
+    const filesReady = files.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
 
-    const thumbs = (list: { url: string }[], open: (images: string[]) => void) => (
+    const thumbs = (list: { url: string; src: string }[], open: (images: string[], titles: string[]) => void) => (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {list.map((p, i) => (
-                <button
-                    key={i}
-                    type="button"
-                    onClick={() => open(list.map(r => r.url!))}
-                    className="aspect-square rounded-lg overflow-hidden border border-border bg-background hover:opacity-90 transition"
-                    aria-label={`Lihat foto ${i + 1}`}
-                >
-                    <img src={p.url} alt={`Foto ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                </button>
-            ))}
+            {list.map((p, i) => {
+                const name = p.src.split('/').pop() ?? 'file'
+                return (
+                    <button
+                        key={i}
+                        type="button"
+                        onClick={() => {
+                            const titles = list.map(r => (r.src.split('/').pop() ?? 'file'))
+                            open(list.map(r => r.url!), titles)
+                        }}
+                        className="aspect-square rounded-lg overflow-hidden border border-border bg-background hover:opacity-90 transition relative"
+                        aria-label={`Lihat ${name}`}
+                    >
+                        <img src={p.url} alt={name} className="w-full h-full object-cover" loading="lazy" />
+                    </button>
+                )
+            })}
         </div>
     )
 
@@ -419,20 +513,44 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
                         <Image className="w-4 h-4 text-muted-foreground" />
                         <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Foto ({clientReady.length})</h4>
                     </div>
-                    {thumbs(clientReady, (images) => setPreview({ images, index: 0 }))}
+                    {thumbs(clientReady, (images, titles) => setPreview({ images, index: 0, titles }))}
+                </div>
+            )}
+            {filesReady.length > 0 && (
+                <div className="mt-3 bg-muted/60 border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                        <FileText className="w-4 h-4 text-muted-foreground" />
+                        <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">File ({filesReady.length})</h4>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                        {filesReady.map((p, i) => {
+                            const name = p.src.split('/').pop() ?? 'file'
+                            return (
+                                <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        {getFileIcon(p.src)}
+                                        <span className="text-xs font-mono truncate">{name}</span>
+                                    </div>
+                                    <button onClick={() => downloadFromUrl(p.url!, name)} className="p-1.5 rounded hover:bg-muted transition shrink-0" aria-label={`Download ${name}`}>
+                                        <Download className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                    </button>
+                                </div>
+                            )
+                        })}
+                    </div>
                 </div>
             )}
             {(internalReady.length > 0 || (isClosed && (catatan || sparepart))) && (
                 <div className="mt-3 bg-emerald-50/60 border border-emerald-200 rounded-lg p-4">
                     <h4 className="text-[10px] font-mono uppercase tracking-widest text-emerald-700 mb-2">Dokumentasi</h4>
                     {internalReady.length > 0 && (
-                        <div className="mb-3">{thumbs(internalReady, (images) => setPreview({ images, index: 0 }))}</div>
+                        <div className="mb-3">{thumbs(internalReady, (images, titles) => setPreview({ images, index: 0, titles }))}</div>
                     )}
                     {catatan && <p className="text-sm text-emerald-900 mb-1">{catatan}</p>}
                     {sparepart && <p className="text-xs text-emerald-800/80">{isSerial ? 'Serial Number' : 'Sparepart'}: {sparepart}</p>}
                 </div>
             )}
-            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} />}
+            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} titles={preview.titles} />}
         </>
     )
 }

@@ -1,15 +1,15 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronDown, Clock, LifeBuoy, Mail, FileText, Filter, CalendarClock, Wrench, CheckCircle2, BadgeCheck, Phone, Search } from "lucide-react";
+import { ArrowRight, ChevronDown, Clock, LifeBuoy, Mail, FileText, Filter, CalendarClock, Wrench, CheckCircle2, BadgeCheck, Phone } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getLandingStats, type LandingStats } from "@/services/ticketService";
-import { PRIORITY_DEFAULTS } from "@/services/sla";
+import SiteFooter from "@/components/SiteFooter";
 import { SiteHeader, SocialIcon } from "@/components/SiteHeader";
 import { TroubleshootCards } from "@/components/TroubleshootCards";
 
-const ADMIN_EMAIL = "support@atapcare.co.id";
-const ADMIN_PHONE_DISPLAY = "0812421414";
-const ADMIN_PHONE_LINK = "6281242141414";
+const ADMIN_EMAIL = "info@atapteknologi.id";
+const ADMIN_PHONE_DISPLAY = "+62 822-8000-0694";
+const ADMIN_PHONE_LINK = "6282280000694";
 
 const SOCIALS: { href: string; label: string; children: React.ReactNode }[] = [
   {
@@ -55,18 +55,14 @@ const FLOW_STEPS: { n: string; title: string; desc: string; Icon: typeof FileTex
   { n: "06", title: "Penutupan Tiket", desc: "Tiket ditutup, pelanggan dikonfirmasi via WhatsApp.", Icon: BadgeCheck },
 ];
 
-const FAQ_ITEMS: (sla: Record<string, number>) => Array<{ q: string; a: string }> = (sla) => [
+const FAQ_ITEMS: Array<{ q: string; a: string }> = [
   {
     q: "Bagaimana cara melaporkan kendala?",
-    a: "Pilih kendala Anda pada panduan \"Kendala Umum\" di atas. Jika belum teratasi, lanjutkan ke form laporan dengan deskripsi otomatis. Alternatifnya, klik \"Lapor Kendala\" dan isi formulir secara manual.",
-  },
-  {
-    q: "Berapa lama kendala saya akan ditangani?",
-    a: `Target penyelesaian berdasarkan prioritas: P1 (Kritis) dalam ${sla.P1 ?? PRIORITY_DEFAULTS.P1} jam kerja, P2 (Sedang) dalam ${sla.P2 ?? PRIORITY_DEFAULTS.P2} jam, dan P3 (Normal) dalam ${sla.P3 ?? PRIORITY_DEFAULTS.P3} jam. Dihitung sesuai jam operasional perusahaan (Senin–Jumat, 08.00–17.00 WIB).`,
+    a: "Buat akun pelanggan melalui halaman Login, lalu masuk dan gunakan form \"Lapor Masalah\" di Dashboard. Isi data site, unit, dan deskripsi masalah.",
   },
   {
     q: "Bagaimana cara melacak status laporan?",
-    a: "Gunakan ID Tiket (contoh: ATC-20260724-X7K9) di halaman \"Pelacakan\". Status, waktu update, dan nama teknisi ditampilkan tanpa perlu login.",
+    a: "Login ke akun pelanggan Anda. Semua tiket dan statusnya terlihat di Dashboard. Klik tiket untuk melihat detail dan timeline.",
   },
   {
     q: "Siapa yang akan menangani laporan saya?",
@@ -106,7 +102,7 @@ export default function Landing() {
   }, []);
 
   const badgeText = `${stats?.active_units ?? 0} Titik Aktif`;
-  const faqItems = useMemo(() => FAQ_ITEMS(stats?.sla ?? PRIORITY_DEFAULTS), [stats]);
+  const faqItems = useMemo(() => FAQ_ITEMS, [])
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-clip flex flex-col">
@@ -127,18 +123,13 @@ export default function Landing() {
           hingga selesai ditangani tim kami.
         </p>
 
-        <div className="mt-8 grid sm:grid-cols-2 gap-3 w-full max-w-md">
+        <div className="mt-8 flex justify-center w-full">
           <Link
-            to="/report"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] bg-foreground text-background font-medium hover:bg-foreground/90 transition text-sm"
+            to="/login"
+            className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] bg-black text-background font-medium hover:bg-black transition-all duration-500 text-sm"
           >
-            Lapor Kendala <ArrowRight className="h-4 w-4" />
-          </Link>
-          <Link
-            to="/track"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] border border-border bg-card text-foreground font-medium hover:border-foreground/30 transition text-sm"
-          >
-            Pelacakan <Search className="h-4 w-4" />
+            <span className="transition-all duration-500 group-hover:pr-1">Lapor Masalah</span>
+            <ArrowRight className="h-4 w-4 text-background transition-all duration-500 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0" />
           </Link>
         </div>
       </main>
@@ -283,21 +274,5 @@ export default function Landing() {
 
       <SiteFooter />
     </div>
-  );
-}
-
-function SiteFooter() {
-  return (
-    <footer className="border-t border-border">
-      <div className="max-w-7xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-center gap-2 text-xs text-muted-foreground">
-        <p>&copy; 2026 PT Atap Teknologi Indonesia. Semua hak dilindungi.</p>
-        <span className="hidden sm:inline">·</span>
-        <div className="flex items-center gap-2">
-          <Link to="/privacy" className="hover:text-foreground transition underline underline-offset-2">Privacy Policy</Link>
-          <span>|</span>
-          <Link to="/terms" className="hover:text-foreground transition underline underline-offset-2">Terms of Service</Link>
-        </div>
-      </div>
-    </footer>
   );
 }

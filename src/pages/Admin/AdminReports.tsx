@@ -21,13 +21,11 @@ import DateRangePicker from "@/components/DateRangePicker";
 import {
   getTicketReport,
   getKpiReport,
-  getAuditReport,
   getRootCauseReport,
   getSerialNumberReport,
   getSites,
   TICKET_REPORT_HEADERS,
   KPI_HEADERS,
-  AUDIT_HEADERS,
   ROOTCAUSE_HEADERS,
   SERIAL_NUMBER_HEADERS,
   exportStyledXlsx,
@@ -38,19 +36,18 @@ import {
 import type { SiteRow } from "@/services";
 
 type ExportCell = string | number | null | undefined;
-type TabKey = "tickets" | "kpi" | "audit" | "rootcause" | "sparepart";
+type TabKey = "tickets" | "kpi" | "rootcause" | "sparepart";
 
 const fmtIso = (iso: string) =>
   new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
     new Date(`${iso.slice(0, 10)}T00:00:00`),
   );
 
-const PRIORITY_OPTIONS = ["P1", "P2", "P3"].map((p) => ({ value: p, label: p }));
+const PRIORITY_OPTIONS = ["Critical", "Medium", "Low"].map((p) => ({ value: p, label: p }));
 
 const DATASETS: Array<{ key: TabKey; label: string }> = [
   { key: "tickets", label: "Tiket & Penanganan" },
   { key: "kpi", label: "KPI Agregat" },
-  { key: "audit", label: "Audit Log Admin" },
   { key: "rootcause", label: "Akar Masalah" },
   { key: "sparepart", label: "Serial Number" },
 ];
@@ -63,16 +60,14 @@ function datasetsFor(mode: "admin" | "helpdesk") {
 }
 
 const PRIORITY_COLS: Record<TabKey, number[]> = {
-  tickets: [5],
+  tickets: [6],
   kpi: [0],
-  audit: [],
   rootcause: [],
   sparepart: [],
 };
 const STATUS_COLS: Record<TabKey, number[]> = {
-  tickets: [6],
+  tickets: [7],
   kpi: [],
-  audit: [],
   rootcause: [],
   sparepart: [],
 };
@@ -113,8 +108,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       if (tab === "tickets") setTickets(await getTicketReport({ ...filters, status: ["CLOSED"] }));
       if (tab === "kpi")
         setKpis((await getKpiReport(filters)) as unknown as Array<Record<string, string | number>>);
-      if (tab === "audit")
-        setAudits((await getAuditReport(filters)) as unknown as Array<Record<string, string>>);
       if (tab === "rootcause")
         setKpis((await getRootCauseReport(filters)) as unknown as Array<Record<string, string | number>>);
       if (tab === "sparepart")
@@ -149,9 +142,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       ? TICKET_REPORT_HEADERS
       : tab === "kpi"
         ? KPI_HEADERS
-        : tab === "audit"
-          ? AUDIT_HEADERS
-          : tab === "rootcause"
+        : tab === "rootcause"
             ? ROOTCAUSE_HEADERS
             : SERIAL_NUMBER_HEADERS;
 
@@ -218,7 +209,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                 placeholder="Cari"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-8 w-full min-w-52 rounded border border-border bg-card pl-8 pr-2 text-[13px] text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:border-foreground"
+                className="h-8 w-full min-w-0 rounded-lg border border-border bg-card pl-8 pr-2 text-[13px] text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:ring-2 focus:ring-foreground/20"
               />
             </div>
             <FilterGroup label="Periode">
@@ -288,7 +279,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                       {tab === "kpi"
                         ? visibleRows.reduce((s, r) => s + (Number(r[1]) || 0), 0)
                         : visibleRows.length}{" "}
-                      {tab === "audit" ? "baris" : "tiket"}
+                      tiket
                     </Badge>
                   </div>
                   <div className="flex gap-2">
@@ -324,6 +315,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                 ) : (
                   <div className="rounded-xl border border-border bg-card overflow-hidden">
                     <div className="overflow-x-auto">
+                      <div className="min-w-[900px]">
                       <Table>
                           <TableHeader>
                             <TableRow>
@@ -358,6 +350,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                           ))}
                         </TableBody>
                       </Table>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -4,12 +4,20 @@ import { useAuth } from '../context/AuthContext'
 import logo from '../assets/logo2.png'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, register } = useAuth()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+
+  // Register state
+  const [regName, setRegName] = useState('')
+  const [regEmail, setRegEmail] = useState('')
+  const [regPhone, setRegPhone] = useState('')
+  const [regCompany, setRegCompany] = useState('')
+  const [regPassword, setRegPassword] = useState('')
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -19,6 +27,23 @@ export default function Login() {
     if (result.error) {
       setError(result.error)
     }
+    setIsLoading(false)
+  }
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError('')
+    if (!regName.trim() || !regEmail.trim() || !regPassword.trim()) {
+      setError('Nama, email, dan password wajib diisi.')
+      return
+    }
+    if (regPassword.length < 6) {
+      setError('Password minimal 6 karakter.')
+      return
+    }
+    setIsLoading(true)
+    const result = await register(regName, regEmail, regPhone, regCompany, regPassword)
+    if (result.error) setError(result.error)
     setIsLoading(false)
   }
 
@@ -49,7 +74,7 @@ export default function Login() {
               Sistem Ticketing Keluhan &amp; Manajemen Operasional Internal PT Atap Teknologi Indonesia.
             </p>
             <div className="mt-10 inline-flex items-center gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
-              <Zap className="h-3 w-3" /> SLA · Race-safe inventory · WA close
+              <Zap className="h-3 w-3" /> FRT · Race-safe inventory · WA close
             </div>
           </div>
         </div>
@@ -64,10 +89,22 @@ export default function Login() {
         </div>
         <div className="rounded-2xl border border-white/10 bg-black p-6 md:p-7 w-full max-w-lg relative">
           <div className="relative">
-            <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-center mb-8 text-white">
-              Welcome Back
+            <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-center mb-6 text-white">
+              {mode === 'login' ? 'Welcome Back' : 'Buat Akun'}
             </h2>
 
+            <div className="flex mb-6 rounded-[3px] overflow-hidden border border-neutral-700">
+              <button type="button" onClick={() => { setMode('login'); setError('') }}
+                className={`flex-1 py-2 text-xs font-semibold transition ${mode === 'login' ? 'bg-white text-neutral-900' : 'bg-neutral-800 text-white/60 hover:text-white'}`}>
+                Masuk
+              </button>
+              <button type="button" onClick={() => { setMode('register'); setError('') }}
+                className={`flex-1 py-2 text-xs font-semibold transition ${mode === 'register' ? 'bg-white text-neutral-900' : 'bg-neutral-800 text-white/60 hover:text-white'}`}>
+                Daftar
+              </button>
+            </div>
+
+            {mode === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
                 <label className="block text-xs font-medium text-white/70 mb-1.5">
@@ -116,6 +153,42 @@ export default function Login() {
                 {isLoading ? 'Memproses...' : 'Masuk'} <ArrowRight className="h-4 w-4" />
               </button>
             </form>
+            ) : (
+            <form onSubmit={handleRegister} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">Nama Lengkap *</label>
+                <input required value={regName} onChange={e => setRegName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">Email *</label>
+                <input required type="email" value={regEmail} onChange={e => setRegEmail(e.target.value)}
+                  className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">No. Telepon</label>
+                <input value={regPhone} onChange={e => setRegPhone(e.target.value)}
+                  className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">Perusahaan</label>
+                <input value={regCompany} onChange={e => setRegCompany(e.target.value)}
+                  className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-white/70 mb-1.5">Password *</label>
+                <input required type="password" value={regPassword} onChange={e => setRegPassword(e.target.value)} minLength={6}
+                  className="w-full px-3 py-2 rounded-[3px] bg-neutral-800 border border-neutral-700 text-white text-sm placeholder:text-white/30 outline-none transition-all duration-150 focus:border-white/40 focus:ring-2 focus:ring-white/10" />
+              </div>
+
+              {error && <p className="text-xs text-destructive">{error}</p>}
+
+              <button type="submit" disabled={isLoading}
+                className="w-full px-5 py-2.5 rounded-[3px] bg-white text-neutral-900 font-medium hover:bg-white/90 transition inline-flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+                {isLoading ? 'Memproses...' : 'Daftar'} <ArrowRight className="h-4 w-4" />
+              </button>
+            </form>
+            )}
           </div>
         </div>
       </div>
