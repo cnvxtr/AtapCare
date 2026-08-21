@@ -1,15 +1,27 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, Filter, Eye, EyeOff } from 'lucide-react'
+import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, Filter, Eye, EyeOff, Trash2, ArrowRight, Check } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { ROLE_LABELS } from '../services/users'
 import { resolveAvatarUrl } from '../services/photoService'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/dropdown-menu'
 
-type ActivityRow = { waktu: string; user: string; aktivitas: string; created_at: string }
+type ActivityRow = { id: string; waktu: string; user: string; aktivitas: string; created_at: string }
 type FilterKey = 'all' | 'today' | 'week' | 'month'
 const FILTER_LABELS: Record<FilterKey, string> = { all: 'Semua', today: 'Hari Ini', week: 'Minggu Ini', month: 'Bulan Ini' }
+const HIDDEN_KEY = (uid: string) => `hidden_activities_${uid}`
+
+function loadHidden(uid: string): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(HIDDEN_KEY(uid)) || '[]')) } catch { return new Set() }
+}
+function saveHidden(uid: string, ids: Set<string>) {
+  localStorage.setItem(HIDDEN_KEY(uid), JSON.stringify([...ids]))
+}
+
+type ProfileField = { key: string; label: string; oldVal: string; newVal: string }
+const FIELD_LABELS: Record<string, string> = { fullName: 'Nama Lengkap', username: 'Username', waNumber: 'No. Telepon' }
 
 export default function Profile() {
   const { user } = useAuth()
@@ -19,6 +31,11 @@ export default function Profile() {
   const [username, setUsername] = useState(user?.username || '')
   const [waNumber, setWaNumber] = useState(user?.wa_number || '')
   const [saving, setSaving] = useState(false)
+  const initRef = useRef({ fullName: user?.full_name || '', username: user?.username || '', waNumber: user?.wa_number || '' })
+
+  // Confirm save
+  const [showConfirmSave, setShowConfirmSave] = useState(false)
+  const [pendingChanges, setPendingChanges] = useState<ProfileField[]>([])
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -35,6 +52,9 @@ export default function Profile() {
   // Activities state
   const [activities, setActivities] = useState<ActivityRow[]>([])
   const [activityFilter, setActivityFilter] = useState<FilterKey>('all')
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => user ? loadHidden(user.id) : new Set())
 
   // Load activities (raw from both tables)
   useEffect(() => {
@@ -44,12 +64,13 @@ export default function Profile() {
       // ticket activities
       const { data: ticketData } = await supabase
         .from('activities')
-        .select('user_name, action, created_at')
+        .select('id, user_name, action, created_at')
         .eq('user_name', user.full_name)
         .order('created_at', { ascending: false })
         .limit(50)
       for (const r of ticketData || []) {
         rows.push({
+          id: r.id,
           waktu: fmtTime(r.created_at),
           user: r.user_name || '—',
           aktivitas: r.action,
@@ -60,13 +81,14 @@ export default function Profile() {
       if (user.role === 'admin') {
         const { data: auditData } = await supabase
           .from('audit_logs')
-          .select('created_at, actor_name, action, entity_type, metadata')
+          .select('id, created_at, actor_name, action, entity_type, metadata')
           .eq('actor_name', user.full_name)
           .order('created_at', { ascending: false })
           .limit(50)
         for (const r of auditData || []) {
           const meta = (r.metadata as Record<string, unknown>) || null
           rows.push({
+            id: r.id,
             waktu: fmtTime(r.created_at),
             user: r.actor_name || '—',
             aktivitas: labelAct(r.action, r.entity_type, meta),
@@ -82,20 +104,23 @@ export default function Profile() {
 
   // Filtered activities
   const filteredActivities = useMemo(() => {
-    if (activityFilter === 'all') return activities
-    const now = new Date()
-    let cutoff: Date
-    if (activityFilter === 'today') {
-      cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    } else if (activityFilter === 'week') {
-      const day = now.getDay()
-      cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((day + 6) % 7))
-    } else {
-      cutoff = new Date(now.getFullYear(), now.getMonth(), 1)
+    let list = activities.filter(a => !hiddenIds.has(a.id))
+    if (activityFilter !== 'all') {
+      const now = new Date()
+      let cutoff: Date
+      if (activityFilter === 'today') {
+        cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      } else if (activityFilter === 'week') {
+        const day = now.getDay()
+        cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((day + 6) % 7))
+      } else {
+        cutoff = new Date(now.getFullYear(), now.getMonth(), 1)
+      }
+      const iso = cutoff.toISOString()
+      list = list.filter(a => a.created_at >= iso)
     }
-    const iso = cutoff.toISOString()
-    return activities.filter(a => a.created_at >= iso)
-  }, [activities, activityFilter])
+    return list
+  }, [activities, activityFilter, hiddenIds])
 
   // Resolve avatar URL
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
@@ -112,13 +137,28 @@ export default function Profile() {
       toast.error('Nama lengkap dan username wajib diisi.')
       return
     }
+    const changes: ProfileField[] = []
+    if (fullName.trim() !== initRef.current.fullName) changes.push({ key: 'fullName', label: FIELD_LABELS.fullName, oldVal: initRef.current.fullName, newVal: fullName.trim() })
+    if (username.trim() !== initRef.current.username) changes.push({ key: 'username', label: FIELD_LABELS.username, oldVal: initRef.current.username, newVal: username.trim() })
+    if ((waNumber.trim() || '') !== initRef.current.waNumber) changes.push({ key: 'waNumber', label: FIELD_LABELS.waNumber, oldVal: initRef.current.waNumber || '(kosong)', newVal: waNumber.trim() || '(kosong)' })
+
+    if (changes.length === 0) {
+      toast.info('Tidak ada perubahan.')
+      return
+    }
+    setPendingChanges(changes)
+    setShowConfirmSave(true)
+  }
+
+  const doSaveProfile = async () => {
+    setShowConfirmSave(false)
     setSaving(true)
     const { error } = await supabase.from('users').update({
       full_name: fullName.trim(),
       name: fullName.trim(),
       username: username.trim(),
       wa_number: waNumber.trim() || null,
-    }).eq('id', user.id)
+    }).eq('id', user!.id)
     setSaving(false)
     if (error) {
       if (error.message.includes('users_username_key')) {
@@ -201,6 +241,21 @@ export default function Profile() {
     setAvatarUploading(false)
     toast.success('Foto profil berhasil diubah.')
     window.location.reload()
+  }
+
+  // Activity select mode helpers
+  const toggleSelectMode = () => { setSelectMode(!selectMode); setSelectedIds(new Set()) }
+  const toggleSelect = (id: string) => setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const selectAll = () => setSelectedIds(new Set(filteredActivities.map(a => a.id)))
+  const hideSelected = () => {
+    if (!user) return
+    const n = new Set(hiddenIds)
+    selectedIds.forEach(id => n.add(id))
+    setHiddenIds(n)
+    saveHidden(user.id, n)
+    toast.success(`${selectedIds.size} aktivitas disembunyikan.`)
+    setSelectedIds(new Set())
+    setSelectMode(false)
   }
 
   return (
@@ -309,45 +364,117 @@ export default function Profile() {
 
       {/* Aktivitas Terbaru */}
       <div className="rounded-lg border border-border bg-card p-6">
+        {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <Shield className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-sm font-bold text-foreground">Aktivitas Terbaru</h2>
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="h-8 w-8 grid place-items-center rounded-[3px] text-muted-foreground hover:text-foreground hover:bg-accent transition">
-                <Filter className="h-4 w-4" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[160px] bg-card border-border text-card-foreground space-y-0.5">
-              {(Object.entries(FILTER_LABELS) as [FilterKey, string][]).map(([key, label]) => (
-                <DropdownMenuItem
-                  key={key}
-                  onClick={() => setActivityFilter(key)}
-                  className={`cursor-pointer ${activityFilter === key ? 'bg-black text-white' : 'focus:bg-black focus:text-white'}`}
-                >
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {selectMode ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-bold text-foreground">Pilih Aktivitas ({selectedIds.size})</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={selectAll} className="text-xs text-muted-foreground hover:text-foreground transition px-2 py-1 rounded hover:bg-accent">
+                  Pilih Semua
+                </button>
+                <button onClick={hideSelected} disabled={selectedIds.size === 0} className="inline-flex items-center gap-1 text-xs font-semibold text-red-500 hover:bg-red-50 px-2.5 py-1.5 rounded transition disabled:opacity-40 disabled:cursor-not-allowed">
+                  <Trash2 className="h-3.5 w-3.5" /> Sembunyikan ({selectedIds.size})
+                </button>
+                <button onClick={toggleSelectMode} className="text-xs text-muted-foreground hover:text-foreground transition px-2 py-1 rounded hover:bg-accent">
+                  Batal
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-bold text-foreground">Aktivitas Terbaru</h2>
+              </div>
+              <div className="flex items-center gap-1">
+                {hiddenIds.size > 0 && (
+                  <button onClick={() => { setHiddenIds(new Set()); user && saveHidden(user.id, new Set()); toast.info('Semua aktivitas ditampilkan kembali.') }} className="text-[11px] text-muted-foreground hover:text-foreground transition px-2 py-1 rounded hover:bg-accent">
+                    Tampilkan tersembunyi ({hiddenIds.size})
+                  </button>
+                )}
+                <button onClick={toggleSelectMode} className="h-8 w-8 grid place-items-center rounded-[3px] text-muted-foreground hover:text-foreground hover:bg-accent transition">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="h-8 w-8 grid place-items-center rounded-[3px] text-muted-foreground hover:text-foreground hover:bg-accent transition">
+                      <Filter className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[160px] bg-card border-border text-card-foreground space-y-0.5">
+                    {(Object.entries(FILTER_LABELS) as [FilterKey, string][]).map(([key, label]) => (
+                      <DropdownMenuItem
+                        key={key}
+                        onClick={() => setActivityFilter(key)}
+                        className={`cursor-pointer ${activityFilter === key ? 'bg-black text-white' : 'focus:bg-black focus:text-white'}`}
+                      >
+                        {label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </>
+          )}
         </div>
+
+        {/* List */}
         <div className="max-h-[350px] overflow-y-auto space-y-0 divide-y divide-border">
           {filteredActivities.length === 0 ? (
             <p className="py-8 text-center text-sm text-muted-foreground">Belum ada aktivitas</p>
           ) : (
-            filteredActivities.map((a, i) => (
-              <div key={i} className="py-3 first:pt-0 last:pb-0">
-                <p className="text-sm text-foreground">
-                  <span className="font-semibold">{a.user}</span> {a.aktivitas}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">{a.waktu}</p>
+            filteredActivities.map((a) => (
+              <div key={a.id} onClick={selectMode ? () => toggleSelect(a.id) : undefined} className={`py-3 first:pt-0 last:pb-0 flex items-start gap-3 ${selectMode ? 'cursor-pointer' : ''}`}>
+                {selectMode && (
+                  <div className={`mt-0.5 h-5 w-5 shrink-0 rounded border flex items-center justify-center transition ${selectedIds.has(a.id) ? 'bg-foreground border-foreground' : 'border-border bg-card'}`}>
+                    {selectedIds.has(a.id) && <Check className="h-3.5 w-3.5 text-primary-foreground" />}
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm text-foreground">
+                    <span className="font-semibold">{a.user}</span> {a.aktivitas}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{a.waktu}</p>
+                </div>
               </div>
             ))
           )}
         </div>
       </div>
+
+      {/* MODAL KONFIRMASI SIMPAN */}
+      {showConfirmSave && createPortal((
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowConfirmSave(false)}>
+          <div className="bg-card border border-border w-full max-w-sm rounded-lg shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-display font-bold text-foreground mb-1">Konfirmasi Perubahan</h3>
+            <p className="text-sm text-muted-foreground mb-4">Perubahan yang akan disimpan:</p>
+            <div className="space-y-3 mb-6">
+              {pendingChanges.map(c => (
+                <div key={c.key} className="rounded bg-muted/60 border border-border p-3">
+                  <p className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">{c.label}</p>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-muted-foreground line-through truncate">{c.oldVal}</span>
+                    <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="font-semibold text-foreground truncate">{c.newVal}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => setShowConfirmSave(false)} className="flex-1 px-4 py-2.5 bg-card border border-border text-muted-foreground hover:bg-muted rounded text-sm font-semibold transition-colors">
+                Batal
+              </button>
+              <button onClick={doSaveProfile} className="flex-1 px-4 py-2.5 bg-foreground text-primary-foreground hover:opacity-90 rounded text-sm font-bold transition-opacity">
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
     </div>
   )
 }
