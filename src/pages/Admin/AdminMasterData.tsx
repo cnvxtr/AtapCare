@@ -22,6 +22,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
+import { PhoneInput, toStoredPhone } from "@/components/ui/input";
 import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -725,7 +726,7 @@ export function AdminMasterData() {
         name: formName,
         address: formAddress,
         pic_name: formPicName,
-        pic_phone: formPicPhone,
+        pic_phone: toStoredPhone(formPicPhone),
         customer_id: customerId,
       };
       const ok = editingId ? await updateSite(editingId, input) : await createSite(input);
@@ -784,7 +785,7 @@ export function AdminMasterData() {
         name: wizCustomerName,
         code: wizCustomerCode || undefined,
         pic_name: wizCustomerPicName,
-        pic_phone: wizCustomerPicPhone,
+        pic_phone: toStoredPhone(wizCustomerPicPhone),
       });
       if (!ok) {
         setSaving(false);
@@ -796,7 +797,7 @@ export function AdminMasterData() {
         name: wizCustomerName,
         code: wizCustomerCode || undefined,
         pic_name: wizCustomerPicName,
-        pic_phone: wizCustomerPicPhone,
+        pic_phone: toStoredPhone(wizCustomerPicPhone),
       });
       if (!newId) {
         setSaving(false);
@@ -819,7 +820,7 @@ export function AdminMasterData() {
         name: wizSiteName,
         address: wizSiteAddress,
         pic_name: wizPicName,
-        pic_phone: wizPicPhone,
+        pic_phone: toStoredPhone(wizPicPhone),
         customer_id: custId,
       };
       if (isEdit && wizSiteTarget !== NEW_ID) {
@@ -829,7 +830,7 @@ export function AdminMasterData() {
           orig.name !== wizSiteName ||
           orig.address !== wizSiteAddress ||
           orig.pic_name !== wizPicName ||
-          orig.pic_phone !== wizPicPhone;
+          orig.pic_phone !== toStoredPhone(wizPicPhone);
         if (changed) {
           const ok = await updateSite(wizSiteTarget, siteInput);
           if (!ok) {
@@ -1513,11 +1514,11 @@ export function AdminMasterData() {
                   </div>
                   <div>
                     <label className={LABEL_CLASS}>No. WA PIC Perusahaan</label>
-                    <input
+                    <PhoneInput
                       value={wizCustomerPicPhone}
-                      onChange={(e) => setWizCustomerPicPhone(e.target.value)}
+                      onChange={setWizCustomerPicPhone}
                       className={FIELD_CLASS}
-                      placeholder="08xxxxxxxxxx"
+                      placeholder="cth. 8123456789"
                     />
                   </div>
                 </div>
@@ -1569,11 +1570,11 @@ export function AdminMasterData() {
                   </div>
                   <div>
                     <label className={LABEL_CLASS}>No. WA Koordinator Site</label>
-                    <input
+                    <PhoneInput
                       value={wizPicPhone}
-                      onChange={(e) => setWizPicPhone(e.target.value)}
+                      onChange={setWizPicPhone}
                       className={FIELD_CLASS}
-                      placeholder="08xxxxxxxxxx"
+                      placeholder="cth. 8123456789"
                     />
                   </div>
                   {!editingId && (
@@ -1698,11 +1699,11 @@ export function AdminMasterData() {
                   </div>
                   <div>
                     <label className={LABEL_CLASS}>No. WA Koordinator Site</label>
-                    <input
+                    <PhoneInput
                       value={formPicPhone}
-                      onChange={(e) => setFormPicPhone(e.target.value)}
+                      onChange={setFormPicPhone}
                       className={FIELD_CLASS}
-                      placeholder="08xxxxxxxxxx"
+                      placeholder="cth. 8123456789"
                     />
                   </div>
                 </>

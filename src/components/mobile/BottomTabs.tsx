@@ -3,10 +3,9 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Inbox, FileBarChart2, Users, Building2,
-  Timer, LayoutGrid, ClipboardList, LogOut, Check,
+  Timer, LayoutGrid, ClipboardList,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import { ROLE_LABELS } from '../../services/users'
 import { resolveAvatarUrl } from '../../services/photoService'
 import type { LucideIcon } from 'lucide-react'
 
@@ -43,33 +42,17 @@ const TABS: Record<string, TabItem[]> = {
   ],
 }
 
-const roleHome = (role?: string) =>
-  role === 'admin' ? '/admin' : role === 'teknisi' ? '/tugas' : '/dashboard'
-
 export default function BottomTabs({ role }: { role: string }) {
   const tabs = TABS[role] || TABS.helpdesk
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout, switchRole } = useAuth()
-  const [switchingRole, setSwitchingRole] = useState(false)
-
+  const { user } = useAuth()
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
   useEffect(() => {
     resolveAvatarUrl(user?.avatar_url).then(setResolvedAvatar)
   }, [user?.avatar_url])
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
-  const roleList = (user?.roles || user?.role || '').split(',').filter(Boolean)
-  const canSwitchRole = roleList.length > 1
-
-  const handleSwitchRole = async (r: string) => {
-    if (!user || r === user.role || switchingRole) return
-    setSwitchingRole(true)
-    const res = await switchRole(r)
-    setSwitchingRole(false)
-    if (res?.error) return
-    navigate(roleHome(r))
-  }
 
   const activePath = tabs.find(t => location.pathname === t.path)?.path || tabs[0].path
   const profileActive = location.pathname === '/profile'

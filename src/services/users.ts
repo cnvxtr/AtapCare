@@ -6,6 +6,7 @@ export const ROLE_LABELS: Record<string, string> = {
   pm: "Project Manager",
   teknisi: "Teknisi Lapangan",
   executive: "Executive",
+  customer: "Pelanggan",
 };
 
 export async function getTechnicians(): Promise<Array<{ id: string; name: string }>> {

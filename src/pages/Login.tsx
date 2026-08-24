@@ -9,7 +9,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Input, PhoneInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -305,7 +305,7 @@ function SignUpView({
           <Label htmlFor="name">Nama Pengguna</Label>
           <Input
             id="name"
-            placeholder="cth: aldi_wijaya"
+            placeholder="Nama pengguna"
             autoComplete="username"
             disabled={isLoading}
             className={cn(errors.name && "border-destructive")}
@@ -342,19 +342,14 @@ function SignUpView({
 
         <div className="space-y-2">
           <Label htmlFor="phone">No. Telepon</Label>
-          <div className="flex">
-            <span className="inline-flex items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground select-none">
-              +62
-            </span>
-            <Input
-              id="phone"
-              inputMode="numeric"
-              autoComplete="tel-national"
-              disabled={isLoading}
-              className={cn("rounded-l-none", errors.phone && "border-destructive")}
-              {...register("phone")}
-            />
-          </div>
+          <PhoneInput
+            id="phone"
+            autoComplete="tel-national"
+            disabled={isLoading}
+            className={cn(errors.phone && "border-destructive")}
+            value={watch("phone")}
+            onChange={(v) => setValue("phone", v)}
+          />
           {errors.phone && <p className="text-xs text-destructive">{errors.phone.message}</p>}
         </div>
 
@@ -503,7 +498,7 @@ function ForgotView({ onBack }: { onBack: () => void }) {
       {!sent && (
         <p className="mt-8 text-center text-sm text-muted-foreground">
           <Button variant="link" className="h-auto p-0 text-sm" onClick={onBack} disabled={busy}>
-            ← Kembali ke Masuk
+            Kembali ke Halaman Masuk
           </Button>
         </p>
       )}

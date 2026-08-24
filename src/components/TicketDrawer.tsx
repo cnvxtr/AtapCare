@@ -32,7 +32,7 @@ interface TicketDrawerProps {
     duplicateCode?: string
 }
 
-export default function TicketDrawer({ onClose, code, ticketId, status, priority, frtMinutes, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
+export default function TicketDrawer({ onClose, code, status, priority, frtMinutes, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
     const [gps, setGps] = useState<GpsPoint[]>([])
     const [locationNames, setLocationNames] = useState<Record<string, string>>({})
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
@@ -249,7 +249,6 @@ export function DetailsText({ text }: { text?: string }) {
     const resolved = usePhotoResolver(tokens)
     if (!text) return null
     const imageTokens = tokens.filter(t => isImageFileByPath(t))
-    const allUrls = tokens.map(t => resolved[t]).filter(Boolean) as string[]
     let count = 0
     return (
         <>

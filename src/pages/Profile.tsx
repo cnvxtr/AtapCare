@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, Filter, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { Camera, Lock, Save, User, Mail, AtSign, Shield, Clock, Filter, Eye, EyeOff, ArrowRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { ROLE_LABELS } from '../services/users'
 import { resolveAvatarUrl, compressImageToBlob, uploadAvatar } from '../services/photoService'
 import { ProgressBar } from '../components/ui/progress-bar'
+import { PhoneInput, normalizePhone, toStoredPhone } from '../components/ui/input'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/dropdown-menu'
 
 type ActivityRow = { id: string; waktu: string; user: string; aktivitas: string; created_at: string }
@@ -117,17 +118,22 @@ export default function Profile() {
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
   const roleLabel = ROLE_LABELS[user?.role || ''] || user?.role || '-'
-  const isChanged = fullName !== (user?.full_name || '') || username !== (user?.username || '') || waNumber !== (user?.wa_number || '')
+  const isChanged = fullName !== (user?.full_name || '') || username !== (user?.username || '') || toStoredPhone(waNumber) !== toStoredPhone(user?.wa_number || '')
 
   const handleSaveProfile = async () => {
     if (!user || !fullName.trim() || !username.trim()) {
       toast.error('Nama lengkap dan username wajib diisi.')
       return
     }
+    const waDigits = normalizePhone(waNumber)
+    if (waNumber.trim() && !/^\d{8,12}$/.test(waDigits)) {
+      toast.error('Nomor telepon tidak valid.')
+      return
+    }
     const changes: ProfileField[] = []
     if (fullName.trim() !== initRef.current.fullName) changes.push({ key: 'fullName', label: FIELD_LABELS.fullName, oldVal: initRef.current.fullName, newVal: fullName.trim() })
     if (username.trim() !== initRef.current.username) changes.push({ key: 'username', label: FIELD_LABELS.username, oldVal: initRef.current.username, newVal: username.trim() })
-    if ((waNumber.trim() || '') !== initRef.current.waNumber) changes.push({ key: 'waNumber', label: FIELD_LABELS.waNumber, oldVal: initRef.current.waNumber || '(kosong)', newVal: waNumber.trim() || '(kosong)' })
+    if (toStoredPhone(waNumber) !== toStoredPhone(initRef.current.waNumber)) changes.push({ key: 'waNumber', label: FIELD_LABELS.waNumber, oldVal: initRef.current.waNumber ? `+62${normalizePhone(initRef.current.waNumber)}` : '(kosong)', newVal: waDigits ? `+62${waDigits}` : '(kosong)' })
 
     if (changes.length === 0) {
       toast.info('Tidak ada perubahan.')
@@ -144,7 +150,7 @@ export default function Profile() {
       full_name: fullName.trim(),
       name: fullName.trim(),
       username: username.trim(),
-      wa_number: waNumber.trim() || null,
+      wa_number: toStoredPhone(waNumber) || null,
     }).eq('id', user!.id)
     setSaving(false)
     if (error) {
@@ -283,7 +289,10 @@ export default function Profile() {
           <Field label="Nama Lengkap" value={fullName} onChange={setFullName} icon={<User className="h-3.5 w-3.5" />} />
           <Field label="Username" value={username} onChange={setUsername} icon={<AtSign className="h-3.5 w-3.5" />} />
           <Field label="Email" value={user?.email || ''} onChange={() => {}} icon={<Mail className="h-3.5 w-3.5" />} disabled />
-          <Field label="No. Telepon" value={waNumber} onChange={setWaNumber} icon={<Phone className="h-3.5 w-3.5" />} />
+          <div>
+            <label className="block text-[11px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">No. Telepon</label>
+            <PhoneInput value={waNumber} onChange={setWaNumber} disabled={saving} className="bg-muted/60 border-border text-sm h-9 rounded-[5px]" />
+          </div>
         </div>
 
         <div className="flex justify-end pt-2">

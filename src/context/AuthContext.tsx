@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { setAuditActor } from '../services/master-data'
@@ -29,12 +29,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
+// Petakan error umum Supabase (Inggris) → pesan Indonesia; sisanya pesan generik.
+const AUTH_ERRORS: Record<string, string> = {
+    'Invalid login credentials': 'Nama pengguna atau kata sandi salah.',
+    'Email not confirmed': 'Email belum dikonfirmasi. Cek kotak masuk Anda.',
+    'User already registered': 'Email sudah terdaftar. Silakan masuk atau gunakan email lain.',
+    'Password should be at least 6 characters': 'Kata sandi minimal 6 karakter.',
+    'New password should be different from the old password.': 'Kata sandi baru harus berbeda dari yang lama.',
+}
+// eslint-disable-next-line react-refresh/only-export-components
+export const authErrorMessage = (message?: string | null): string =>
+    (message && AUTH_ERRORS[message]) || 'Terjadi kesalahan. Silakan coba lagi.'
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [user, setUser] = useState<UserProfile | null>(null)
     const [lastLoginTime, setLastLoginTime] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
     const navigate = useNavigate()
+    // Selama proses daftar, abaikan event sesi buatan signUp (konfirmasi email
+    // nonaktif → signUp langsung membuat sesi) agar tidak dianggap sudah login.
+    const registeringRef = useRef(false)
 
     const fetchUserProfile = async (userId: string) => {
         const { data, error } = await supabase
@@ -70,6 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         getSession()
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            if (registeringRef.current) return
             if (session?.user) {
                 const profile = await fetchUserProfile(session.user.id)
                 if (profile) {
@@ -115,7 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         })
 
         if (error) {
-            return { error: error.message }
+            return { error: authErrorMessage(error.message) }
         }
 
         if (data.user) {
@@ -156,28 +172,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const register = async (name: string, email: string, phone: string, password: string) => {
-        // 1. Buat auth user dulu lewat Supabase Auth
-        const { data: authData, error: authError } = await supabase.auth.signUp({
-            email,
-            password,
-        })
-        if (authError) return { error: authError.message }
-        if (!authData.user) return { error: 'Gagal membuat akun.' }
+        registeringRef.current = true
+        try {
+            // 1. Buat auth user dulu lewat Supabase Auth
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email,
+                password,
+            })
+            if (authError) return { error: authErrorMessage(authError.message) }
+            if (!authData.user) return { error: 'Gagal membuat akun.' }
 
-        // 2. Insert ke tabel users lewat RPC (pakai auth UUID)
-        const { data, error } = await supabase.rpc('register_customer', {
-            p_name: name,
-            p_email: email,
-            p_phone: phone,
-            p_user_id: authData.user.id,
-        })
-        if (error) return { error: error.message }
-        const res = data as { error?: string; ok?: boolean }
-        if (res?.error) return { error: res.error }
+            // Konfirmasi email nonaktif → signUp membuat sesi langsung. Tutup sesi
+            // itu agar pelanggan masuk sendiri lewat halaman masuk (bukan auto-login).
+            if (authData.session) await supabase.auth.signOut()
 
-        // 3. Selesai — tanpa auto-login: pengguna diarahkan ke halaman masuk
-        //    (menghindari jebakan "Email not confirmed" bila konfirmasi aktif)
-        return { error: null }
+            // 2. Insert ke tabel users lewat RPC (pakai auth UUID)
+            const { data, error } = await supabase.rpc('register_customer', {
+                p_name: name,
+                p_email: email,
+                p_phone: phone,
+                p_user_id: authData.user.id,
+            })
+            if (error) return { error: authErrorMessage(error.message) }
+            const res = data as { error?: string; ok?: boolean }
+            if (res?.error) return { error: res.error }
+
+            // 3. Selesai — tanpa auto-login: pengguna diarahkan ke halaman masuk
+            return { error: null }
+        } finally {
+            registeringRef.current = false
+        }
     }
 
     const switchRole = async (role: string) => {

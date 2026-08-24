@@ -1,6 +1,5 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useTickets, type Ticket } from '../../context/TicketContext'
+import { useTickets } from '../../context/TicketContext'
 import { useAuth } from '../../context/AuthContext'
 import { Badge } from '../../components/Badge'
 import { ClipboardCheck, ChevronRight, AlertTriangle, CheckCircle2, Plus } from 'lucide-react'
@@ -66,8 +65,8 @@ export default function CustomerDashboard() {
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
                                         <span className="text-sm font-semibold font-mono">{ticket.code}</span>
-                                        <Badge status={ticket.status} />
-                                        {ticket.priority && <Badge priority={ticket.priority} />}
+                                        <Badge type="status" value={ticket.status} />
+                                        {ticket.priority && <Badge type="priority" value={ticket.priority} />}
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-1 truncate">{ticket.description}</p>
                                 </div>

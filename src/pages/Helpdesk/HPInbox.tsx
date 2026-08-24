@@ -11,6 +11,7 @@ import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
 import { ProgressBar } from '../../components/ui/progress-bar'
+import { PhoneInput } from '../../components/ui/input'
 import { getCustomers, getSites, getUnits, problemCategoriesApi, type Customer, type SiteRow, type UnitRow, type CatalogItem } from '../../services/master-data'
 import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
@@ -133,7 +134,7 @@ export default function HPInbox() {
         const created = await addTicket({
             reporterName: formData.reporterName, company: 'Internal', site: formData.site, unit: formData.unit,
             priority: (formData.priority || undefined) as Priority | undefined,
-            description: `Jabatan: ${formData.jabatan}\nWA Pelapor: ${formData.noWaPelapor}\n\n${formData.description}`,
+            description: `Jabatan: ${formData.jabatan}\nWA Pelapor: +62${formData.noWaPelapor}\n\n${formData.description}`,
             photoUrl: undefined, initialStatus,
             catatanInternal: catatan,
             photos,
@@ -145,9 +146,9 @@ export default function HPInbox() {
     }
 
     const validateForm = (): boolean => {
-        const errs: { reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string } = {}
+        const errs: { reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string; photos?: string } = {}
         if (!formData.reporterName.trim()) errs.reporterName = 'Mohon isi Nama Pelapor'
-        if (!/^(\+62|62|0)8\d{7,12}$/.test(formData.noWaPelapor.replace(/\s/g, ''))) errs.noWaPelapor = 'No WhatsApp tidak valid.'
+        if (!/^\d{8,12}$/.test(formData.noWaPelapor)) errs.noWaPelapor = 'No WhatsApp tidak valid.'
         if (!formData.site) errs.site = 'Mohon pilih Site'
         if (!formData.unit) errs.unit = 'Mohon pilih Unit / Perangkat'
         if (!formData.description.trim()) errs.description = 'Mohon isi Deskripsi Kendala'
@@ -729,7 +730,7 @@ export default function HPInbox() {
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">No WhatsApp Pelapor</label>
-                                            <input type="text" value={formData.noWaPelapor} onChange={e => { setFormData({ ...formData, noWaPelapor: e.target.value }); setFormErrors(prev => ({ ...prev, noWaPelapor: undefined })) }} className={`${inputCls} ${formErrors.noWaPelapor ? 'border-red-500' : ''}`} placeholder="" />
+                                            <PhoneInput value={formData.noWaPelapor} onChange={v => { setFormData({ ...formData, noWaPelapor: v }); setFormErrors(prev => ({ ...prev, noWaPelapor: undefined })) }} className={`${inputCls} ${formErrors.noWaPelapor ? 'border-red-500' : ''}`} />
                                             <FieldError msg={formErrors.noWaPelapor} />
                                         </div>
                                     </section>
@@ -886,7 +887,7 @@ export default function HPInbox() {
                                 <div className="p-5 space-y-3 overflow-y-auto flex-1">
                                     {[
                                         ['Pelapor', formData.reporterName],
-                                        ['No WhatsApp', formData.noWaPelapor],
+                                        ['No WhatsApp', formData.noWaPelapor ? `+62${formData.noWaPelapor}` : '—'],
                                         ['Perusahaan', selectedCompany?.name || formData.company || '—'],
                                         ['Site / Unit', `${formData.site} - ${formData.unit}`],
                                         ['Prioritas', formData.priority],

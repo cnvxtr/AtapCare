@@ -23,4 +23,39 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 )
 Input.displayName = "Input"
 
-export { Input }
+// Nomor telepon Indonesia: UI selalu menampilkan prefix +62, nilai = digit
+// nasional tanpa awalan 0/62. Format tersimpan di DB: "62xxxxxxxxxx".
+// eslint-disable-next-line react-refresh/only-export-components
+export function normalizePhone(raw: string | null | undefined): string {
+  return (raw || "").replace(/\D/g, "").replace(/^62/, "").replace(/^0+/, "")
+}
+
+// ponytail: simpan seragam "62xxx"; kalau nanti perlu E.164 penuh (+), tinggal ganti di sini
+// eslint-disable-next-line react-refresh/only-export-components
+export const toStoredPhone = (raw: string | null | undefined): string =>
+  normalizePhone(raw) ? `62${normalizePhone(raw)}` : ""
+
+type PhoneInputProps = Omit<InputProps, "value" | "onChange" | "type"> & {
+  value?: string | number | null
+  onChange?: (value: string) => void
+}
+
+function PhoneInput({ value, onChange, className, ...props }: PhoneInputProps) {
+  return (
+    <div className="flex">
+      <span className="inline-flex items-center rounded-l-md border border-r-0 border-input bg-muted px-3 text-sm text-muted-foreground select-none">
+        +62
+      </span>
+      <Input
+        type="tel"
+        inputMode="numeric"
+        className={cn("rounded-l-none", className)}
+        {...props}
+        value={normalizePhone(String(value ?? ""))}
+        onChange={(e) => onChange?.(normalizePhone(e.target.value))}
+      />
+    </div>
+  )
+}
+
+export { Input, PhoneInput }

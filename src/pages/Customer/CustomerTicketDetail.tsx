@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTickets } from '../../context/TicketContext'
-import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { Badge } from '../../components/Badge'
 import { ArrowLeft, Star, MessageSquare } from 'lucide-react'
@@ -10,7 +9,6 @@ import { toast } from 'sonner'
 export default function CustomerTicketDetail() {
     const { ticketCode } = useParams<{ ticketCode: string }>()
     const navigate = useNavigate()
-    const { user } = useAuth()
     const { tickets } = useTickets()
     const ticket = tickets.find(t => t.code === ticketCode)
 
@@ -59,8 +57,8 @@ export default function CustomerTicketDetail() {
             <div className="bg-card border border-border rounded-lg p-6">
                 <div className="flex items-center gap-3 mb-4">
                     <h1 className="text-xl font-display font-bold font-mono">{ticket.code}</h1>
-                    <Badge status={ticket.status} />
-                    {ticket.priority && <Badge priority={ticket.priority} />}
+                    <Badge type="status" value={ticket.status} />
+                    {ticket.priority && <Badge type="priority" value={ticket.priority} />}
                 </div>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                     <div><span className="text-muted-foreground">Site: </span>{ticket.site}</div>

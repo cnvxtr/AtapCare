@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { authErrorMessage } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LIGHT } from "./Login";
-import logo from "../assets/logo2.png";
+import logo from "../assets/logo.png";
 
 type Phase = "checking" | "invalid" | "ready";
 
@@ -46,7 +47,7 @@ export default function ResetPassword() {
     const { error } = await supabase.auth.updateUser({ password: pw });
     if (error) {
       setBusy(false);
-      return setMsg(error.message);
+      return setMsg(authErrorMessage(error.message));
     }
     // Keluar dari sesi recovery agar pengguna membuktikan sandi barunya di halaman masuk
     await supabase.auth.signOut();

@@ -1,6 +1,8 @@
 import { supabase } from '@/lib/supabase'
 
 const BUCKET = 'ticket-photos'
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // Fraksi 0..1 untuk progres upload (dipakai ProgressBar).
 export type UploadProgress = (fraction: number) => void
@@ -11,8 +13,8 @@ async function xhrUpload(bucket: string, path: string, body: Blob | File, conten
     const { data } = await supabase.auth.getSession()
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest()
-        xhr.open('POST', `${supabase.supabaseUrl}/storage/v1/object/${bucket}/${path}`)
-        xhr.setRequestHeader('apikey', supabase.supabaseKey)
+        xhr.open('POST', `${SUPABASE_URL}/storage/v1/object/${bucket}/${path}`)
+        xhr.setRequestHeader('apikey', SUPABASE_ANON_KEY)
         if (data.session?.access_token) xhr.setRequestHeader('authorization', `Bearer ${data.session.access_token}`)
         if (upsert) xhr.setRequestHeader('x-upsert', 'true')
         xhr.setRequestHeader('content-type', contentType)
