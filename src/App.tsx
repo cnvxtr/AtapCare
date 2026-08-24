@@ -20,10 +20,10 @@ import { AdminMasterData } from './pages/Admin/AdminMasterData'
 import { AdminReports } from './pages/Admin/AdminReports'
 
 import Landing from './pages/indexclient'
-import Troubleshoot from './pages/Troubleshoot'
 import Privacy from './pages/Privacy'
 import Terms from './pages/Terms'
 import NotFound from './pages/NotFound'
+import ResetPassword from './pages/ResetPassword'
 
 import CustomerDashboard from './pages/Customer/CustomerDashboard'
 import CustomerReport from './pages/Customer/CustomerReport'
@@ -72,6 +72,7 @@ function RoleDashboard() {
 function AppRoutes() {
   const { isAuthenticated, user, loading } = useAuth()
   const [splashDone, setSplashDone] = useState(() => !isNativePlatform())
+  const isMobile = useIsMobile()
 
   if (!splashDone) {
     return <SplashScreen onFinish={() => setSplashDone(true)} />
@@ -85,16 +86,16 @@ function AppRoutes() {
     )
   }
 
-  const isMobile = useIsMobile()
   const AppLayout = isMobile ? MobileLayout : MainLayout
 
   return (
     <Routes>
       {/* GERBANG 1: Portal Publik (Tanpa Login) */}
       <Route path="/" element={<Landing />} />
-      <Route path="/troubleshoot/:scenario" element={<Troubleshoot />} />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
+      {/* Publik & tanpa guard isAuthenticated: saat link recovery dibuka, sesi memang sudah aktif */}
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* GERBANG 2: Login Karyawan */}
       <Route

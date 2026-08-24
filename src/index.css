@@ -77,6 +77,12 @@ html {
         border-color: hsl(var(--border));
     }
 
+    /* Seleksi teks: hitam di light mode, putih di dark mode */
+    ::selection {
+        background-color: hsl(var(--foreground));
+        color: hsl(var(--background));
+    }
+
     body {
         background-color: hsl(var(--background));
         color: hsl(var(--foreground));
@@ -209,6 +215,53 @@ html {
     .input:focus {
         border-color: hsl(var(--foreground) / 0.4);
         box-shadow: 0 0 0 2px hsl(var(--foreground) / 0.1);
+    }
+
+    /* Reveal: muncul saat elemen masuk viewport (dikontrol komponen <Reveal/>) */
+    .reveal {
+        opacity: 0;
+        transform: translateY(14px);
+        transition:
+            opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+            transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    .reveal[data-shown="true"] {
+        opacity: 1;
+        transform: none;
+    }
+
+    /* Sweep: kilatan menyapu permukaan kartu saat hover */
+    .sweep {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .sweep::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+            110deg,
+            transparent 35%,
+            hsl(var(--foreground) / 0.07) 50%,
+            transparent 65%
+        );
+        transform: translateX(-100%);
+        transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+        pointer-events: none;
+    }
+
+    .sweep:hover::before {
+        transform: translateX(100%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reveal {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
     }
 }
 

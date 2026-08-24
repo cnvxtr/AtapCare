@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { createTicket, type CreateTicketPayload } from '../../services/ticketService'
-import { X, Camera, FileText } from 'lucide-react'
+import { Camera, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Combobox, type ComboboxOption } from '../../components/ui/combobox'
+import { ProgressBar } from '../../components/ui/progress-bar'
 
 interface CustomerRow { id: string; name: string }
 interface SiteRow { id: string; name: string }
@@ -25,6 +26,7 @@ export default function CustomerReport() {
     const [description, setDescription] = useState('')
     const [photos, setPhotos] = useState<File[]>([])
     const [isLoading, setIsLoading] = useState(false)
+    const [uploadPct, setUploadPct] = useState<number | null>(null)
     const [error, setError] = useState('')
 
     useEffect(() => {
@@ -70,9 +72,11 @@ export default function CustomerReport() {
             unit: selectedUnit?.label || '',
             description,
             photos: photos.length > 0 ? photos : undefined,
+            onUploadProgress: setUploadPct,
         }
         const result = await createTicket(payload)
         setIsLoading(false)
+        setUploadPct(null)
         if (result.error) { setError(result.error); return }
         toast.success('Tiket berhasil dibuat!')
         navigate('/customer')
@@ -118,6 +122,9 @@ export default function CustomerReport() {
                                 e.target.value = ''
                             }} />
                     </div>
+                    {isLoading && (
+                        <ProgressBar value={uploadPct} label="Mengunggah lampiran…" className="mt-3" />
+                    )}
                     {photos.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-2">
                             {photos.map((f, i) => (

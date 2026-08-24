@@ -7,7 +7,7 @@ import Logo from '../Logo'
 import {
   LayoutDashboard, Inbox, ClipboardList, LayoutGrid,
   ChevronRight, Bell, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
-  Users, Building2, FileBarChart2, Timer, Sun, Moon, Check, X
+  Users, Building2, FileBarChart2, Sun, Moon, Check
 } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../../components/ui/tooltip'
 import {
@@ -182,8 +182,8 @@ export default function MainLayout() {
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight min-w-0 cursor-pointer" onClick={() => navigate(user?.role === 'admin' ? '/admin' : '/dashboard')}>
-              <span className="font-display font-bold tracking-tight truncate">Atap Care</span>
-              <span className="text-[9px] text-muted-foreground uppercase tracking-tight truncate">PT Atap Teknologi Indonesia</span>
+              <span className="font-display text-sm font-bold uppercase tracking-[0.2em] truncate">Atap Care</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest truncate">PT Atap Teknologi Indonesia</span>
             </div>
           )}
           {!collapsed && (

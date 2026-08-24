@@ -7,9 +7,9 @@ export default function SiteFooter() {
         <p>&copy; 2026 PT Atap Teknologi Indonesia. Semua hak dilindungi.</p>
         <span className="hidden sm:inline">·</span>
         <div className="flex items-center gap-2">
-          <Link to="/privacy" className="hover:text-foreground transition underline underline-offset-2">Privacy Policy</Link>
+          <Link to="/privacy" className="hover:text-foreground transition underline underline-offset-2">Kebijakan Privasi</Link>
           <span>|</span>
-          <Link to="/terms" className="hover:text-foreground transition underline underline-offset-2">Terms of Service</Link>
+          <Link to="/terms" className="hover:text-foreground transition underline underline-offset-2">Syarat &amp; Ketentuan</Link>
         </div>
       </div>
     </footer>

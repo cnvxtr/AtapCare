@@ -1,47 +1,63 @@
-import { Link } from "react-router-dom";
-import { ArrowRight } from "lucide-react";
-import { SCENARIOS } from "@/lib/troubleshoot";
+import { Cpu, Router as RouterIcon, Wifi, Zap } from "lucide-react";
+import Reveal from "@/components/Reveal";
+
+const TROUBLE_CARDS = [
+  {
+    code: "TS-01",
+    title: "Perangkat Tidak Menyala",
+    desc: "Periksa sumber daya, adaptor, dan kabel. Bila tetap mati, laporkan dengan foto unit.",
+    Icon: Zap,
+  },
+  {
+    code: "TS-02",
+    title: "Koneksi Terputus",
+    desc: "Restart perangkat, tunggu 3 menit. Catat lampu indikator sebelum melapor.",
+    Icon: Wifi,
+  },
+  {
+    code: "TS-03",
+    title: "Jaringan Lambat",
+    desc: "Uji kecepatan pada dua perangkat berbeda lalu lampirkan hasilnya pada tiket.",
+    Icon: RouterIcon,
+  },
+  {
+    code: "TS-04",
+    title: "Perangkat Bermasalah",
+    desc: "Sebutkan kode unit dan gejala yang muncul agar teknisi menyiapkan sparepart.",
+    Icon: Cpu,
+  },
+];
 
 export function TroubleshootCards() {
   return (
     <section
       id="kendala"
-      className="relative z-10 px-6 py-16 max-w-5xl mx-auto w-full min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center scroll-mt-16"
+      className="relative z-10 mx-auto w-full max-w-5xl scroll-mt-16 px-6 py-20"
     >
-      <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight text-center mb-3">
-        Kendala <span className="italic font-serif text-muted-foreground">Umum?</span>
-      </h2>
-      <p className="text-center text-sm text-muted-foreground mb-8">
-        Coba cek dulu dengan panduan cepat — sebagian kendala bisa teratasi tanpa teknisi.
-      </p>
+      <Reveal className="mb-10">
+        <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight">
+          Kendala <span className="italic font-serif text-muted-foreground">Umum</span>
+        </h2>
+      </Reveal>
 
-      <div className="grid sm:grid-cols-2 gap-3">
-        {SCENARIOS.map(({ slug, title, subtitle, Icon, iconClass }) => (
-          <Link
-            key={slug}
-            to={`/troubleshoot/${slug}`}
-            className="group relative rounded-[3px] border border-border bg-card p-6 hover:border-foreground/30 transition flex items-start gap-4"
-          >
-            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[3px] border ${iconClass}`}>
-              <Icon className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <p className="font-display font-bold tracking-tight">{title}</p>
-              <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{subtitle}</p>
-              <p className="mt-2 text-xs font-medium inline-flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition">
-                Mulai Panduan <ArrowRight className="h-3.5 w-3.5" />
-              </p>
-            </div>
-          </Link>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {TROUBLE_CARDS.map(({ code, title, desc, Icon }, i) => (
+          <Reveal key={code} delay={i * 80}>
+            <article className="sweep group h-full rounded-[3px] border border-border bg-card p-5 transition-all duration-500 hover:-translate-y-1 hover:border-foreground/40">
+              <div className="flex items-center justify-between">
+                <span className="flex h-9 w-9 items-center justify-center rounded-[3px] bg-foreground text-background">
+                  <Icon className="h-4 w-4" />
+                </span>
+                <span className="font-mono text-[11px] tracking-[0.16em] text-muted-foreground">
+                  {code}
+                </span>
+              </div>
+              <p className="mt-4 text-sm font-semibold leading-tight">{title}</p>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{desc}</p>
+            </article>
+          </Reveal>
         ))}
       </div>
-
-      <p className="mt-6 text-center text-sm text-muted-foreground">
-        Kendala Anda tidak ada di pilihan atas?{" "}
-        <Link to="/login" className="text-foreground font-medium underline underline-offset-2 hover:no-underline">
-          Langsung Buat Laporan Manual Tanpa Panduan →
-        </Link>
-      </p>
     </section>
   );
 }

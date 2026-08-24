@@ -5,7 +5,8 @@ import { Camera, Lock, Save, User, Mail, Phone, AtSign, Shield, Clock, Filter, E
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { ROLE_LABELS } from '../services/users'
-import { resolveAvatarUrl } from '../services/photoService'
+import { resolveAvatarUrl, compressImageToBlob, uploadAvatar } from '../services/photoService'
+import { ProgressBar } from '../components/ui/progress-bar'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/dropdown-menu'
 
 type ActivityRow = { id: string; waktu: string; user: string; aktivitas: string; created_at: string }
@@ -187,6 +188,7 @@ export default function Profile() {
     setConfirmPassword('')
   }
 
+  const [avatarPct, setAvatarPct] = useState<number | null>(null)
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -196,37 +198,32 @@ export default function Profile() {
     }
     setAvatarUploading(true)
 
-    // Compress image
-    const compressed = await compressImage(file, 400, 0.8)
-    const ext = file.name.split('.').pop() || 'jpg'
-    const path = `${user.id}/avatar.${ext}`
+    try {
+      // Kompres ke JPEG blob lalu upload dengan progres nyata.
+      const compressed = await compressImageToBlob(file, 400, 0.8)
+      const path = `${user.id}/avatar.jpg`
 
-    // Upload
-    const { error: uploadError } = await supabase.storage
-      .from('avatars')
-      .upload(path, compressed, { upsert: true })
+      await uploadAvatar(path, compressed, setAvatarPct)
 
-    if (uploadError) {
-      setAvatarUploading(false)
+      // Signed URL (diperbarui otomatis saat halaman di-reload di bawah)
+      await supabase.storage.from('avatars').createSignedUrl(path, 3600 * 24 * 365)
+
+      // Update users table
+      const { error: updateError } = await supabase.from('users').update({ avatar_url: path }).eq('id', user.id)
+
+      if (updateError) {
+        toast.error('Foto tersimpan, tapi gagal memperbarui profil.')
+        return
+      }
+
+      toast.success('Foto profil berhasil diubah.')
+      window.location.reload()
+    } catch {
       toast.error('Gagal upload avatar.')
-      return
-    }
-
-    // Get signed URL
-    const { data: urlData } = await supabase.storage.from('avatars').createSignedUrl(path, 3600 * 24 * 365)
-
-    // Update users table
-    const { error: updateError } = await supabase.from('users').update({ avatar_url: path }).eq('id', user.id)
-
-    if (updateError) {
+    } finally {
       setAvatarUploading(false)
-      toast.error('Foto tersimpan, tapi gagal memperbarui profil.')
-      return
+      setAvatarPct(null)
     }
-
-    setAvatarUploading(false)
-    toast.success('Foto profil berhasil diubah.')
-    window.location.reload()
   }
 
   return (
@@ -270,6 +267,9 @@ export default function Profile() {
             </div>
           </div>
         </div>
+        {avatarUploading && (
+          <ProgressBar value={avatarPct} label="Mengunggah foto profil…" className="mt-4" />
+        )}
       </div>
 
       {/* Informasi Akun */}
@@ -483,27 +483,3 @@ function labelAct(action: string, entityType: string, meta: Record<string, unkno
   return map[action] || `${action} ${entityType}`.trim()
 }
 
-function compressImage(file: File, maxDim: number, quality: number): Promise<Blob> {
-  return new Promise((resolve) => {
-    const img = new Image()
-    const url = URL.createObjectURL(file)
-    img.onload = () => {
-      let { width, height } = img
-      if (width > maxDim || height > maxDim) {
-        const ratio = Math.min(maxDim / width, maxDim / height)
-        width = Math.round(width * ratio)
-        height = Math.round(height * ratio)
-      }
-      const canvas = document.createElement('canvas')
-      canvas.width = width
-      canvas.height = height
-      const ctx = canvas.getContext('2d')!
-      ctx.drawImage(img, 0, 0, width, height)
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(url)
-        resolve(blob || file)
-      }, 'image/jpeg', quality)
-    }
-    img.src = url
-  })
-}

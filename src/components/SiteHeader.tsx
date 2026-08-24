@@ -6,9 +6,9 @@ import Logo from "./Logo";
 
 const NAV_ITEMS = [
   { label: "Beranda", href: "/#beranda" },
-  { label: "Kendala", href: "/#kendala" },
-  { label: "Alur", href: "/#alur" },
-  { label: "Info", href: "/#info" },
+  { label: "Kendala Umum", href: "/#kendala" },
+  { label: "Alur Layanan", href: "/#alur" },
+  { label: "Informasi", href: "/#info" },
 ];
 
 export function SiteHeader() {
@@ -20,7 +20,7 @@ export function SiteHeader() {
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <Logo className="h-9 w-9 rounded-xl object-contain" />
           <div className="flex flex-col leading-tight">
-            <span className="font-display font-bold">Atap Care</span>
+            <span className="font-display text-sm font-bold uppercase tracking-[0.2em]">Atap Care</span>
             <span className="text-[10px] uppercase tracking-widest text-muted-foreground">PT Atap Teknologi Indonesia</span>
           </div>
         </Link>
@@ -30,7 +30,7 @@ export function SiteHeader() {
             <a
               key={item.href}
               href={item.href}
-              className="px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition"
+              className="relative px-3 py-2 text-sm text-muted-foreground transition-colors duration-300 after:absolute after:bottom-1 after:left-3 after:right-3 after:h-px after:origin-right after:scale-x-0 after:bg-foreground after:transition-transform after:duration-300 hover:text-foreground hover:after:origin-left hover:after:scale-x-100"
             >
               {item.label}
             </a>
@@ -39,7 +39,7 @@ export function SiteHeader() {
 
         <div className="flex items-center gap-4 min-w-[180px] justify-end">
           <Link to="/login" className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background rounded-[3px] text-xs font-semibold hover:opacity-90 transition">
-            <LoginIcon size={14} /> Login
+            <LoginIcon size={14} /> Masuk
           </Link>
           <button onClick={() => setOpen(!open)} className="lg:hidden p-2 rounded hover:bg-accent transition" aria-label="Menu">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -61,7 +61,7 @@ export function SiteHeader() {
               </a>
             ))}
             <Link to="/login" onClick={() => setOpen(false)} className="px-2 py-2.5 text-sm font-semibold text-foreground hover:bg-muted transition inline-flex items-center gap-1.5 border-b border-border">
-              <LoginIcon size={14} /> Login
+              <LoginIcon size={14} /> Masuk
             </Link>
           </div>
         </nav>

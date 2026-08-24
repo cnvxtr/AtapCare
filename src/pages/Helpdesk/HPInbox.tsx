@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, selectTr
 import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
+import { ProgressBar } from '../../components/ui/progress-bar'
 import { getCustomers, getSites, getUnits, problemCategoriesApi, type Customer, type SiteRow, type UnitRow, type CatalogItem } from '../../services/master-data'
 import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
@@ -77,6 +78,7 @@ export default function HPInbox() {
     // State Alur Buat Tiket Internal
     const [createStep, setCreateStep] = useState<'form' | 'review' | 'remote' | 'path' | 'void'>('form')
     const [submitting, setSubmitting] = useState(false)
+    const [uploadPct, setUploadPct] = useState<number | null>(null)
     const [newVoidReason, setNewVoidReason] = useState('')
     const [newTicketId, setNewTicketId] = useState<string | null>(null)
     const [formErrors, setFormErrors] = useState<{ reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string; priority?: string; photos?: string }>({})
@@ -134,9 +136,11 @@ export default function HPInbox() {
             description: `Jabatan: ${formData.jabatan}\nWA Pelapor: ${formData.noWaPelapor}\n\n${formData.description}`,
             photoUrl: undefined, initialStatus,
             catatanInternal: catatan,
-            photos
+            photos,
+            onUploadProgress: setUploadPct
         })
         setSubmitting(false)
+        setUploadPct(null)
         return created
     }
 
@@ -673,7 +677,9 @@ export default function HPInbox() {
             {/* MODAL BUAT TIKET INTERNAL (ALUR 5 LANGKAH) */}
             {/* ========================================== */}
             {isModalOpen && createPortal((
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 fade-in" onClick={closeCreateModal}>
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 fade-in" onClick={closeCreateModal}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => e.preventDefault()}>
                     <div className="relative bg-card w-full max-w-2xl rounded-2xl border border-border shadow-2xl flex flex-col max-h-[90vh] overflow-hidden fade-in" onClick={(e) => e.stopPropagation()}>
                         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-foreground/40 to-transparent" />
                         <div className="pointer-events-none absolute -top-20 -right-20 w-56 h-56 rounded-full bg-blue-500/10 blur-3xl" />
@@ -820,7 +826,7 @@ export default function HPInbox() {
                                             >
                                                 <span className="inline-flex p-2.5 rounded-full bg-muted group-hover:bg-accent transition"><ImagePlus className="w-5 h-5" /></span>
                                                 <span>Tarik & lepas foto atau file di sini, atau klik untuk memilih</span>
-                                                <input id="upload-photo-input" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple className="sr-only" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
+                                                <input id="upload-photo-input" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple className="hidden" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
                                             </label>
                                             {photos.length > 0 && (
                                                 <div className="mt-2.5 flex flex-wrap gap-2">
@@ -831,6 +837,9 @@ export default function HPInbox() {
                                                         </span>
                                                     ))}
                                                 </div>
+                                            )}
+                                            {submitting && (
+                                                <ProgressBar value={uploadPct} label="Mengunggah lampiran…" className="mt-2.5" />
                                             )}
                                         </div>
                                         <div>

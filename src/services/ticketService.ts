@@ -20,6 +20,7 @@ export interface CreateTicketPayload {
   unit: string
   description: string
   photos?: File[]
+  onUploadProgress?: (fraction: number) => void
 }
 
 export async function createTicket(data: CreateTicketPayload) {
@@ -28,7 +29,12 @@ export async function createTicket(data: CreateTicketPayload) {
     // Foto portal → Storage (bukan data URL) agar kolom DB tidak membengkak (K2).
     const folder = `ticket-photos/guest/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
     try {
-      photos = await Promise.all(data.photos.map((f) => uploadAttachment(f, folder)))
+      const files = data.photos
+      const fracs = new Array(files.length).fill(0)
+      photos = await Promise.all(files.map((f, i) => uploadAttachment(f, folder, (p) => {
+        fracs[i] = p
+        data.onUploadProgress?.(fracs.reduce((a, b) => a + b, 0) / files.length)
+      })))
     } catch {
       return { error: 'Gagal mengunggah foto. Silakan coba lagi.' }
     }

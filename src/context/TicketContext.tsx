@@ -139,6 +139,7 @@ interface AddTicketData {
     priority?: Priority
     catatanInternal?: string
     photos?: File[]
+    onUploadProgress?: (fraction: number) => void
 }
 
 interface TicketContextType {
@@ -214,7 +215,11 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
         if (data.photos?.length) {
             try {
-                const paths = await Promise.all(data.photos.map((f) => uploadAttachment(f, code)))
+                const fracs = new Array(data.photos.length).fill(0)
+                const paths = await Promise.all(data.photos.map((f, i) => uploadAttachment(f, code, (p) => {
+                    fracs[i] = p
+                    data.onUploadProgress?.(fracs.reduce((a, b) => a + b, 0) / data.photos!.length)
+                })))
                 const photoBlock = `Foto keluhan (${paths.length}):\n${paths.join('\n')}`
                 details = details ? `${details}\n${photoBlock}` : photoBlock
             } catch {

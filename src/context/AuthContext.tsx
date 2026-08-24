@@ -21,6 +21,7 @@ interface AuthContextType {
     lastLoginTime: string | null
     loading: boolean
     login: (username: string, password: string) => Promise<{ error: string | null }>
+    loginWithGoogle: () => Promise<{ error: string | null }>
     register: (name: string, email: string, phone: string, password: string) => Promise<{ error: string | null; ok?: boolean }>
     logout: () => Promise<void>
     switchRole: (role: string) => Promise<{ error: string | null }>
@@ -135,6 +136,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: 'Login gagal' }
     }
 
+    const loginWithGoogle = async () => {
+        // Login sekaligus daftar otomatis: user Google baru diprovision
+        // oleh trigger DB (supabase/google-user-trigger.sql) sebagai customer.
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin },
+        })
+        return { error: error?.message ?? null }
+    }
+
     const logout = async () => {
         await supabase.auth.signOut()
         setUser(null)
@@ -164,10 +175,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const res = data as { error?: string; ok?: boolean }
         if (res?.error) return { error: res.error }
 
-        // 3. Auto-login setelah register
-        const loginResult = await login(email, password)
-        if (loginResult.error) return { error: null, ok: true }
-        return { error: null, ok: true }
+        // 3. Selesai — tanpa auto-login: pengguna diarahkan ke halaman masuk
+        //    (menghindari jebakan "Email not confirmed" bila konfirmasi aktif)
+        return { error: null }
     }
 
     const switchRole = async (role: string) => {
@@ -189,7 +199,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, loginWithGoogle, register, logout, switchRole }}>
             {children}
         </AuthContext.Provider>
     )

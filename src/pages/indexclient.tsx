@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getLandingStats, type LandingStats } from "@/services/ticketService";
 import SiteFooter from "@/components/SiteFooter";
+import Reveal from "@/components/Reveal";
 import { SiteHeader, SocialIcon } from "@/components/SiteHeader";
 import { TroubleshootCards } from "@/components/TroubleshootCards";
 
@@ -47,12 +48,12 @@ const SOCIALS: { href: string; label: string; children: React.ReactNode }[] = [
 ];
 
 const FLOW_STEPS: { n: string; title: string; desc: string; Icon: typeof FileText }[] = [
-  { n: "01", title: "Laporkan Kendala", desc: "Kirim laporan via portal, dapatkan ID tiket untuk pelacakan.", Icon: FileText },
-  { n: "02", title: "Penilaian & Prioritas", desc: "Kendala ditelaah, prioritas ditetapkan, penanganan jarak jauh dicoba bila memungkinkan.", Icon: Filter },
-  { n: "03", title: "Penjadwalan & Penugasan", desc: "Penanganan dijadwalkan dan ditugaskan ke personel lapangan.", Icon: CalendarClock },
-  { n: "04", title: "Perbaikan di Lapangan", desc: "Kehadiran terekam, perbaikan dilaksanakan, bukti hasil & BAST diunggah.", Icon: Wrench },
-  { n: "05", title: "Verifikasi Hasil", desc: "Hasil diverifikasi; dikembalikan untuk perbaikan ulang bila belum tuntas.", Icon: CheckCircle2 },
-  { n: "06", title: "Penutupan Tiket", desc: "Tiket ditutup, pelanggan dikonfirmasi via WhatsApp.", Icon: BadgeCheck },
+  { n: "01", title: "Laporkan Kendala", desc: "Masuk ke akun Anda melalui halaman Login, kirim laporan kendala beserta foto, dan dapatkan ID tiket untuk pelacakan.", Icon: FileText },
+  { n: "02", title: "Validasi & Prioritas", desc: "Tim kami memvalidasi laporan, mengonfirmasi penerimaan via WhatsApp, serta menetapkan prioritas sesuai urgensi. Bantuan jarak jauh dicoba bila memungkinkan.", Icon: Filter },
+  { n: "03", title: "Penjadwalan & Penugasan", desc: "Perbaikan dijadwalkan dan ditugaskan ke teknisi lapangan yang berwenang di lokasi Anda.", Icon: CalendarClock },
+  { n: "04", title: "Perbaikan di Lapangan", desc: "Teknisi check-in via GPS, perbaikan dilaksanakan, foto bukti hasil & serial number unit diunggah ke sistem.", Icon: Wrench },
+  { n: "05", title: "Verifikasi Hasil", desc: "Hasil pekerjaan diverifikasi tim kami; dikembalikan untuk perbaikan ulang bila belum tuntas.", Icon: CheckCircle2 },
+  { n: "06", title: "Penutupan & Penilaian", desc: "Tiket ditutup oleh tim kami, dan Anda diminta memberikan penilaian layanan.", Icon: BadgeCheck },
 ];
 
 const FAQ_ITEMS: Array<{ q: string; a: string }> = [
@@ -66,7 +67,7 @@ const FAQ_ITEMS: Array<{ q: string; a: string }> = [
   },
   {
     q: "Siapa yang akan menangani laporan saya?",
-    a: "Laporan ditangani Helpdesk (Kustiara Bhakti) dan Project Manager (Aditya Okki), lalu diteruskan ke teknisi lapangan yang bertugas di lokasi Anda.",
+    a: "Laporan Anda divalidasi oleh tim kami, kemudian dikoordinasikan hingga diteruskan ke teknisi lapangan yang bertugas di lokasi Anda.",
   },
   {
     q: "Bagaimana jika gangguan terjadi di luar jam kerja (malam atau hari libur)?",
@@ -75,7 +76,7 @@ const FAQ_ITEMS: Array<{ q: string; a: string }> = [
 ];
 
 const ZONE = "relative z-10 px-6 py-16 max-w-5xl mx-auto w-full min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center scroll-mt-16";
-const ZONE_TITLE = "text-2xl md:text-3xl font-display font-bold tracking-tight text-center mb-10";
+const ZONE_TITLE = "text-2xl md:text-3xl font-display font-bold tracking-tight self-start mb-10";
 const STATS_CACHE_KEY = "atapcare-landing-stats";
 
 export default function Landing() {
@@ -140,25 +141,24 @@ export default function Landing() {
         <h2 className={ZONE_TITLE}>
           Alur <span className="italic font-serif text-muted-foreground">Layanan</span>
         </h2>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
-          {FLOW_STEPS.map(({ n, title, desc, Icon }) => (
-            <div
-              key={n}
-              className="group relative rounded-[3px] border border-border bg-card p-5 hover:border-foreground/30 transition"
-            >
-              <span className="font-mono text-3xl font-bold text-muted-foreground/30 group-hover:text-foreground/40 transition">
-                {n}
-              </span>
-              <div className="mt-3 flex items-start gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] bg-foreground text-background">
-                  <Icon className="h-4.5 w-4.5" />
+        <div className="grid auto-rows-fr sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
+          {FLOW_STEPS.map(({ n, title, desc, Icon }, i) => (
+            <Reveal key={n} delay={i * 70}>
+              <div className="sweep group relative h-full rounded-[3px] border border-border bg-card p-5 transition-all duration-500 hover:-translate-y-1 hover:border-foreground/40">
+                <span className="font-mono text-3xl font-bold text-muted-foreground/30 group-hover:text-foreground/50 transition-colors duration-500">
+                  {n}
                 </span>
-                <div>
-                  <p className="font-semibold text-sm leading-tight">{title}</p>
-                  <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                <div className="mt-3 flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] bg-foreground text-background">
+                    <Icon className="h-4.5 w-4.5" />
+                  </span>
+                  <div>
+                    <p className="font-semibold text-sm leading-tight">{title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -166,6 +166,7 @@ export default function Landing() {
       <section id="info" className="relative z-10 px-6 pb-20 max-w-5xl mx-auto w-full scroll-mt-16">
         <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-3">
           <div className="space-y-3">
+            <Reveal>
             <div className="rounded-[3px] border border-border bg-card p-6">
               <h2 className="text-lg font-display font-bold tracking-tight">
                 Informasi <span className="italic font-serif text-muted-foreground">Penting</span>
@@ -195,7 +196,9 @@ export default function Landing() {
                 </div>
               </div>
             </div>
+            </Reveal>
 
+            <Reveal delay={90}>
             <div className="rounded-[3px] border border-border bg-card p-6">
               <h2 className="text-lg font-display font-bold tracking-tight">
                 Kontak <span className="italic font-serif text-muted-foreground">Kami</span>
@@ -233,6 +236,7 @@ export default function Landing() {
                 </div>
               </div>
             </div>
+            </Reveal>
           </div>
 
           <div className="rounded-[3px] border border-border bg-card p-6 flex flex-col min-h-0">
