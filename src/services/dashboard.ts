@@ -173,7 +173,8 @@ export async function getAdminMonthlyData(): Promise<AdminMonthlyData> {
 
   const counts = new Map<string, number>();
   for (const t of closed) {
-    const name = t.assigned_to ? userNameById.get(t.assigned_to) || "Teknisi" : "Unassigned";
+    if (!t.assigned_to) continue; // tiket tanpa penugasan bukan bagian leaderboard teknisi
+    const name = userNameById.get(t.assigned_to) || "Teknisi";
     counts.set(name, (counts.get(name) || 0) + 1);
   }
 

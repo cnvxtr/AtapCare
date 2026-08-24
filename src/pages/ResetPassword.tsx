@@ -85,7 +85,7 @@ export default function ResetPassword() {
 
             {phase === "ready" && done && (
               <div className="rounded-lg border border-emerald-600/20 bg-emerald-50 p-3 text-sm text-emerald-700 text-center">
-                Kata sandi berhasil diperbarui — mengarahkan ke halaman masuk...
+                Kata sandi berhasil diperbarui. Mengarahkan ke halaman masuk...
               </div>
             )}
 

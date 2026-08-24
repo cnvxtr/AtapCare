@@ -105,24 +105,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [])
 
     const login = async (username: string, password: string) => {
-        // Lookup email by username lewat RPC SECURITY DEFINER (anon tak bisa
-        // baca kolom username setelah RLS 03).
-        const { data: loginEmail } = await supabase.rpc('resolve_login_email', {
-            p_username: username,
+        // Resolusi nama pengguna → email dilakukan di server (Edge Function) dan
+        // hanya setelah kata sandi terverifikasi, sehingga browser tidak dapat
+        // memanen email milik pengguna lain dari nama penggunanya.
+        const invoke = await supabase.functions.invoke<{ email?: string }>('login-email', {
+            body: { identifier: username, password },
         })
-        let userEmail = (loginEmail as string | null) || null
+        const userEmail = invoke.data?.email || null
 
         if (!userEmail) {
-            const { data } = await supabase
-                .from('users')
-                .select('email')
-                .eq('email', username)
-                .maybeSingle()
-            userEmail = data?.email || null
-        }
-
-        if (!userEmail) {
-            return { error: 'Username tidak ditemukan' }
+            return { error: 'Nama pengguna atau kata sandi salah.' }
         }
 
         const { data, error } = await supabase.auth.signInWithPassword({

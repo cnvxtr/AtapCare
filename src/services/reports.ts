@@ -40,7 +40,6 @@ export interface TicketReportRow {
   assignee: string;
   createdAt: string;
   frtMinutes: number | null;
-  bappUrl: string;
 }
 
 export const TICKET_REPORT_HEADERS = [
@@ -55,7 +54,6 @@ export const TICKET_REPORT_HEADERS = [
   "Teknisi",
   "Tanggal Masuk",
   "FRT (jam)",
-  "URL BAPP",
 ];
 
 export const ROOTCAUSE_HEADERS = ["Akar Kendala", "Jumlah", "% Total"];
@@ -101,7 +99,7 @@ async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
-      "id, code, customer, site, unit, category, priority, status, assigned_to, rejection_reason, created_at, frt_minutes, bapp_document_url",
+      "id, code, customer, site, unit, category, priority, status, assigned_to, rejection_reason, created_at, frt_minutes",
     )
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
@@ -128,7 +126,6 @@ function toTicketRow(
     created_at: string;
     assigned_to: string | null;
     frt_minutes?: number | null;
-    bapp_document_url?: string | null;
   },
   names?: Map<string, string>,
   serials?: Map<string, string>,
@@ -145,7 +142,6 @@ function toTicketRow(
     assignee: t.assigned_to ? names?.get(t.assigned_to) ?? "—" : "—",
     createdAt: fmt(t.created_at),
     frtMinutes: t.frt_minutes ?? null,
-    bappUrl: t.bapp_document_url || "—",
   };
 }
 

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
-import { Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
-import { LogOut, Sun, Moon, Bell } from 'lucide-react'
+import { LogOut, Sun, Moon, Bell, ChevronDown, Check } from 'lucide-react'
 import {
   getMyNotifications, getUnreadCount, markAllRead, markNotificationRead,
   type NotificationRow,
@@ -11,6 +11,7 @@ import {
 import { approveBackup, rejectBackup } from '../../services/ticketService'
 import { getStoredTheme, setTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
+import { ROLE_LABELS } from '../../services/users'
 import ErrorBoundary from '../ErrorBoundary'
 import BottomTabs from './BottomTabs'
 
@@ -24,14 +25,21 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/users': 'Pengguna',
   '/admin/master-data': 'Master Data',
   '/admin/reports': 'Laporan',
-  '/admin/sla': 'Konfigurasi SLA',
+  '/customer': 'Dashboard',
+  '/customer/report': 'Lapor Kendala',
 }
+
+const roleHome = (r?: string) =>
+  r === 'admin' ? '/admin' : r === 'teknisi' ? '/tugas' : r === 'customer' ? '/customer' : r === 'executive' ? '/executive' : '/dashboard'
 
 export default function MobileLayout() {
   const location = useLocation()
-  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const { user, logout, switchRole } = useAuth()
   const [showNotifSheet, setShowNotifSheet] = useState(false)
+  const [showRoleSheet, setShowRoleSheet] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [switchingRole, setSwitchingRole] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
@@ -63,7 +71,9 @@ export default function MobileLayout() {
     void registerPush(user.id)
   }, [user])
 
-  const pageTitle = PAGE_TITLES[location.pathname] || 'Atap Care'
+  const pageTitle = location.pathname.startsWith('/customer/ticket/')
+    ? 'Detail Tiket'
+    : PAGE_TITLES[location.pathname] || 'Atap Care'
 
   const handleLogout = () => {
     logout()
@@ -85,6 +95,24 @@ export default function MobileLayout() {
     }
   }
 
+  // Ganti Role — perilaku identik dengan sidebar web.
+  const roleList = (user?.roles || user?.role || '').split(',').filter(Boolean)
+  const canSwitchRole = roleList.length > 1
+
+  const handleSwitchRole = async (r: string) => {
+    if (!user || r === user.role || switchingRole) return
+    setSwitchingRole(true)
+    const res = await switchRole(r)
+    setSwitchingRole(false)
+    if (res?.error) {
+      toast.error(res.error)
+      return
+    }
+    setShowRoleSheet(false)
+    toast.success(`Role berubah menjadi ${ROLE_LABELS[r] || r}`)
+    navigate(roleHome(r))
+  }
+
   const toggleTheme = () => {
     const next = isDark ? 'light' : 'dark'
     setTheme(next)
@@ -104,6 +132,17 @@ export default function MobileLayout() {
       <header className="sticky top-0 z-40 h-15 flex items-center justify-between px-5 border-b border-border bg-background/80 backdrop-blur-xl">
         <h1 className="text-lg font-display font-bold tracking-tight truncate">{pageTitle}</h1>
         <div className="flex items-center gap-1">
+          {/* Ganti Role — hanya untuk multi-role */}
+          {canSwitchRole && user && (
+            <button
+              onClick={() => setShowRoleSheet(true)}
+              className="flex items-center gap-1 h-9 px-2.5 rounded-full border border-border bg-card text-xs font-semibold hover:bg-accent transition-colors"
+            >
+              {ROLE_LABELS[user.role] || user.role}
+              <ChevronDown className="h-3.5 w-3.5" />
+            </button>
+          )}
+
           {/* Notifikasi */}
           <button
             onClick={() => setShowNotifSheet(true)}
@@ -203,6 +242,41 @@ export default function MobileLayout() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+
+      {/* Role Switcher Bottom Sheet */}
+      {createPortal(
+        <>
+          <div
+            className={`fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200 ${showRoleSheet ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            onClick={() => setShowRoleSheet(false)}
+          />
+          <div
+            className={`fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[60vh] flex flex-col transition-transform duration-300 ease-out ${showRoleSheet ? 'translate-y-0' : 'translate-y-full'}`}
+          >
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            <div className="px-5 pb-3 border-b border-border">
+              <span className="text-sm font-semibold text-foreground">Ganti Role</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Role aktif saat ini: {ROLE_LABELS[user?.role || ''] || user?.role}</p>
+            </div>
+            <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              {roleList.map((r) => (
+                <button
+                  key={r}
+                  disabled={switchingRole || r === user?.role}
+                  onClick={() => handleSwitchRole(r)}
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-muted hover:bg-accent disabled:opacity-50 transition-colors"
+                >
+                  <span className="text-sm font-medium text-foreground">{ROLE_LABELS[r] || r}</span>
+                  {r === user?.role && <Check className="h-4 w-4 text-foreground" />}
+                </button>
+              ))}
             </div>
           </div>
         </>,

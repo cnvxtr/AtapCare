@@ -234,13 +234,8 @@ export default function TugasTeknisi() {
             >
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                            <span className="font-mono text-xs font-bold text-foreground">{ticket.code}</span>
-                            {ticket.priority && (
-                                            <Badge type="priority" value={ticket.priority} />
-                            )}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground truncate">{ticket.site}{ticket.unit ? ` — ${ticket.unit}` : ''}</p>
+                        <span className="font-mono text-xs font-bold text-foreground">{ticket.code}</span>
+                        <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{ticket.site}{ticket.unit ? ` — ${ticket.unit}` : ''}</p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">{ticket.customer}</p>
                         {isOvertime && (
                             <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
@@ -248,7 +243,8 @@ export default function TugasTeknisi() {
                             </span>
                         )}
                     </div>
-                    <div className="flex flex-col items-end gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {ticket.priority && <Badge type="priority" value={ticket.priority} small />}
                         <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </div>
                 </div>

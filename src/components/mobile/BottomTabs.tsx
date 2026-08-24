@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Inbox, FileBarChart2, Users, Building2,
-  Timer, LayoutGrid, ClipboardList,
+  LayoutGrid, ClipboardList,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { resolveAvatarUrl } from '../../services/photoService'
@@ -26,7 +26,6 @@ const TABS: Record<string, TabItem[]> = {
     { path: '/admin/users', icon: Users, label: 'Pengguna' },
     { path: '/admin/master-data', icon: Building2, label: 'Data' },
     { path: '/admin/reports', icon: FileBarChart2, label: 'Laporan' },
-    { path: '/admin/sla', icon: Timer, label: 'SLA' },
   ],
   pm: [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Beranda' },
@@ -39,6 +38,10 @@ const TABS: Record<string, TabItem[]> = {
     { path: '/executive', icon: LayoutDashboard, label: 'Beranda' },
     { path: '/executive/inbox', icon: Inbox, label: 'Tiket' },
     { path: '/executive/reports', icon: FileBarChart2, label: 'Laporan' },
+  ],
+  customer: [
+    { path: '/customer', icon: LayoutDashboard, label: 'Beranda' },
+    { path: '/customer/report', icon: FileBarChart2, label: 'Lapor' },
   ],
 }
 

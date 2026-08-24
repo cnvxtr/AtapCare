@@ -4,7 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { AnimatePresence, motion } from "framer-motion";
-import { Eye, EyeOff, Loader2, Zap } from "lucide-react";
+import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -166,7 +166,7 @@ function SignInView({
 
       {justRegistered && (
         <div className="mb-6 rounded-lg border border-emerald-600/20 bg-emerald-50 p-3 text-sm text-emerald-700">
-          Pendaftaran berhasil — silakan masuk dengan nama pengguna Anda.
+          Pendaftaran berhasil. Silakan masuk dengan nama pengguna Anda.
         </div>
       )}
 
@@ -320,7 +320,7 @@ function SignUpView({
           ) : unameState === "checking" ? (
             <p className="text-xs text-muted-foreground">Memeriksa ketersediaan nama pengguna…</p>
           ) : unameState === "taken" ? (
-            <p className="text-xs text-destructive">Nama pengguna sudah dipakai — coba tambahkan angka atau variasikan.</p>
+            <p className="text-xs text-destructive">Nama pengguna sudah dipakai. Coba tambahkan angka atau variasikan.</p>
           ) : unameState === "available" ? (
             <p className="text-xs font-medium text-emerald-600">Nama pengguna tersedia</p>
           ) : null}
@@ -420,29 +420,25 @@ function SignUpView({
 /* ---------------- Lupa Kata Sandi ---------------- */
 
 function ForgotView({ onBack }: { onBack: () => void }) {
-  const [identity, setIdentity] = useState("");
+  const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const id = identity.trim();
-    if (!id || busy) return;
+    const value = email.trim();
+    if (!value || busy) return;
     setError(null);
+    if (!/^\S+@\S+\.\S+$/.test(value)) {
+      setError("Masukkan alamat email yang valid.");
+      return;
+    }
     setBusy(true);
-    // Terjemahkan nama pengguna → email (fallback: input dianggap email)
-    const { data: resolved } = await supabase.rpc("resolve_login_email", { p_username: id });
-    let email: string | null = (resolved as string | null) || null;
-    if (!email && id.includes("@")) {
-      const { data } = await supabase.from("users").select("email").eq("email", id).maybeSingle();
-      email = data?.email ?? null;
-    }
-    if (email) {
-      await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-    }
+    // Diam saja untuk email tak terdaftar (anti-enumeration)
+    await supabase.auth.resetPasswordForEmail(value, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
     setBusy(false);
     // Pesan generik apa pun hasilnya — jangan bocorkan akun mana yang terdaftar
     setSent(true);
@@ -453,7 +449,7 @@ function ForgotView({ onBack }: { onBack: () => void }) {
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Lupa Kata Sandi</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Masukkan nama pengguna atau email Anda, tautan atur ulang akan dikirim ke email
+          Masukkan email terdaftar Anda, tautan atur ulang akan dikirim ke email tersebut.
         </p>
       </div>
 
@@ -471,18 +467,19 @@ function ForgotView({ onBack }: { onBack: () => void }) {
       ) : (
         <form onSubmit={submit} className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="identity">Nama Pengguna / Email</Label>
+            <Label htmlFor="reset-email">Email</Label>
             <Input
-              id="identity"
-              placeholder="Nama pengguna / email Anda"
-              autoComplete="username"
+              id="reset-email"
+              type="email"
+              placeholder="Email terdaftar Anda"
+              autoComplete="email"
               disabled={busy}
-              value={identity}
-              onChange={(e) => setIdentity(e.target.value)}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           </div>
 
-          <Button type="submit" className="w-full h-11" disabled={busy || !identity.trim()}>
+          <Button type="submit" className="w-full h-11" disabled={busy || !email.trim()}>
             {busy ? (
               <>
                 <Loader2 className="animate-spin" />
@@ -524,22 +521,19 @@ export default function Login() {
           <div className="flex items-center gap-2">
             <img src={logo} alt="Atap Care" className="h-9 w-9 rounded-xl object-contain" />
             <div className="flex flex-col leading-tight">
-              <span className="font-display font-bold text-white">Atap Care</span>
+              <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-white">Atap Care</span>
               <span className="text-[10px] uppercase tracking-widest text-white/50">PT Atap Teknologi Indonesia</span>
             </div>
           </div>
           <div className="flex-1 flex flex-col justify-center">
-            <p className="text-xs font-mono uppercase tracking-widest text-white/60">
-              PORTAL KARYAWAN INTERNAL
-            </p>
-            <h1 className="text-4xl md:text-5xl font-display font-bold mt-6 tracking-tight leading-[1.05] text-white">
-              Command Center Operasional.
+            <h1 className="text-4xl md:text-5xl font-display font-bold tracking-tight leading-[1.05] text-white">
+              Kendala Anda, Prioritas Kami.
             </h1>
             <p className="mt-6 text-base text-white/60 max-w-md">
-              Sistem Ticketing Keluhan &amp; Manajemen Operasional Internal PT Atap Teknologi Indonesia.
+              Laporkan kendala unit Anda, pantau progres perbaikan secara real-time, dan pastikan setiap penanganan terdokumentasi rapi, dari laporan masuk hingga berita acara ditandatangani.
             </p>
             <div className="mt-10 inline-flex items-center gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
-              <Zap className="h-3 w-3" /> FRT · Race-safe inventory · WA close
+              <ShieldCheck className="h-3 w-3" /> Cepat · Terverifikasi · Terdokumentasi
             </div>
           </div>
         </div>

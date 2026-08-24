@@ -18,142 +18,123 @@ export default function Privacy() {
 
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold mt-2">Kebijakan Privasi</h1>
-          <p className="text-xs text-muted-foreground font-mono mt-2">Terakhir diperbarui: 24 Juli 2026</p>
+          <p className="text-xs text-muted-foreground font-mono mt-2">Terakhir diperbarui: 24 Agustus 2026</p>
         </div>
 
         <article className="space-y-8 text-sm leading-relaxed">
           <Section title="1. Pendahuluan">
-            <p>Selamat datang di Atap Care — sistem informasi ticketing keluhan pelanggan yang dikelola oleh PT Atap Teknologi Indonesia ("kami", "perusahaan"). Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi data pribadi Anda ketika Anda menggunakan portal pelaporan keluhan kami di lapor.atapcare.id ("Portal Publik") serta aplikasi internal yang digunakan oleh karyawan kami ("Portal Internal" dan "APK Atap Care").</p>
-            <p>Kami berkomitmen untuk mematuhi Undang-Undang No. 27 Tahun 2022 tentang Perlindungan Data Pribadi (UU PDP) dan peraturan turunannya. Dengan menggunakan layanan kami, Anda menyetujui praktik pengolahan data yang dijelaskan dalam Kebijakan Privasi ini.</p>
+            <p>PT Atap Teknologi Indonesia ("kami", "perusahaan") menghormati dan melindungi privasi setiap pengguna layanan Atap Care. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi data pribadi Anda saat Anda menggunakan Portal Publik (lapor.atapcare.id) maupun APK Atap Care.</p>
+            <p>Kebijakan ini disusun berdasarkan Undang-Undang No. 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP) serta peraturan pelaksananya.</p>
           </Section>
 
-          <Section title="2. Data yang Kami Kumpulkan">
-            <SubSection title="2.1 Data dari Pelanggan (Pengguna Portal Publik)">
-              <p>Ketika Anda mengirimkan laporan keluhan melalui Portal Publik, kami mengumpulkan:</p>
+          <Section title="2. Informasi yang Kami Kumpulkan">
+            <SubSection title="2.1 Data Akun dan Laporan Pelanggan">
+              <p><strong>Saat Anda membuat akun</strong>, kami mengumpulkan:</p>
               <ul>
-                <li>Nama Pelapor (nama lengkap atau nama jabatan)</li>
-                <li>Jabatan Anda di perusahaan klien</li>
-                <li>Nomor WhatsApp aktif untuk komunikasi tindak lanjut</li>
-                <li>Lokasi/Site tempat unit/perangkat berada</li>
-                <li>Unit/Perangkat yang mengalami kendala</li>
-                <li>Deskripsi kendala yang Anda sampaikan (maksimal 2.000 karakter)</li>
-                <li>Foto pendukung (opsional, maksimal 5 foto)</li>
+                <li>Nama lengkap;</li>
+                <li>Nama pengguna (username);</li>
+                <li>Alamat email;</li>
+                <li>Nomor telepon aktif (disimpan dalam format terstandar);</li>
+                <li>Kata sandi disimpan hanya dalam bentuk terenkripsi satu arah dan tidak pernah dapat dibaca oleh siapa pun, termasuk kami;</li>
+                <li>Foto profil (opsional).</li>
               </ul>
-              <p>Kami tidak meminta Anda membuat akun atau memberikan email. Pelacakan status tiket dilakukan menggunakan ID Tiket unik yang diberikan setelah pengiriman laporan.</p>
+              <p><strong>Saat Anda mengirimkan laporan kendala</strong>, kami mengumpulkan:</p>
+              <ul>
+                <li>Data unit yang dilaporkan: perusahaan, site/lokasi, dan unit/perangkat;</li>
+                <li>Deskripsi kendala yang Anda tulis;</li>
+                <li>Lampiran berupa foto dan/atau dokumen pendukung.</li>
+              </ul>
+              <p>Nama pelapor pada laporan diambil otomatis dari profil akun Anda, sehingga Anda tidak perlu memasukkan ulang data identitas setiap kali melapor.</p>
             </SubSection>
-
-            <SubSection title="2.2 Data dari Karyawan Internal (Pengguna Portal Internal & APK)">
-              <p>Untuk karyawan PT Atap Teknologi Indonesia yang menggunakan sistem internal, kami mengumpulkan:</p>
-              <ul>
-                <li>Nama lengkap dan jabatan struktural</li>
-                <li>Username (dibuat oleh Administrator)</li>
-                <li>Password (disimpan dalam bentuk hashed menggunakan bcrypt, tidak pernah disimpan sebagai teks asli)</li>
-                <li>Nomor WhatsApp untuk keperluan operasional</li>
-                <li>Role yang ditugaskan (Helpdesk, PM, Teknisi, Admin)</li>
-                <li>Koordinat GPS saat teknisi memulai pekerjaan di lokasi pelanggan (sebagai bukti kehadiran)</li>
-                <li>Foto dokumentasi pekerjaan (hasil perbaikan, Serial Number unit, BAST yang ditandatangani)</li>
-              </ul>
+            <SubSection title="2.2 Data Petugas Internal">
+              <p>Kami mengelola data kepegawaian dasar para petugas kami, seperti nama, kontak dinas, dan penempatan tugas, semata-mata untuk keperluan operasional penanganan laporan. Akses atas data ini diatur secara ketat sesuai penugasan yang ditetapkan perusahaan.</p>
             </SubSection>
-
-            <SubSection title="2.3 Data yang Dicatat Otomatis">
-              <p>Sistem kami secara otomatis mencatat:</p>
-              <ul>
-                <li>Activity Log: setiap perubahan status tiket, perubahan prioritas, penugasan, upload dokumen, serta aksi login/logout dan switch role. Log ini bersifat immutable (tidak dapat diubah atau dihapus).</li>
-                <li>Timestamp setiap aksi (dalam zona waktu WIB, UTC+7).</li>
-                <li>Alamat IP dan User-Agent browser untuk keperluan keamanan.</li>
-              </ul>
+            <SubSection title="2.3 Data Teknis">
+              <p>Sistem mencatat data teknis minimum (waktu akses dan jejak audit aktivitas penting) untuk menjaga keamanan layanan. Jejak audit bersifat rahasia dan tidak diakseskan kepada pengguna.</p>
             </SubSection>
           </Section>
 
-          <Section title="3. Tujuan Pengumpulan Data">
-            <p>Data pribadi Anda kami gunakan untuk:</p>
+          <Section title="3. Penggunaan Informasi">
+            <p>Kami menggunakan data yang terkumpul untuk:</p>
             <ul>
-              <li>Memproses laporan keluhan yang Anda sampaikan dan memberikan tindak lanjut yang sesuai.</li>
-              <li>Mengidentifikasi unit/perangkat yang dilaporkan agar penanganan tepat sasaran.</li>
-              <li>Menghubungi Anda melalui WhatsApp untuk klarifikasi, konfirmasi, atau informasi penyelesaian.</li>
-              <li>Mencatat jejak audit penanganan keluhan untuk keperluan evaluasi kualitas layanan dan kepatuhan terhadap Service Level Agreement (SLA).</li>
-              <li>Menghasilkan laporan operasional agregat (tanpa mengungkap identitas individu) untuk perbaikan layanan internal.</li>
-              <li>Memenuhi kewajiban hukum yang berlaku, termasuk UU PDP.</li>
+              <li>Menerima, memverifikasi, dan menindaklanjuti laporan kendala Anda;</li>
+              <li>Menghubungi Anda terkait perkembangan laporan melalui saluran resmi (WhatsApp Group atau kontak yang terdaftar);</li>
+              <li>Menugaskan petugas yang tepat untuk menangani kendala di lokasi Anda;</li>
+              <li>Mendokumentasikan hasil pekerjaan, termasuk berita acara serah terima digital;</li>
+              <li>Menjaga keamanan akun dan mencegah penyalahgunaan layanan;</li>
+              <li>Memenuhi kewajiban hukum yang berlaku.</li>
+            </ul>
+            <p>Kami tidak menjual atau menyewakan data pribadi Anda kepada pihak mana pun.</p>
+          </Section>
+
+          <Section title="4. Dasar Pemrosesan dan Hak Anda">
+            <p>Pemrosesan data pribadi dilakukan berdasarkan: (a) pemenuhan kewajiban kontrak layanan antara perusahaan dengan klien korporat; (b) persetujuan Anda; dan/atau (c) kepatuhan terhadap kewajiban hukum.</p>
+            <p>Sesuai UU PDP, Anda memiliki hak untuk mengakses, memperbaiki, atau meminta penghapusan data pribadi Anda, serta menarik persetujuan pemrosesan. Permintaan dapat diajukan melalui kontak resmi pada bagian akhir kebijakan ini.</p>
+          </Section>
+
+          <Section title="5. Keamanan Data">
+            <p>Kami menerapkan langkah pengamanan yang berlaku secara industri, termasuk:</p>
+            <ul>
+              <li>Enkripsi koneksi (HTTPS/TLS) untuk seluruh komunikasi data;</li>
+              <li>Kata sandi disimpan hanya dalam bentuk terenkripsi satu arah;</li>
+              <li>Pembatasan akses data secara teknis: hanya petugas yang berwenang yang dapat mengakses data tertentu, sesuai kebutuhan penugasannya;</li>
+              <li>Pembatasan otomatis terhadap upaya login yang tidak berhasil untuk mencegah akses ilegal;</li>
+              <li>Pencatatan jejak audit atas aktivitas sensitif di dalam sistem;</li>
+              <li>Pemeriksaan dan pembaruan pengamanan secara berkala.</li>
             </ul>
           </Section>
 
-          <Section title="4. Dasar Hukum Pengolahan Data">
-            <p>Pengolahan data pribadi Anda didasarkan pada:</p>
+          <Section title="6. Batasan Informasi">
+            <p>Kami berkomitmen memberikan informasi kepada pelanggan secara jelas namun proporsional. Dengan demikian:</p>
             <ul>
-              <li>Pelaksanaan kontrak antara PT Atap Teknologi Indonesia dengan perusahaan tempat Anda bekerja (klien korporat).</li>
-              <li>Kepentingan sah kami dalam menyediakan layanan pemeliharaan sistem monitoring (VMS, INTANK) yang berkualitas.</li>
-              <li>Kewajiban hukum berdasarkan UU PDP dan peraturan terkait.</li>
+              <li>Yang kami sampaikan kepada Anda: status dan perkembangan tiket Anda, ID Tiket, serta informasi hasil penyelesaian pekerjaan;</li>
+              <li>Yang tidak kami ungkapkan: identitas lengkap dan kontak pribadi petugas penangani, catatan serta diskusi internal antar petugas, data milik pelanggan lain, evaluasi kinerja internal, maupun detail struktur dan mekanisme teknis sistem;</li>
+              <li>Dokumen dan komunikasi publik kami tidak memaparkan susunan organisasi kerja internal; penyebutan fungsi hanya dilakukan secara umum (misalnya "teknisi" atau "tim lapangan").</li>
+            </ul>
+            <p>Jika Anda memerlukan kejelasan lebih lanjut terkait penanganan laporan Anda, silakan ajukan melalui saluran resmi yang tersedia.</p>
+          </Section>
+
+          <Section title="7. Penyimpanan dan Retensi">
+            <p>Data pribadi disimpan di pusat data yang menerapkan standar keamanan memadai. Tiket yang telah selesai masuk ke arsip dan disimpan dalam periode tertentu untuk keperluan garansi dan audit; setelah periode tersebut, data pribadi pelapor dianonimkan secara permanen sementara catatan teknis pekerjaan tetap tersimpan untuk kepentingan riwayat unit.</p>
+            <p>Data akun yang dihapus oleh pengguna akan dibersihkan dari sistem sesuai prosedur retensi kami, kecuali diwajibkan lain oleh hukum.</p>
+          </Section>
+
+          <Section title="8. Berbagi Informasi dengan Pihak Ketiga">
+            <p>Kami tidak membagikan data pribadi Anda kepada pihak ketiga, kecuali:</p>
+            <ul>
+              <li>Ke penyedia infrastruktur teknologi yang terikat perjanjian kerahasiaan dan perlindungan data;</li>
+              <li>Apabila diwajibkan oleh perintah hukum yang sah dari otoritas berwenang;</li>
+              <li>Dalam batas yang diperlukan untuk melindungi hak, keselamatan, atau properti kami maupun pengguna lain.</li>
             </ul>
           </Section>
 
-          <Section title="5. Penyimpanan & Keamanan Data">
-            <p>Kami menerapkan langkah-langkah teknis dan organisasional yang wajar untuk melindungi data Anda, termasuk:</p>
-            <ul>
-              <li>Enkripsi data dalam perjalanan (HTTPS/TLS) dan saat disimpan (Supabase Storage).</li>
-              <li>Password hashing menggunakan algoritma bcrypt.</li>
-              <li>Row Level Security (RLS) pada database untuk membatasi akses data berdasarkan role.</li>
-              <li>Rate limiting untuk mencegah brute-force (5x percobaan login gagal → akun terkunci 15 menit).</li>
-              <li>Masking nomor telepon pada tampilan yang tidak memerlukan informasi lengkap.</li>
-              <li>Validasi file upload (client-side dan server-side) untuk mencegah unggahan berbahaya.</li>
-            </ul>
-            <p>Meskipun demikian, tidak ada sistem yang 100% aman. Kami tidak dapat menjamin keamanan mutlak data yang Anda kirimkan melalui internet.</p>
+          <Section title="9. Perlindungan Identitas dalam Dokumentasi">
+            <p>Dokumentasi pekerjaan (foto, berita acara, catatan penyelesaian) hanya dapat diakses oleh Anda dan petugas berwenang. Nomor telepon dan identitas pelapor ditampilkan dalam bentuk yang dilindungi (sebagian angka disembunyikan) pada tampilan sistem, dan dokumen arsip lama dianonimkan sesuai ketentuan retensi.</p>
           </Section>
 
-          <Section title="6. Retensi & Penghapusan Data">
-            <p>Kami menerapkan kebijakan retensi data sebagai berikut:</p>
-            <ul>
-              <li><strong>Aktif</strong> — Tiket status NEW s.d. RESOLVED: Data ditampilkan penuh di dashboard operasional.</li>
-              <li><strong>Closed</strong> — Tiket final (CLOSED/VOID/DUPLICATE), usia 0–6 bulan: Data tetap dapat dicari di menu "Arsip Tiket" (Read-Only).</li>
-              <li><strong>Archived</strong> — Tiket final, usia &gt;6 bulan: Data pribadi (Nama, No WhatsApp) di-masking penuh. Data teknis (ID Tiket, Site, Unit, Status, Activity Log) tetap disimpan untuk audit.</li>
-              <li><strong>Anonymized</strong> — Tiket final, usia &gt;5 tahun: Data pribadi di-anonimisasi permanen (Nama → "Pelanggan X", No WA → "08xx-xxxx-xxxx"). Data teknis tetap disimpan permanen untuk histori maintenance unit.</li>
-            </ul>
-            <p>Activity Log bersifat permanen dan tidak pernah dihapus atau diarsipkan, untuk menjaga integritas audit trail.</p>
-            <p>Master Data (Customer, Site, Unit) tidak diarsipkan, melainkan menggunakan mekanisme soft-delete (flag is_deleted=true) sehingga data tidak dihapus secara fisik dari database.</p>
+          <Section title="10. Cookie dan Penyimpanan Lokal">
+            <p>Aplikasi web dan APK kami hanya menggunakan penyimpanan lokal yang diperlukan untuk menjaga sesi login Anda tetap aman. Kami tidak menggunakan cookie pelacak iklan atau analitik pihak ketiga.</p>
           </Section>
 
-          <Section title="7. Pembagian Data kepada Pihak Ketiga">
-            <p>Kami tidak menjual, menyewakan, atau memperdagangkan data pribadi Anda kepada pihak ketiga. Data Anda hanya dapat dibagikan dalam kondisi berikut:</p>
+          <Section title="11. Hak Anda">
+            <p>Sebagai pengguna akun, Anda dapat:</p>
             <ul>
-              <li>Kepada perusahaan klien tempat Anda bekerja, sebagai bagian dari layanan pemeliharaan yang kami berikan.</li>
-              <li>Kepada teknisi lapangan kami yang ditugaskan untuk menangani keluhan Anda (nama, site, unit, dan deskripsi kendala).</li>
-              <li>Kepada otoritas yang berwenang, jika diwajibkan oleh hukum atau perintah pengadilan.</li>
-            </ul>
-            <p>Kami tidak menggunakan layanan analitik pihak ketiga (Google Analytics, Facebook Pixel, dll.) pada Portal Publik.</p>
-          </Section>
-
-          <Section title="8. Hak Anda sebagai Subjek Data (UU PDP)">
-            <p>Berdasarkan UU PDP, Anda memiliki hak untuk:</p>
-            <ul>
-              <li>Memperoleh informasi tentang kejelasan identitas, dasar hukum, dan tujuan pengolahan data pribadi Anda.</li>
-              <li>Melengkapi, memperbarui, dan/atau memperbaiki kesalahan data pribadi Anda (melalui Helpdesk kami).</li>
-              <li>Mengakses dan mendapatkan salinan data pribadi Anda yang kami simpan.</li>
-              <li>Mengakhiri pengolahan, menghapus, dan/atau membatasi pemrosesan data pribadi Anda (dengan pengecualian untuk data yang wajib disimpan berdasarkan kewajiban hukum atau kontrak).</li>
-              <li>Menarik kembali persetujuan pengolahan data pribadi.</li>
-              <li>Mengajukan pengaduan kepada lembaga yang berwenang jika terjadi pelanggaran.</li>
-            </ul>
-            <p>Untuk melaksanakan hak-hak tersebut, silakan hubungi kami melalui kontak di Bagian 11.</p>
-          </Section>
-
-          <Section title="9. Cookie & Teknologi Pelacakan">
-            <p>Portal Publik kami tidak menggunakan cookie pelacakan atau teknologi serupa (tracking pixels, fingerprinting). Kami hanya menggunakan:</p>
-            <ul>
-              <li>Session cookie esensial untuk menjaga sesi aktif pada Portal Internal (khusus karyawan).</li>
-              <li>Penyimpanan sesi browser (sessionStorage) untuk draft formulir sementara — terhapus otomatis saat tab atau browser ditutup.</li>
-              <li>localStorage untuk preferensi tampilan dasar.</li>
+              <li>Melihat dan memperbarui data profil (nama, email, nomor telepon, foto profil) kapan saja;</li>
+              <li>Mengganti kata sandi melalui fitur pemulihan akun;</li>
+              <li>Menghapus akun dengan menghubungi kami melalui saluran resmi.</li>
             </ul>
           </Section>
 
-          <Section title="10. Perubahan Kebijakan Privasi">
-            <p>Kami dapat memperbarui Kebijakan Privasi ini dari waktu ke waktu untuk mencerminkan perubahan praktik atau persyaratan hukum. Perubahan akan diberitahukan melalui pembaruan tanggal "Terakhir diperbarui" di bagian atas dokumen ini. Penggunaan layanan secara berkelanjutan setelah perubahan dianggap sebagai persetujuan Anda terhadap Kebijakan Privasi yang diperbarui.</p>
+          <Section title="12. Perubahan Kebijakan">
+            <p>Kebijakan Privasi ini dapat diperbarui dari waktu ke waktu. Setiap perubahan akan ditandai dengan pembaruan tanggal "Terakhir diperbarui" pada halaman ini.</p>
           </Section>
 
-          <Section title="11. Kontak Kami">
-            <p>Jika Anda memiliki pertanyaan, permintaan, atau pengaduan terkait Kebijakan Privasi ini atau pengolahan data pribadi Anda, silakan hubungi:</p>
+          <Section title="13. Hubungi Kami">
+            <p>Untuk pertanyaan, permintaan akses, koreksi, atau penghapusan data pribadi, hubungi:</p>
             <div className="mt-3 p-4 rounded-xl border border-border bg-card space-y-1">
               <p className="font-medium">PT Atap Teknologi Indonesia</p>
               <p className="text-muted-foreground">Alamat: Jl. Kamarung No.888, RT.03/RW.14, Padaasih, Kec. Cisarua, Kabupaten Bandung Barat, Jawa Barat 40551</p>
-              <p className="text-muted-foreground">Email: <span className="font-mono">privacy@atapcare.id</span></p>
-              <p className="text-muted-foreground">Helpdesk Operasional: Kustiara Bhakti (melalui WhatsApp Group resmi klien)</p>
+              <p className="text-muted-foreground">Email: <span className="font-mono">legal@atapcare.id</span></p>
             </div>
           </Section>
         </article>
