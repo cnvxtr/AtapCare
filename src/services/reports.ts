@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase";
-import { getSites, type SiteRow } from "./master-data";
 
 export interface ReportFilters {
   from?: string;
@@ -22,11 +21,6 @@ export const STATUS_FILTER_GROUPS: Record<string, string[]> = {
   Dibatalkan: ["VOID"],
   Digabungkan: ["DUPLICATE"],
 };
-
-export const STATUS_FILTER_OPTIONS = Object.keys(STATUS_FILTER_GROUPS).map((label) => ({
-  value: label,
-  label,
-}));
 
 export interface TicketReportRow {
   code: string;
@@ -61,8 +55,6 @@ export const ROOTCAUSE_HEADERS = ["Akar Kendala", "Jumlah", "% Total"];
 export const SERIAL_NUMBER_HEADERS = ["ID Tiket", "Teknisi", "Tanggal", "Site", "Serial Number"];
 
 export const KPI_HEADERS = ["Prioritas", "Total", "Terbuka", "Selesai", "Overdue", "FTF (%)"];
-
-export const AUDIT_HEADERS = ["Waktu", "User", "Role", "Aktivitas", "Entitas", "Detail"];
 
 const ACTIVE_STATUSES = [
   "NEW",
@@ -206,31 +198,6 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
   }
   return rows;
 }
-
-export async function getAuditReport(
-  filters: ReportFilters,
-): Promise<Record<string, string>[]> {
-  let q = supabase
-    .from("audit_logs")
-    .select("created_at, actor_name, metadata, action, entity_type, entity_id")
-    .order("created_at", { ascending: false });
-  if (filters.from) q = q.gte("created_at", dayStart(filters.from));
-  if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
-  const { data } = await q;
-  return (data || []).map((r) => {
-    const meta = (r.metadata as Record<string, unknown>) || {};
-    return {
-      waktu: fmt(r.created_at),
-      user: r.actor_name ?? "—",
-      role: String(meta.role ?? meta.active_role ?? "—"),
-      aktivitas: r.action,
-      entitas: r.entity_type ?? "—",
-      detail: r.entity_id ? r.entity_id.slice(0, 8) : "—",
-    };
-  });
-}
-
-export { getSites, type SiteRow };
 
 // ── Top 10 Akar Kendala ──
 export async function getRootCauseReport(

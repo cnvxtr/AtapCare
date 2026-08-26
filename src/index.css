@@ -199,15 +199,6 @@ html {
         -webkit-tap-highlight-color: transparent;
     }
 
-    /* Hide scrollbar for horizontal scroll areas */
-    .scrollbar-none::-webkit-scrollbar {
-        display: none;
-    }
-    .scrollbar-none {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-    }
-
     .input::placeholder {
         color: color-mix(in oklab, hsl(var(--muted-foreground)) 50%, transparent);
     }

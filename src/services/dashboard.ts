@@ -1,12 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { getCustomers, getSites, getUnits } from "./master-data";
 
-export interface AdminActivityRow {
-  waktu: string;
-  user: string;
-  aktivitas: string;
-}
-
 export interface AdminFrtData {
   avgHours: number;
   responded: number;
@@ -28,42 +22,6 @@ export interface AdminSystemData {
   totalCustomers: number;
   totalUnits: number;
   unitDist: { name: string; count: number }[];
-}
-
-const ACTIVITY_LABELS: Record<string, string> = {
-  update_sla: "mengubah target SLA",
-  sync_holidays: "menyinkronkan hari libur",
-  update_user: "memperbarui user",
-  reset_password: "mereset password user",
-  delete_user: "menghapus user",
-  archive_reveal: "membuka arsip",
-  create: "menambah",
-  update: "mengubah",
-  soft_delete: "mengarsipkan",
-  restore: "memulihkan",
-};
-
-const ENTITY_LABELS: Record<string, string> = {
-  customers: "pelanggan",
-  sites: "site",
-  units: "unit",
-  problem_categories: "kategori kendala",
-  root_causes: "akar kendala",
-  sla_config: "SLA",
-  holidays: "hari libur",
-  users: "user",
-};
-
-function fmtWaktu(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("id-ID", { month: "short" })} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-}
-
-function labelActivity(action: string, entityType: string, metadata: Record<string, unknown> | null): string {
-  const verb = ACTIVITY_LABELS[action] || action;
-  const entity = ENTITY_LABELS[entityType] || entityType;
-  const name = typeof metadata?.name === "string" ? metadata.name : undefined;
-  return name ? `${verb} ${entity} "${name}"` : `${verb} ${entity}`;
 }
 
 export async function getAdminSystemData(): Promise<AdminSystemData> {
@@ -89,39 +47,6 @@ export async function getAdminSystemData(): Promise<AdminSystemData> {
     .sort((a, b) => b.count - a.count);
 
   return { totalUsers, totalCustomers: customers.length, totalUnits: units.length, unitDist };
-}
-
-export async function getAdminActivities(limit = 10, userName?: string): Promise<AdminActivityRow[]> {
-  let query = supabase
-    .from("audit_logs")
-    .select("created_at, actor_name, action, entity_type, metadata")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (userName) query = query.eq("actor_name", userName);
-  const { data } = await query;
-
-  return (data || []).map((r) => ({
-    waktu: fmtWaktu(r.created_at),
-    user: r.actor_name || "—",
-    aktivitas: labelActivity(r.action, r.entity_type, (r.metadata as Record<string, unknown>) || null),
-  }));
-}
-
-// Feed aktivitas tiket untuk semua role. Filter per user.
-export async function getTicketActivities(limit = 10, userName?: string): Promise<AdminActivityRow[]> {
-  let query = supabase
-    .from("activities")
-    .select("user_name, action, created_at")
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (userName) query = query.eq("user_name", userName);
-  const { data } = await query;
-
-  return (data || []).map((r) => ({
-    waktu: fmtWaktu(r.created_at),
-    user: r.user_name || "—",
-    aktivitas: r.action,
-  }));
 }
 
 export async function getAdminFrt(): Promise<AdminFrtData> {

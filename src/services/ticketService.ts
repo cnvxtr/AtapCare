@@ -62,36 +62,6 @@ export async function createTicket(data: CreateTicketPayload) {
   return { code: res.code }
 }
 
-export async function getTicketByCode(code: string) {
-  const { data, error } = await supabase.rpc("get_ticket_for_tracking", { p_code: code })
-  if (error || !data) return null
-
-  const d = data as {
-    status?: string
-    site?: string
-    unit?: string
-    created_at?: string
-    updated_at?: string
-    technician_name?: string | null
-  }
-  if (!d.status) return null
-
-  return {
-    status: d.status,
-    site: d.site || '-',
-    unit: d.unit || '-',
-    createdAt: d.created_at ?? '',
-    updatedAt: d.updated_at ?? '',
-    technicianName: d.technician_name ?? null,
-  }
-}
-
-export interface SiteReport {
-  customer_name: string
-  site_name: string
-  units: string[]
-}
-
 // Tandai konfirmasi WA terkirim (Jalur B) → auto-close cron menutup setelah 24 jam (K3).
 export async function setConfirmSent(ticketId: string): Promise<boolean> {
   const { error } = await supabase.rpc("set_confirm_sent", { p_ticket_id: ticketId })
@@ -155,11 +125,6 @@ export async function setTicketCatalog(
   return !error;
 }
 
-export async function getSitesForReport(): Promise<SiteReport[]> {
-  const { data } = await supabase.rpc("get_sites_for_report")
-  return (data ?? []) as SiteReport[]
-}
-
 export interface LandingStats {
   active_units: number
   customers: string[]
@@ -198,28 +163,4 @@ export async function getTicketGps(code: string): Promise<GpsPoint[]> {
     .select("lat, lon, phase, captured_at, tickets!inner(code)")
     .eq("tickets.code", code)
   return (data ?? []) as unknown as GpsPoint[]
-}
-
-export interface PublicTimelineItem {
-  action: string
-  created_at: string
-  user_name: string | null
-  details?: string | null
-}
-
-export async function getPublicTimeline(code: string): Promise<PublicTimelineItem[]> {
-  const { data } = await supabase.rpc("get_public_timeline", { p_code: code })
-  return (data ?? []) as PublicTimelineItem[]
-}
-
-export async function uploadBappDocument(ticketId: string, file: File): Promise<string | null> {
-  const ext = file.name.split('.').pop() || 'pdf'
-  const path = `bapp/${ticketId}.${ext}`
-  const { error: upErr } = await supabase.storage.from('ticket-photos').upload(path, file, { upsert: true })
-  if (upErr) return null
-  const { data: urlData } = supabase.storage.from('ticket-photos').getPublicUrl(path)
-  const publicUrl = urlData?.publicUrl
-  if (!publicUrl) return null
-  await supabase.from('tickets').update({ bapp_document_url: publicUrl }).eq('id', ticketId)
-  return publicUrl
 }
