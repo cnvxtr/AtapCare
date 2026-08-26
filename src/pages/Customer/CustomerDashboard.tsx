@@ -25,21 +25,25 @@ export default function CustomerDashboard() {
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="bg-card border border-border rounded-lg p-5">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 text-amber-600 rounded-lg"><AlertTriangle className="h-5 w-5" /></div>
+            <div className="grid grid-cols-2 gap-3 max-w-sm">
+                <div className="bg-card border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2">
+                        <span className="h-8 w-8 grid place-items-center rounded-lg bg-amber-50 text-amber-600">
+                            <AlertTriangle className="h-4 w-4" />
+                        </span>
                         <div>
-                            <p className="text-xs text-muted-foreground">Tiket Aktif</p>
+                            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Tiket Aktif</p>
                             <p className="text-2xl font-bold">{openCount}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-card border border-border rounded-lg p-5">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 text-emerald-600 rounded-lg"><CheckCircle2 className="h-5 w-5" /></div>
+                <div className="bg-card border border-border rounded-lg p-4">
+                    <div className="flex items-center gap-2">
+                        <span className="h-8 w-8 grid place-items-center rounded-lg bg-emerald-50 text-emerald-600">
+                            <CheckCircle2 className="h-4 w-4" />
+                        </span>
                         <div>
-                            <p className="text-xs text-muted-foreground">Selesai</p>
+                            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Selesai</p>
                             <p className="text-2xl font-bold">{closedCount}</p>
                         </div>
                     </div>

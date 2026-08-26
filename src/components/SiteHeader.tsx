@@ -38,7 +38,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-4 min-w-[180px] justify-end">
-          <Link to="/login" className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background rounded-[3px] text-xs font-semibold hover:opacity-90 transition">
+          <Link to="/login" className="inline-flex items-center gap-1.5 px-4 py-2 bg-foreground text-background rounded-[3px] text-xs font-semibold hover:opacity-90 transition">
             <LoginIcon size={14} /> Masuk
           </Link>
           <button onClick={() => setOpen(!open)} className="lg:hidden p-2 rounded hover:bg-accent transition" aria-label="Menu">

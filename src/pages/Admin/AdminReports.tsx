@@ -18,6 +18,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileSpreadsheet, Loader2, RefreshCw, Search } from "lucide-react";
 import MultiSelectFilter from "@/components/MultiSelectFilter";
 import DateRangePicker from "@/components/DateRangePicker";
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, type DrawerTab } from "@/components/TicketDrawer";
+import { useTickets } from "@/context/TicketContext";
 import {
   getTicketReport,
   getKpiReport,
@@ -91,6 +93,9 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [loadedKeys, setLoadedKeys] = useState<Partial<Record<TabKey, string>>>({});
+  const { tickets: allTickets } = useTickets();
+  const [selectedTicket, setSelectedTicket] = useState<TicketReportRow | null>(null);
+  const [activeDrawerTab, setActiveDrawerTab] = useState<DrawerTab>("detail");
 
   const [tickets, setTickets] = useState<TicketReportRow[]>([]);
   const [kpis, setKpis] = useState<Array<Record<string, string | number>>>([]);
@@ -331,7 +336,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                           </TableHeader>
                         <TableBody className="divide-y divide-border">
                           {visibleRows.map((r, i) => (
-                            <TableRow key={i} className="hover:bg-muted">
+                            <TableRow key={i} className="hover:bg-muted cursor-pointer" onClick={() => { if (tab === 'tickets') { setSelectedTicket(tickets[i]); setActiveDrawerTab('detail') } }}>
                               {r.map((c, j) => (
                                 <TableCell
                                   key={j}
@@ -359,6 +364,46 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
           </TabsContent>
         ))}
       </Tabs>
+
+      {selectedTicket && (() => {
+        const live = allTickets.find(t => t.code === selectedTicket.code)
+        const acts = live?.activities || []
+        const status = live?.status || selectedTicket.status
+        const isFinal = ['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(status)
+        return (
+          <TicketDrawer
+            onClose={() => setSelectedTicket(null)}
+            code={selectedTicket.code}
+            ticketId={live?.id}
+            status={status}
+            priority={live?.priority || selectedTicket.priority}
+            createdAt={live?.createdAt || ''}
+            activeTab={activeDrawerTab}
+            onTabChange={setActiveDrawerTab}
+            activities={live?.activities}
+            duplicateCode={live?.duplicateCode}
+            footer={<p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>}
+          >
+            {activeDrawerTab === 'detail' && (
+              <div className="space-y-4">
+                <AssignmentCard items={acts} />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Pelapor</p>
+                    <p className="font-medium text-sm">{live?.customer || selectedTicket.customer}</p>
+                  </div>
+                  <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Site / Unit</p>
+                    <p className="font-medium text-sm">{live?.site || selectedTicket.site} - {live?.unit || selectedTicket.unit}</p>
+                  </div>
+                </div>
+                <TicketDescription description={live?.description || selectedTicket.description || ''} />
+              </div>
+            )}
+            {activeDrawerTab === 'timeline' && <TicketTimeline items={acts} isFinal={isFinal} />}
+          </TicketDrawer>
+        )
+      })()}
     </div>
   );
 }

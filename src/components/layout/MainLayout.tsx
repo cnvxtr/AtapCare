@@ -203,7 +203,9 @@ export default function MainLayout() {
             {user?.role === 'teknisi' ? 'Tugas' : user?.role === 'admin' ? 'Administrasi' : user?.role === 'customer' ? 'Layanan' : user?.role === 'executive' ? 'Executive' : 'Workspace'}
           </div>
           {nav.map((item) => {
-            const active = pathname === item.path
+            const active = item.path === '/customer'
+              ? pathname.startsWith('/customer') && !pathname.startsWith('/customer/report')
+              : pathname === item.path
             const Icon = item.icon
             const button = (
               <button

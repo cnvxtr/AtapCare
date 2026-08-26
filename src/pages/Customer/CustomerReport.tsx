@@ -6,7 +6,6 @@ import { createTicket, type CreateTicketPayload } from '../../services/ticketSer
 import { Camera, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { Combobox, type ComboboxOption } from '../../components/ui/combobox'
-import { ProgressBar } from '../../components/ui/progress-bar'
 
 interface CustomerRow { id: string; name: string }
 interface SiteRow { id: string; name: string }
@@ -26,7 +25,6 @@ export default function CustomerReport() {
     const [description, setDescription] = useState('')
     const [photos, setPhotos] = useState<File[]>([])
     const [isLoading, setIsLoading] = useState(false)
-    const [uploadPct, setUploadPct] = useState<number | null>(null)
     const [error, setError] = useState('')
 
     useEffect(() => {
@@ -67,16 +65,14 @@ export default function CustomerReport() {
         const payload: CreateTicketPayload = {
             reporterName: user?.full_name || '',
             position: 'Pelanggan',
-            phone: '',
+            phone: user?.wa_number || '',
             site: selectedSite.label,
             unit: selectedUnit?.label || '',
             description,
             photos: photos.length > 0 ? photos : undefined,
-            onUploadProgress: setUploadPct,
         }
         const result = await createTicket(payload)
         setIsLoading(false)
-        setUploadPct(null)
         if (result.error) { setError(result.error); return }
         toast.success('Tiket berhasil dibuat!')
         navigate('/customer')
@@ -104,6 +100,11 @@ export default function CustomerReport() {
                         disabled={!selectedSiteId} emptyText="Unit tidak ditemukan" />
                 </div>
                 <div>
+                    <label className="block text-xs font-medium mb-1.5">No. WhatsApp</label>
+                    <input type="text" readOnly value={user?.wa_number || ''}
+                        className="w-full px-3 py-2 rounded-md border border-border bg-muted text-sm cursor-not-allowed" />
+                </div>
+                <div>
                     <label className="block text-xs font-medium mb-1.5">Deskripsi Kendala</label>
                     <textarea required rows={4} value={description} onChange={e => setDescription(e.target.value)}
                         className="w-full px-3 py-2 rounded-[3px] border border-border bg-background text-sm resize-none"
@@ -122,9 +123,6 @@ export default function CustomerReport() {
                                 e.target.value = ''
                             }} />
                     </div>
-                    {isLoading && (
-                        <ProgressBar value={uploadPct} label="Mengunggah lampiran…" className="mt-3" />
-                    )}
                     {photos.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-2">
                             {photos.map((f, i) => (

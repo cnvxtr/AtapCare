@@ -26,15 +26,15 @@ const OrderTracking = React.forwardRef<HTMLDivElement, OrderTrackingProps>(
               <div key={index} className="flex">
                 <div className="flex flex-col items-center">
                   {step.isCompleted ? (
-                    <CheckCircle2 className="h-6 w-6 shrink-0 text-primary/70" />
+                    <CheckCircle2 className="h-6 w-6 shrink-0 text-foreground" />
                   ) : (
-                    <Circle className="h-6 w-6 shrink-0 text-muted-foreground" />
+                    <Circle className="h-6 w-6 shrink-0 text-foreground/30" />
                   )}
                   {index < steps.length - 1 && (
                     <div
                       className={cn("w-[1.5px] grow", {
-                        "bg-primary/70": steps[index + 1].isCompleted,
-                        "bg-muted-foreground": !steps[index + 1].isCompleted,
+                        "bg-foreground/30": steps[index + 1].isCompleted,
+                        "bg-foreground/15": !steps[index + 1].isCompleted,
                       })}
                     />
                   )}

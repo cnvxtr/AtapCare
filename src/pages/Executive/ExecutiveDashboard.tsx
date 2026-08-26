@@ -141,12 +141,12 @@ export default function ExecutiveDashboard() {
                         <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                             <tr>
                                 <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
-                                <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">FRT</th>
+                                <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {displayTickets.length === 0 ? (
-                                <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                             ) : (
                                 displayTickets.map(ticket => (
                                     <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
@@ -162,9 +162,6 @@ export default function ExecutiveDashboard() {
                                                     <AlertTriangle className="h-2.5 w-2.5" /> {getPendingAlarm(ticket.updatedAt)}
                                                 </span>
                                             )}
-                                        </td>
-                                        <td className="p-4">
-                                            {ticket.frtMinutes != null && <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">{ticket.frtMinutes}m</span>}
                                         </td>
                                     </tr>
                                 ))
@@ -183,7 +180,6 @@ export default function ExecutiveDashboard() {
                 ticketId={selectedTicket.id}
                 status={selectedTicket.status}
                 priority={selectedTicket.priority}
-                frtMinutes={selectedTicket.frtMinutes}
                 createdAt={selectedTicket.createdAt}
                 activeTab={activeDrawerTab}
                 onTabChange={setActiveDrawerTab}

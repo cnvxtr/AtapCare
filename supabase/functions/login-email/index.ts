@@ -7,7 +7,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
 const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
 
-// Service client: membaca users.user_name tanpa terkena RLS.
+// Service client: membaca users.username tanpa terkena RLS.
 const service = createClient(
   supabaseUrl,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     const { data } = await service
       .from("users")
       .select("email")
-      .eq("user_name", identifier)
+      .eq("username", identifier)
       .maybeSingle();
     if (!data?.email) return json({ error: "invalid_credentials" }, 401);
     email = data.email;

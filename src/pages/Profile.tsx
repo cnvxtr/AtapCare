@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { Camera, Lock, Save, User, Mail, AtSign, Shield, Clock, Filter, Eye, EyeOff, ArrowRight } from 'lucide-react'
+import { Camera, Lock, Save, User, Mail, AtSign, Shield, Clock, Filter, Eye, EyeOff, ArrowRight, LogOut } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { ROLE_LABELS } from '../services/users'
 import { resolveAvatarUrl, compressImageToBlob, uploadAvatar } from '../services/photoService'
-import { ProgressBar } from '../components/ui/progress-bar'
 import { PhoneInput, normalizePhone, toStoredPhone } from '../components/ui/input'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '../components/ui/dropdown-menu'
 
@@ -194,7 +193,6 @@ export default function Profile() {
     setConfirmPassword('')
   }
 
-  const [avatarPct, setAvatarPct] = useState<number | null>(null)
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file || !user) return
@@ -209,7 +207,7 @@ export default function Profile() {
       const compressed = await compressImageToBlob(file, 400, 0.8)
       const path = `${user.id}/avatar.jpg`
 
-      await uploadAvatar(path, compressed, setAvatarPct)
+      await uploadAvatar(path, compressed)
 
       // Signed URL (diperbarui otomatis saat halaman di-reload di bawah)
       await supabase.storage.from('avatars').createSignedUrl(path, 3600 * 24 * 365)
@@ -228,7 +226,6 @@ export default function Profile() {
       toast.error('Gagal upload avatar.')
     } finally {
       setAvatarUploading(false)
-      setAvatarPct(null)
     }
   }
 
@@ -273,9 +270,6 @@ export default function Profile() {
             </div>
           </div>
         </div>
-        {avatarUploading && (
-          <ProgressBar value={avatarPct} label="Mengunggah foto profil…" className="mt-4" />
-        )}
       </div>
 
       {/* Informasi Akun */}
@@ -383,6 +377,15 @@ export default function Profile() {
           )}
         </div>
       </div>
+
+      {/* Keluar */}
+      <button
+        onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}
+        className="w-full rounded-lg border border-destructive/30 bg-card p-4 flex items-center gap-3 text-destructive hover:bg-destructive/5 transition cursor-pointer"
+      >
+        <LogOut className="h-5 w-5" />
+        <span className="text-sm font-semibold">Keluar</span>
+      </button>
 
       {/* MODAL KONFIRMASI SIMPAN */}
       {showConfirmSave && createPortal((

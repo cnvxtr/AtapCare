@@ -48,7 +48,7 @@ export function TroubleshootCards() {
                 <span className="flex h-9 w-9 items-center justify-center rounded-[3px] bg-foreground text-background">
                   <Icon className="h-4 w-4" />
                 </span>
-                <span className="font-mono text-[11px] tracking-[0.16em] text-muted-foreground">
+                <span className="font-mono text-[11px] tracking-[0.16em] text-foreground">
                   {code}
                 </span>
               </div>

@@ -29,13 +29,13 @@ async function doSubscribe(userId: string): Promise<void> {
   try {
     const reg = await navigator.serviceWorker.register('/sw.js')
     await navigator.serviceWorker.ready
-    let sub = await reg.pushManager.getSubscription()
-    if (!sub) {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
-      })
-    }
+    // Selalu unsubscribe dulu lalu re-subscribe — pastikan VAPID key fresh
+    const old = await reg.pushManager.getSubscription()
+    if (old) await old.unsubscribe()
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
+    })
     await upsertSubscription(userId, sub)
 
     // Kunci berubah / endpoint kadaluarsa: resubscribe otomatis.

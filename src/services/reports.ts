@@ -39,7 +39,7 @@ export interface TicketReportRow {
   status: string;
   assignee: string;
   createdAt: string;
-  frtMinutes: number | null;
+  closedAt: string;
 }
 
 export const TICKET_REPORT_HEADERS = [
@@ -53,7 +53,7 @@ export const TICKET_REPORT_HEADERS = [
   "Status",
   "Teknisi",
   "Tanggal Masuk",
-  "FRT (jam)",
+  "Tanggal Keluar",
 ];
 
 export const ROOTCAUSE_HEADERS = ["Akar Kendala", "Jumlah", "% Total"];
@@ -99,7 +99,7 @@ async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
-      "id, code, customer, site, unit, category, priority, status, assigned_to, rejection_reason, created_at, frt_minutes",
+      "id, code, customer, site, unit, category, priority, status, assigned_to, rejection_reason, created_at, closed_at",
     )
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
@@ -124,8 +124,8 @@ function toTicketRow(
     priority: string;
     status: string;
     created_at: string;
+    closed_at?: string | null;
     assigned_to: string | null;
-    frt_minutes?: number | null;
   },
   names?: Map<string, string>,
   serials?: Map<string, string>,
@@ -141,7 +141,7 @@ function toTicketRow(
     status: t.status,
     assignee: t.assigned_to ? names?.get(t.assigned_to) ?? "—" : "—",
     createdAt: fmt(t.created_at),
-    frtMinutes: t.frt_minutes ?? null,
+    closedAt: t.closed_at ? fmt(t.closed_at) : "—",
   };
 }
 

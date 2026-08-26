@@ -107,32 +107,37 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-clip flex flex-col">
-      <div className="absolute inset-0 grid-bg pointer-events-none opacity-80" />
-
       <SiteHeader />
 
       <main id="beranda" className="relative z-10 flex-1 min-h-[calc(100vh-4rem)] scroll-mt-16 flex flex-col items-center justify-center px-6 py-20 text-center">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs font-mono uppercase tracking-widest mb-6">
-          <span className="h-1.5 w-1.5 rounded-full bg-success pulse-ring" />
-          {badgeText}
-        </div>
-        <h1 className="text-4xl md:text-6xl font-display font-bold tracking-tight leading-[1.05]">
-          Gerbang <span className="italic font-serif text-muted-foreground">Atap Care</span>
-        </h1>
-        <p className="mt-4 text-base text-muted-foreground max-w-2xl mx-auto">
-          Kirim laporan kerusakan untuk perangkat Anda, lalu pantau perkembangannya secara real-time
-          hingga selesai ditangani tim kami.
-        </p>
-
-        <div className="mt-8 flex justify-center w-full">
-          <Link
-            to="/login"
-            className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] bg-black text-background font-medium hover:bg-black transition-all duration-500 text-sm"
-          >
-            <span className="transition-all duration-500 group-hover:pr-1">Lapor Kendala</span>
-            <ArrowRight className="h-4 w-4 text-background transition-all duration-500 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0" />
-          </Link>
-        </div>
+        <Reveal>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs font-mono uppercase tracking-widest mb-6">
+            <span className="h-1.5 w-1.5 rounded-full bg-success pulse-ring" />
+            {badgeText}
+          </div>
+        </Reveal>
+        <Reveal delay={100}>
+          <h1 className="text-4xl md:text-6xl font-display font-bold tracking-tight leading-[1.05]">
+            Gerbang <span className="italic font-serif text-muted-foreground">Atap Care</span>
+          </h1>
+        </Reveal>
+        <Reveal delay={200}>
+          <p className="mt-4 text-base text-muted-foreground max-w-2xl mx-auto">
+            Kirim laporan kerusakan untuk perangkat Anda, lalu pantau perkembangannya secara real-time
+            hingga selesai ditangani tim kami.
+          </p>
+        </Reveal>
+        <Reveal delay={300}>
+          <div className="mt-8 flex justify-center w-full">
+            <Link
+              to="/login"
+              className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] bg-black text-background font-medium hover:bg-black transition-all duration-500 text-sm"
+            >
+              <span className="transition-all duration-500 group-hover:pr-1">Lapor Kendala</span>
+              <ArrowRight className="h-4 w-4 text-background transition-all duration-500 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0" />
+            </Link>
+          </div>
+        </Reveal>
       </main>
 
       <TroubleshootCards />
@@ -145,7 +150,7 @@ export default function Landing() {
           {FLOW_STEPS.map(({ n, title, desc, Icon }, i) => (
             <Reveal key={n} delay={i * 70}>
               <div className="sweep group relative h-full rounded-[3px] border border-border bg-card p-5 transition-all duration-500 hover:-translate-y-1 hover:border-foreground/40">
-                <span className="font-mono text-3xl font-bold text-muted-foreground/30 group-hover:text-foreground/50 transition-colors duration-500">
+                <span className="font-mono text-3xl font-bold text-foreground group-hover:text-foreground/70 transition-colors duration-500">
                   {n}
                 </span>
                 <div className="mt-3 flex items-start gap-3">

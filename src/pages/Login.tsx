@@ -530,7 +530,7 @@ export default function Login() {
               Kendala Anda, Prioritas Kami.
             </h1>
             <p className="mt-6 text-base text-white/60 max-w-md">
-              Laporkan kendala unit Anda, pantau progres perbaikan secara real-time, dan pastikan setiap penanganan terdokumentasi rapi, dari laporan masuk hingga berita acara ditandatangani.
+              Laporkan kendala unit Anda, pantau progres perbaikan secara real-time, dan pastikan setiap penanganan terdokumentasi rapi, dari laporan masuk hingga kendala teratasi.
             </p>
             <div className="mt-10 inline-flex items-center gap-2 text-xs text-white/50 font-mono uppercase tracking-widest">
               <ShieldCheck className="h-3 w-3" /> Cepat · Terverifikasi · Terdokumentasi

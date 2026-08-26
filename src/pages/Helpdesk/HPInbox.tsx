@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, selectTr
 import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
-import { ProgressBar } from '../../components/ui/progress-bar'
 import { PhoneInput } from '../../components/ui/input'
 import { getCustomers, getSites, getUnits, problemCategoriesApi, type Customer, type SiteRow, type UnitRow, type CatalogItem } from '../../services/master-data'
 import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
@@ -79,7 +78,6 @@ export default function HPInbox() {
     // State Alur Buat Tiket Internal
     const [createStep, setCreateStep] = useState<'form' | 'review' | 'remote' | 'path' | 'void'>('form')
     const [submitting, setSubmitting] = useState(false)
-    const [uploadPct, setUploadPct] = useState<number | null>(null)
     const [newVoidReason, setNewVoidReason] = useState('')
     const [newTicketId, setNewTicketId] = useState<string | null>(null)
     const [formErrors, setFormErrors] = useState<{ reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string; priority?: string; photos?: string }>({})
@@ -138,10 +136,8 @@ export default function HPInbox() {
             photoUrl: undefined, initialStatus,
             catatanInternal: catatan,
             photos,
-            onUploadProgress: setUploadPct
         })
         setSubmitting(false)
-        setUploadPct(null)
         return created
     }
 
@@ -209,7 +205,7 @@ export default function HPInbox() {
     }
 
     const handleRemoteClick = () => {
-        if (!validateForm() || !requirePriority()) return
+        if (!validateForm()) return
         setRemoteMedia('WA'); setRemoteNotes(''); setRemoteDuration(''); setRemoteResult('')
         setCreateStep('remote')
     }
@@ -443,10 +439,7 @@ export default function HPInbox() {
                                                     <div className="flex items-center gap-1 min-w-0">
                                                         <User className="h-2 w-2 shrink-0 text-muted-foreground" />
                                                         <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
-                                                    </div>
-                                                     {!['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status) && t.frtMinutes != null && (
-                                                         <span className="text-[8px] font-mono text-blue-600 bg-blue-50 px-1 rounded border border-blue-200">{t.frtMinutes}m</span>
-                                            )}
+                                                     </div>
                                             {formErrors.photos && <p className="text-[11px] text-red-500 mt-1.5">{formErrors.photos}</p>}
                                         </div>
                                             </div>
@@ -467,12 +460,12 @@ export default function HPInbox() {
                             <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                                 <tr>
                                     <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
-                                    <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th><th className="px-4 py-3 font-medium text-left w-[120px]">FRT</th>
+                                    <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {filteredTickets.length === 0 ? (
-                                    <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                    <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                                 ) : (
                                     filteredTickets.map(ticket => (
                                         <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
@@ -486,9 +479,6 @@ export default function HPInbox() {
                                             <td className="p-4">
                                                 <Badge type="status" value={ticket.status} />
                                             </td>
-                                             <td className="p-4">
-                                                 {ticket.frtMinutes != null && <span className="text-[10px] font-mono text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">{ticket.frtMinutes}m</span>}
-                                             </td>
                                         </tr>
                                     ))
                                 )}
@@ -507,7 +497,6 @@ export default function HPInbox() {
                     ticketId={liveTicket.id}
                     status={liveTicket.status}
                     priority={liveTicket.priority}
-                    frtMinutes={liveTicket.frtMinutes}
                     createdAt={liveTicket.createdAt}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
@@ -545,8 +534,8 @@ export default function HPInbox() {
                                             </div>
                                         </div>
                                     </div>
-                                    <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} disabled={!liveTicket.priority || !openCategoryId} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold disabled:opacity-40 disabled:cursor-not-allowed">Remote Support</button>
-                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} disabled={!liveTicket.priority || !openCategoryId} className="w-full py-2.5 bg-transparent text-foreground border border-border rounded-[3px] font-medium hover:bg-muted transition disabled:opacity-40 disabled:cursor-not-allowed">Eskalasi ke PM</button>
+                                    <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Remote Support</button>
+                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} disabled={!liveTicket.priority || !openCategoryId} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">Eskalasi ke PM</button>
                                 </>
                             )}
                             {liveTicket.status === 'RESOLVED' && (
@@ -640,7 +629,6 @@ export default function HPInbox() {
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4">Remote Support</h3>
                         <div className="space-y-4">
-                            <div><label className="text-xs font-semibold text-muted-foreground">Media</label><div className="flex gap-2 mt-1">{['WA', 'Telepon', 'VC'].map(m => (<button key={m} onClick={() => setRemoteMedia(m)} className={`flex-1 py-2 rounded border text-sm ${remoteMedia === m ? 'bg-foreground text-primary-foreground border-foreground' : 'bg-card border-border'}`}>{m}</button>))}</div></div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Durasi (Menit)</label><input type="number" value={remoteDuration} onChange={e => setRemoteDuration(e.target.value)} className="w-full mt-1 px-3 py-2 border border-border rounded" /></div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Catatan</label><textarea value={remoteNotes} onChange={e => setRemoteNotes(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border rounded"></textarea></div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Hasil</label><div className="grid grid-cols-2 gap-2 mt-1"><button onClick={() => { setRemoteResult('success'); setRemoteError('') }} className={`py-2 rounded border text-sm ${remoteResult === 'success' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-card border-border'}`}>Berhasil</button><button onClick={() => { setRemoteResult('fail'); setRemoteError('') }} className={`py-2 rounded border text-sm ${remoteResult === 'fail' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-card border-border'}`}>Gagal</button></div><FieldError msg={remoteError} /></div>
@@ -839,9 +827,6 @@ export default function HPInbox() {
                                                     ))}
                                                 </div>
                                             )}
-                                            {submitting && (
-                                                <ProgressBar value={uploadPct} label="Mengunggah lampiran…" className="mt-2.5" />
-                                            )}
                                         </div>
                                         <div>
                                             <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Deskripsi Kendala</label>
@@ -914,10 +899,6 @@ export default function HPInbox() {
                         {createStep === 'remote' && (
                             <>
                                 <div className="p-5 space-y-4 overflow-y-auto flex-1">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Media</label>
-                                        <div className="flex gap-2">{['WA', 'Telepon', 'VC'].map(m => (<button key={m} onClick={() => setRemoteMedia(m)} className={`flex-1 py-2 rounded-[3px] border text-sm font-semibold transition ${remoteMedia === m ? 'bg-foreground text-primary-foreground border-foreground' : 'bg-card border-border hover:border-foreground/50'}`}>{m}</button>))}</div>
-                                    </div>
                                     <div>
                                         <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Durasi (Menit)</label>
                                         <input type="number" min="1" value={remoteDuration} onChange={e => { setRemoteDuration(e.target.value); setRemoteCreateErrors(prev => ({ ...prev, duration: undefined })) }} className={`${inputCls} ${remoteCreateErrors.duration ? 'border-red-500' : ''}`} />

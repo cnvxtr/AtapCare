@@ -14,7 +14,6 @@ import { Badge } from '../../components/Badge'
 import { Combobox } from '../../components/ui/combobox'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime, formatJadwal } from '../../components/TicketDrawer'
 import { uploadAttachment } from '../../services/photoService'
-import { ProgressBar } from '../../components/ui/progress-bar'
 import { recordGps, requestBackup, setTicketCatalog } from '../../services/ticketService'
 import { problemCategoriesApi, rootCausesApi } from '../../services/master-data'
 
@@ -38,7 +37,6 @@ export default function TugasTeknisi() {
     const [pendingReason, setPendingReason] = useState('')
     const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
     const [pendingSubmitting, setPendingSubmitting] = useState(false)
-    const [pendPct, setPendPct] = useState<number | null>(null)
     const [showCompleteModal, setShowCompleteModal] = useState(false)
     const [completeNote, setCompleteNote] = useState('')
     const [serialNumber, setSerialNumber] = useState('')
@@ -46,7 +44,6 @@ export default function TugasTeknisi() {
     const [completeRootNote, setCompleteRootNote] = useState('')
     const [photos, setPhotos] = useState<File[]>([])
     const [submitting, setSubmitting] = useState(false)
-    const [compPct, setCompPct] = useState<number | null>(null)
     const [catalogItems, setCatalogItems] = useState<{ categories: Map<string, string>; roots: Map<string, string> }>({
         categories: new Map(), roots: new Map(),
     })
@@ -146,11 +143,7 @@ export default function TugasTeknisi() {
         try {
             let details = `Ditunda: ${pendingReason.trim()}`
             if (pendingPhotos.length) {
-                const fracs = new Array(pendingPhotos.length).fill(0)
-                const paths = await Promise.all(pendingPhotos.map((f, i) => uploadAttachment(f, selectedTicket.code, (p) => {
-                    fracs[i] = p
-                    setPendPct(fracs.reduce((a, b) => a + b, 0) / pendingPhotos.length)
-                })))
+                const paths = await Promise.all(pendingPhotos.map((f) => uploadAttachment(f, selectedTicket.code)))
                 details += ` | Foto (${paths.length}):\n${paths.join('\n')}`
             }
             await handleStatusUpdate(selectedTicket.id, 'PENDING', details)
@@ -159,7 +152,6 @@ export default function TugasTeknisi() {
         } finally {
             setPendingReason('')
             setPendingPhotos([])
-            setPendPct(null)
             setPendingSubmitting(false)
             setShowPendingModal(false)
         }
@@ -171,13 +163,8 @@ export default function TugasTeknisi() {
         if (!completeRootCause) { toast.error('Akar Kendala wajib diisi.'); return }
         if (photos.length === 0) { toast.error('Foto & File Dokumentasi wajib diunggah.'); return }
         setSubmitting(true)
-        setCompPct(null)
         try {
-            const fracs = new Array(photos.length).fill(0)
-            const paths = await Promise.all(photos.map((f, i) => uploadAttachment(f, selectedTicket.code, (p) => {
-                fracs[i] = p
-                setCompPct(fracs.reduce((a, b) => a + b, 0) / photos.length)
-            })))
+            const paths = await Promise.all(photos.map((f) => uploadAttachment(f, selectedTicket.code)))
             const parts = [`Selesai${completeNote ? ': ' + completeNote : ''}`]
             if (serialNumber.trim()) parts.push(`Serial Number: ${serialNumber.trim()}`)
             if (paths.length) parts.push(`Foto (${paths.length}):\n${paths.join('\n')}`)
@@ -197,7 +184,6 @@ export default function TugasTeknisi() {
             toast.error('Gagal mengunggah foto. Coba lagi.')
         } finally {
             setSubmitting(false)
-            setCompPct(null)
             setCompleteNote('')
             setSerialNumber('')
             setCompleteRootCause('')
@@ -340,7 +326,6 @@ export default function TugasTeknisi() {
                     ticketId={selectedTicket.id}
                     status={selectedTicket.status}
                     priority={selectedTicket.priority}
-                    frtMinutes={selectedTicket.frtMinutes}
                     createdAt={selectedTicket.createdAt}
                     activeTab={activeDrawerTab}
                     onTabChange={setActiveDrawerTab}
@@ -504,9 +489,6 @@ export default function TugasTeknisi() {
                                 </div>
                             )}
                         </div>
-                        {pendingSubmitting && (
-                            <ProgressBar value={pendPct} label="Mengunggah bukti…" className="mb-4" />
-                        )}
                         <div className="flex gap-3">
                             <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]) }}
                                 disabled={pendingSubmitting}
@@ -584,9 +566,6 @@ export default function TugasTeknisi() {
                                 )}
                             </div>
                         </div>
-                        {submitting && (
-                            <ProgressBar value={compPct} label="Mengunggah dokumentasi…" className="mb-4" />
-                        )}
                         <div className="flex gap-3 mt-6">
                             <button onClick={() => { setShowCompleteModal(false); setCompleteNote(''); setSerialNumber(''); setCompleteRootCause(''); setCompleteRootNote(''); setPhotos([]) }}
                                 disabled={submitting}

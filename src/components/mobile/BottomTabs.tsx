@@ -57,7 +57,11 @@ export default function BottomTabs({ role }: { role: string }) {
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
 
-  const activePath = tabs.find(t => location.pathname === t.path)?.path || tabs[0].path
+  const activePath = tabs.find(t =>
+    t.path === '/customer'
+      ? location.pathname.startsWith('/customer') && !location.pathname.startsWith('/customer/report')
+      : location.pathname === t.path
+  )?.path || tabs[0].path
   const profileActive = location.pathname === '/profile'
 
   return (

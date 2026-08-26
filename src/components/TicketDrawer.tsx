@@ -22,7 +22,6 @@ interface TicketDrawerProps {
     ticketId?: string
     status: string
     priority?: string
-    frtMinutes?: number | null
     createdAt: string
     activeTab: DrawerTab
     onTabChange: (t: DrawerTab) => void
@@ -32,7 +31,7 @@ interface TicketDrawerProps {
     duplicateCode?: string
 }
 
-export default function TicketDrawer({ onClose, code, status, priority, frtMinutes, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
+export default function TicketDrawer({ onClose, code, status, priority, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
     const [gps, setGps] = useState<GpsPoint[]>([])
     const [locationNames, setLocationNames] = useState<Record<string, string>>({})
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
@@ -72,9 +71,6 @@ export default function TicketDrawer({ onClose, code, status, priority, frtMinut
                                 <Badge type="status" value={status} />
                                 {duplicateCode && (
                                     <span className="px-1.5 py-0.5 rounded-[5px] bg-amber-100 text-amber-700 text-[10px] font-bold whitespace-nowrap">Duplikat dari {duplicateCode}</span>
-                                )}
-                                {frtMinutes != null && (
-                                    <span className="px-1.5 py-0.5 rounded-[5px] bg-blue-50 text-blue-700 text-[10px] font-bold whitespace-nowrap border border-blue-200">FRT: {frtMinutes}m</span>
                                 )}
                             </div>
                             <p className="mt-1 font-mono text-[11px] text-muted-foreground">
@@ -273,7 +269,9 @@ export function TicketTimeline({ items, isFinal }: { items: { timestamp: string;
     }
     const sorted = items.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     const steps = sorted.map((act, idx) => {
-        let { action, details } = sanitizeTimeline(act.action, act.details)
+        const sanitized = sanitizeTimeline(act.action, act.details, true)
+        let { details } = sanitized
+        const action = sanitized.action
         if (locationNames && gps) {
             if (action === 'Pekerjaan dimulai') {
                 const p = gps.find(g => g.phase === 'start')
@@ -299,11 +297,25 @@ export function TicketTimeline({ items, isFinal }: { items: { timestamp: string;
 // Sanitasi tampilan timeline agar tidak memuat nama/role orang (mis. "Tiket ditugaskan
 // ke Rahma" → "…teknisi", baris "Pendukung: Hilman" dihapus). Data mentah di DB tetap
 // utuh untuk audit — hanya render yang dibersihkan.
-export function sanitizeTimeline(action: string, details?: string): { action: string; details?: string } {
+export function sanitizeTimeline(action: string, details?: string, includeSupport?: boolean): { action: string; details?: string } {
     let a = action
-    if (a.startsWith('Tiket ditugaskan ke')) a = 'Tiket ditugaskan ke teknisi'
-    if (a.startsWith('Tiket dieskalasi ke PM Lead')) a = 'Tiket dieskalasi'
     let d = details
+    if (a.startsWith('Tiket ditugaskan ke')) {
+        if (includeSupport) {
+            // Drawer: keep lead name in action, format details with schedule + support
+            const leadName = a.replace('Tiket ditugaskan ke', '').trim()
+            const schedule = d?.match(/Jadwal:\s*(.+)/)?.[1]?.trim()
+            const supportMatch = d?.match(/^Pendukung:\s*(.+)$/m)
+            const support = supportMatch?.[1]?.trim()
+            const parts = [`Ketua: ${leadName}`]
+            if (schedule) parts.push(`Jadwal: ${schedule}`)
+            if (support) parts.push(`Pendukung: ${support}`)
+            d = parts.join('\n') || undefined
+            return { action: a, details: d }
+        }
+        a = 'Tiket ditugaskan ke teknisi'
+    }
+    if (a.startsWith('Tiket dieskalasi ke PM Lead')) a = 'Tiket dieskalasi'
     if (d) {
         d = d.replace(/^Pendukung:\s*.+\n?/gm, '').replace(/\n+$/, '') || undefined
     }
