@@ -75,7 +75,6 @@ const FAQ_ITEMS: Array<{ q: string; a: string }> = [
   },
 ];
 
-const ZONE = "relative z-10 px-6 py-16 max-w-5xl mx-auto w-full min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center scroll-mt-16";
 const ZONE_TITLE = "text-2xl md:text-3xl font-display font-bold tracking-tight self-start mb-10";
 const STATS_CACHE_KEY = "atapcare-landing-stats";
 
@@ -103,59 +102,90 @@ export default function Landing() {
   }, []);
 
   const badgeText = `${stats?.active_units ?? 0} Titik Aktif`;
-  const faqItems = useMemo(() => FAQ_ITEMS, [])
+  const faqItems = useMemo(() => FAQ_ITEMS, []);
 
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-clip flex flex-col">
+
+      {/* ========================================== */}
+      {/* LAYER BACKGROUND PREMIUM (MONOCHROME)      */}
+      {/* ========================================== */}
+      {/* 1. Base Grid Pattern */}
+      <div className="fixed inset-0 grid-bg opacity-30 pointer-events-none z-0" />
+
+      {/* 2. Noise Texture (Film Grain) */}
+      <div className="fixed inset-0 noise-overlay pointer-events-none z-0" />
+
+      {/* 3. Ambient Glow 1 (Top Left) - Memberikan kedalaman tanpa warna */}
+      <div className="fixed -top-32 -left-32 w-[600px] h-[600px] bg-muted rounded-full blur-[120px] opacity-70 pointer-events-none z-0" />
+
+      {/* 4. Ambient Glow 2 (Bottom Right) - Menyeimbangkan komposisi */}
+      <div className="fixed -bottom-32 -right-32 w-[700px] h-[700px] bg-border rounded-full blur-[150px] opacity-60 pointer-events-none z-0" />
+
+      {/* KONTEN UTAMA (z-10 agar di atas background)*/}
+
       <SiteHeader />
 
-      <main id="beranda" className="relative z-10 flex-1 min-h-[calc(100vh-4rem)] scroll-mt-16 flex flex-col items-center justify-center px-6 py-20 text-center">
-        <Reveal>
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass text-xs font-mono uppercase tracking-widest mb-6">
-            <span className="h-1.5 w-1.5 rounded-full bg-success pulse-ring" />
-            {badgeText}
-          </div>
-        </Reveal>
-        <Reveal delay={100}>
-          <h1 className="text-4xl md:text-6xl font-display font-bold tracking-tight leading-[1.05]">
-            Gerbang <span className="italic font-serif text-muted-foreground">Atap Care</span>
-          </h1>
-        </Reveal>
-        <Reveal delay={200}>
-          <p className="mt-4 text-base text-muted-foreground max-w-2xl mx-auto">
-            Kirim laporan kerusakan untuk perangkat Anda, lalu pantau perkembangannya secara real-time
-            hingga selesai ditangani tim kami.
-          </p>
-        </Reveal>
-        <Reveal delay={300}>
-          <div className="mt-8 flex justify-center w-full">
-            <Link
-              to="/login"
-              className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-[3px] bg-black text-background font-medium hover:bg-black transition-all duration-500 text-sm"
-            >
-              <span className="transition-all duration-500 group-hover:pr-1">Lapor Kendala</span>
-              <ArrowRight className="h-4 w-4 text-background transition-all duration-500 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0" />
-            </Link>
-          </div>
-        </Reveal>
+      {/* HERO SECTION */}
+      <main id="beranda" className="relative flex-1 min-h-[calc(100vh-4rem)] scroll-mt-16 flex flex-col items-center justify-center px-6 py-20 text-center overflow-hidden">
+
+        {/* LAYARAN BACKGROUND HERO */}
+
+        <div className="absolute inset-0 hero-blob z-0" />
+        <div className="absolute inset-0 grid-bg opacity-40 z-0" />
+        <div className="absolute inset-0 noise-overlay z-0" />
+        <div className="relative z-10 max-w-4xl mx-auto w-full">
+          <Reveal>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass border border-border text-xs font-mono uppercase tracking-widest mb-6">
+              <span className="h-1.5 w-1.5 rounded-full bg-success pulse-ring" />
+              {badgeText}
+            </div>
+          </Reveal>
+
+          <Reveal delay={100}>
+            <h1 className="text-4xl md:text-6xl font-display font-bold tracking-tight leading-[1.05]">
+              Gerbang Atap Care
+            </h1>
+          </Reveal>
+
+          <Reveal delay={200}>
+            <p className="mt-4 text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              Kirim laporan kerusakan untuk perangkat Anda, lalu pantau perkembangannya secara real-time
+              hingga selesai ditangani tim kami.
+            </p>
+          </Reveal>
+
+          <Reveal delay={300}>
+            <div className="mt-8 flex justify-center w-full">
+              <Link
+                to="/login"
+                className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-foreground text-background font-medium hover:opacity-90 transition-all duration-300 text-sm shadow-sm"
+              >
+                <span className="transition-all duration-300 group-hover:pr-1">Lapor Kendala</span>
+                <ArrowRight className="h-4 w-4 text-background transition-all duration-300 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0" />
+              </Link>
+            </div>
+          </Reveal>
+        </div>
       </main>
 
       <TroubleshootCards />
 
-      <section id="alur" className={ZONE}>
+      {/* ALUR LAYANAN SECTION */}
+      <section id="alur" className="relative z-10 px-6 py-16 max-w-5xl mx-auto w-full scroll-mt-16">
         <h2 className={ZONE_TITLE}>
-          Alur <span className="italic font-serif text-muted-foreground">Layanan</span>
+          Alur Layanan
         </h2>
-        <div className="grid auto-rows-fr sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full">
+        <div className="grid auto-rows-fr sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
           {FLOW_STEPS.map(({ n, title, desc, Icon }, i) => (
             <Reveal key={n} delay={i * 70}>
-              <div className="sweep group relative h-full rounded-[3px] border border-border bg-card p-5 transition-all duration-500 hover:-translate-y-1 hover:border-foreground/40">
-                <span className="font-mono text-3xl font-bold text-foreground group-hover:text-foreground/70 transition-colors duration-500">
+              <div className="sweep group relative h-full rounded-xl border border-border bg-card/60 backdrop-blur-sm p-5 transition-all duration-300 hover:-translate-y-1 hover:border-foreground/40 hover:bg-card">
+                <span className="font-mono text-3xl font-bold text-muted-foreground/30 group-hover:text-foreground/20 transition-colors duration-300">
                   {n}
                 </span>
                 <div className="mt-3 flex items-start gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] bg-foreground text-background">
-                    <Icon className="h-4.5 w-4.5" />
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                    <Icon className="h-4 w-4" />
                   </span>
                   <div>
                     <p className="font-semibold text-sm leading-tight">{title}</p>
@@ -168,92 +198,93 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* INFO & FAQ SECTION */}
       <section id="info" className="relative z-10 px-6 pb-20 max-w-5xl mx-auto w-full scroll-mt-16">
-        <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-3">
-          <div className="space-y-3">
+        <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4">
+          <div className="space-y-4">
             <Reveal>
-            <div className="rounded-[3px] border border-border bg-card p-6">
-              <h2 className="text-lg font-display font-bold tracking-tight">
-                Informasi <span className="italic font-serif text-muted-foreground">Penting</span>
-              </h2>
-              <div className="mt-4 space-y-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] bg-foreground text-background">
-                    <Clock className="h-4.5 w-4.5" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold">Jam Operasional</p>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                      Senin–Jumat · 08.00–17.00 WIB. Pelaporan di luar jam kerja akan diproses pada jam operasional berikutnya.
-                    </p>
+              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6">
+                <h2 className="text-lg font-display font-bold tracking-tight">
+                  Informasi Penting
+                </h2>
+                <div className="mt-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <Clock className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Jam Operasional</p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        Senin–Jumat · 08.00–17.00 WIB. Pelaporan di luar jam kerja akan diproses pada jam operasional berikutnya.
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] bg-foreground text-background">
-                    <LifeBuoy className="h-4.5 w-4.5" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold">Butuh Bantuan?</p>
-                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                      Hubungi kami melalui chat atau hubungi admin.
-                    </p>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <LifeBuoy className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Butuh Bantuan?</p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        Hubungi kami melalui chat atau hubungi admin.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             </Reveal>
 
             <Reveal delay={90}>
-            <div className="rounded-[3px] border border-border bg-card p-6">
-              <h2 className="text-lg font-display font-bold tracking-tight">
-                Kontak <span className="italic font-serif text-muted-foreground">Kami</span>
-              </h2>
-              <div className="mt-4 space-y-4">
-                <a href={`mailto:${ADMIN_EMAIL}`} className="flex items-center gap-3 group">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] bg-foreground text-background">
-                    <Mail className="h-4.5 w-4.5" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold">Email</p>
-                    <p className="text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_EMAIL}</p>
+              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6">
+                <h2 className="text-lg font-display font-bold tracking-tight">
+                  Kontak Kami
+                </h2>
+                <div className="mt-4 space-y-4">
+                  <a href={`mailto:${ADMIN_EMAIL}`} className="flex items-center gap-3 group">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <Mail className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Email</p>
+                      <p className="text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_EMAIL}</p>
+                    </div>
+                  </a>
+                  <a
+                    href={`https://wa.me/${ADMIN_PHONE_LINK}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 group"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <Phone className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Nomor Admin</p>
+                      <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_PHONE_DISPLAY}</p>
+                    </div>
+                  </a>
+                  <div className="flex items-center gap-3 pt-1">
+                    {SOCIALS.map((s) => (
+                      <SocialIcon key={s.label} href={s.href} label={s.label}>
+                        {s.children}
+                      </SocialIcon>
+                    ))}
                   </div>
-                </a>
-                <a
-                  href={`https://wa.me/${ADMIN_PHONE_LINK}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 group"
-                >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[3px] bg-foreground text-background">
-                    <Phone className="h-4.5 w-4.5" />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold">Nomor Admin</p>
-                    <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_PHONE_DISPLAY}</p>
-                  </div>
-                </a>
-                <div className="flex items-center gap-3 pt-1">
-                  {SOCIALS.map((s) => (
-                    <SocialIcon key={s.label} href={s.href} label={s.label}>
-                      {s.children}
-                    </SocialIcon>
-                  ))}
                 </div>
               </div>
-            </div>
             </Reveal>
           </div>
 
-          <div className="rounded-[3px] border border-border bg-card p-6 flex flex-col min-h-0">
+          <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6 flex flex-col min-h-0">
             <h2 className="text-lg font-display font-bold tracking-tight">
-              FAQ - <span className="italic font-serif text-muted-foreground">Pertanyaan Umum</span>
+              FAQ - Pertanyaan Umum
             </h2>
             <div className="mt-4 space-y-2 flex-1 min-h-0 overflow-y-auto">
               {faqItems.map((item, i) => (
-                <div key={i} className="border border-border rounded-[3px] overflow-hidden">
+                <div key={i} className="border border-border rounded-lg overflow-hidden bg-background/50">
                   <button
                     onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-left cursor-pointer"
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-left cursor-pointer hover:bg-accent/50 transition-colors"
                   >
                     {item.q}
                     <ChevronDown

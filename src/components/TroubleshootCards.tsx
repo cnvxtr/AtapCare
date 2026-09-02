@@ -36,7 +36,7 @@ export function TroubleshootCards() {
     >
       <Reveal className="mb-10">
         <h2 className="text-2xl md:text-3xl font-display font-bold tracking-tight">
-          Kendala <span className="italic font-serif text-muted-foreground">Umum</span>
+          Kendala Umum
         </h2>
       </Reveal>
 

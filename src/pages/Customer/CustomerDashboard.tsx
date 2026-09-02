@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useTickets } from '../../context/TicketContext'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
+import { useEffect, useState } from 'react'
 import { Badge } from '../../components/Badge'
 import { ClipboardCheck, ChevronRight, AlertTriangle, CheckCircle2, Plus } from 'lucide-react'
 
@@ -8,9 +10,17 @@ export default function CustomerDashboard() {
     const navigate = useNavigate()
     const { user } = useAuth()
     const { tickets } = useTickets()
+    const [companyName, setCompanyName] = useState('')
+
+    useEffect(() => {
+        if (!user?.customer_id) { setCompanyName(''); return }
+        supabase.from('customers').select('name').eq('id', user.customer_id).single().then(({ data }) => {
+            setCompanyName((data as { name: string } | null)?.name || '')
+        })
+    }, [user?.customer_id])
 
     const myTickets = tickets.filter(t =>
-        t.customer === user?.full_name || t.company === user?.full_name
+        companyName && (t.company === companyName || t.customer === user?.full_name)
     )
 
     const openCount = myTickets.filter(t => !['RESOLVED', 'CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status)).length

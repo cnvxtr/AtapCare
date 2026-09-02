@@ -15,8 +15,8 @@ export default function CustomerReport() {
     const navigate = useNavigate()
     const { user } = useAuth()
 
-    const [customers, setCustomers] = useState<ComboboxOption[]>([])
-    const [selectedCustomerId, setSelectedCustomerId] = useState('')
+    const [companyName, setCompanyName] = useState('')
+    const [customerId, setCustomerId] = useState(user?.customer_id || '')
     const [sites, setSites] = useState<ComboboxOption[]>([])
     const [selectedSiteId, setSelectedSiteId] = useState('')
     const [units, setUnits] = useState<ComboboxOption[]>([])
@@ -28,18 +28,20 @@ export default function CustomerReport() {
     const [error, setError] = useState('')
 
     useEffect(() => {
-        supabase.from('customers').select('id, name').order('name').then(({ data }) => {
-            setCustomers((data || []).map((c: CustomerRow) => ({ value: c.id, label: c.name })))
+        if (!user?.customer_id) { setCompanyName(''); return }
+        setCustomerId(user.customer_id)
+        supabase.from('customers').select('id, name').eq('id', user.customer_id).single().then(({ data }) => {
+            setCompanyName((data as CustomerRow | null)?.name || '')
         })
-    }, [])
+    }, [user?.customer_id])
 
     useEffect(() => {
-        if (!selectedCustomerId) { setSites([]); setSelectedSiteId(''); setUnits([]); setSelectedUnitId(''); return }
-        supabase.from('sites').select('id, name').eq('customer_id', selectedCustomerId).order('name').then(({ data }) => {
+        if (!customerId) { setSites([]); setSelectedSiteId(''); setUnits([]); setSelectedUnitId(''); return }
+        supabase.from('sites').select('id, name').eq('customer_id', customerId).order('name').then(({ data }) => {
             setSites((data || []).map((s: SiteRow) => ({ value: s.id, label: s.name })))
         })
         setSelectedSiteId(''); setUnits([]); setSelectedUnitId('')
-    }, [selectedCustomerId])
+    }, [customerId])
 
     useEffect(() => {
         if (!selectedSiteId) { setUnits([]); setSelectedUnitId(''); return }
@@ -49,7 +51,6 @@ export default function CustomerReport() {
         setSelectedUnitId('')
     }, [selectedSiteId])
 
-    const selectedCustomer = customers.find(c => c.value === selectedCustomerId)
     const selectedSite = sites.find(s => s.value === selectedSiteId)
     const selectedUnit = units.find(u => u.value === selectedUnitId)
 
@@ -57,8 +58,8 @@ export default function CustomerReport() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!description.trim() || !selectedCustomer || !selectedSite) {
-            setError('Perusahaan, site, dan deskripsi wajib diisi.'); return
+        if (!description.trim() || !selectedSite) {
+            setError('Site dan deskripsi wajib diisi.'); return
         }
         if (photos.length === 0) { setError('Foto & File Pendukung wajib diunggah.'); return }
         setIsLoading(true); setError('')
@@ -84,14 +85,14 @@ export default function CustomerReport() {
             <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-6 space-y-4">
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Perusahaan</label>
-                    <Combobox options={customers} value={selectedCustomerId} onChange={setSelectedCustomerId}
-                        placeholder="Ketik nama perusahaan..." emptyText="Perusahaan tidak ditemukan" minChars={4} />
+                    <input type="text" readOnly value={companyName || '—'}
+                        className="w-full px-3 py-2 rounded-md border border-border bg-muted text-sm cursor-not-allowed" />
                 </div>
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Site</label>
                     <Combobox options={sites} value={selectedSiteId} onChange={setSelectedSiteId}
-                        placeholder={selectedCustomerId ? "Ketik nama site..." : "Pilih perusahaan terlebih dahulu"}
-                        disabled={!selectedCustomerId} emptyText="Site tidak ditemukan" />
+                        placeholder={companyName ? "Ketik nama site..." : "Perusahaan belum terhubung"}
+                        disabled={!companyName} emptyText="Site tidak ditemukan" />
                 </div>
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Unit</label>
@@ -100,7 +101,7 @@ export default function CustomerReport() {
                         disabled={!selectedSiteId} emptyText="Unit tidak ditemukan" />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium mb-1.5">No. WhatsApp</label>
+                    <label className="block text-xs font-medium mb-1.5">No. Telepon</label>
                     <input type="text" readOnly value={user?.wa_number || ''}
                         className="w-full px-3 py-2 rounded-md border border-border bg-muted text-sm cursor-not-allowed" />
                 </div>

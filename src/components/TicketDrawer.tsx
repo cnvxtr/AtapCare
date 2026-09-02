@@ -1,13 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Download, FileText, Image, MapPin, X } from 'lucide-react'
 import { Badge } from './Badge'
 import { resolvePhotos } from '../services/photoService'
 import { getTicketGps, type GpsPoint } from '../services/ticketService'
-import { reverseGeocode } from '../lib/geocode'
 import { OrderTracking } from './ui/order-tracking'
-
-const GpsContext = createContext<{ locationNames?: Record<string, string>; gps?: GpsPoint[] }>({})
+import { useIsMobile } from '../lib/platform'
 
 export type DrawerTab = 'detail' | 'timeline'
 
@@ -32,8 +30,8 @@ interface TicketDrawerProps {
 }
 
 export default function TicketDrawer({ onClose, code, status, priority, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
+    const isMobile = useIsMobile()
     const [gps, setGps] = useState<GpsPoint[]>([])
-    const [locationNames, setLocationNames] = useState<Record<string, string>>({})
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
         ? [...(activities ?? [])].reverse().find(a => a.action === 'Tugas diselesaikan')?.timestamp
         : undefined
@@ -47,20 +45,9 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
         return () => { mounted = false }
     }, [activeTab, code])
 
-    useEffect(() => {
-        if (!gps.length) return
-        let mounted = true
-        ;(async () => {
-            for (const p of gps) {
-                const name = await reverseGeocode(p.lat, p.lon)
-                if (mounted) setLocationNames(prev => ({ ...prev, [p.phase]: name }))
-            }
-        })()
-        return () => { mounted = false }
-    }, [gps])
     return createPortal(
         <div className="fixed inset-0 bg-black/80 z-[100] flex justify-end animate-[fade-in_0.2s_ease]" onClick={onClose}>
-            <div className="w-full max-w-2xl h-full bg-card/95 backdrop-blur-xl border-l border-border shadow-2xl flex flex-col drawer-enter" onClick={(e) => e.stopPropagation()}>
+            <div className={`${isMobile ? 'w-full h-full' : 'w-full max-w-2xl h-full'} bg-card/95 backdrop-blur-xl border-l border-border shadow-2xl flex flex-col drawer-enter`} onClick={(e) => e.stopPropagation()}>
                 <div className="sticky top-0 z-10 bg-card/80 backdrop-blur-xl px-4 py-2.5">
                     <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
@@ -108,7 +95,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
                                         <MapPin className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                                         <div>
                                             <span className="uppercase font-mono">{phase === 'start' ? 'Mulai' : 'Selesai'}:</span>
-                                            <span className="text-foreground ml-1">{locationNames[phase] ?? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`}</span>
+                                            <span className="text-foreground ml-1">{`${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`}</span>
                                             <span className="ml-1">· {formatWIB(p.captured_at)}</span>
                                         </div>
                                     </div>
@@ -116,9 +103,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
                             })}
                         </div>
                     )}
-                    <GpsContext.Provider value={{ locationNames, gps }}>
-                        {children}
-                    </GpsContext.Provider>
+                    {children}
                     {activeTab === 'detail' && activities && <PhotoGallery items={activities} status={status} />}
                 </div>
 
@@ -183,7 +168,7 @@ function PhotoLightbox({ images, index, onClose, titles }: { images: string[]; i
 const FILE_TOKEN_RE = /(data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|(?:ticket-photos\/)?[A-Za-z0-9-]+\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9-]+)?\.\w+)/g
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp'])
 
-async function downloadFromUrl(url: string, filename: string) {
+export async function downloadFromUrl(url: string, filename: string) {
     try {
         const res = await fetch(url)
         const blob = await res.blob()
@@ -263,27 +248,14 @@ export function DetailsText({ text }: { text?: string }) {
 }
 
 export function TicketTimeline({ items, isFinal }: { items: { timestamp: string; action: string; details?: string }[]; isFinal?: boolean }) {
-    const { locationNames, gps } = useContext(GpsContext)
     if (items.length === 0) {
         return <p className="text-sm text-muted-foreground italic">Belum ada aktivitas.</p>
     }
     const sorted = items.slice().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     const steps = sorted.map((act, idx) => {
         const sanitized = sanitizeTimeline(act.action, act.details, true)
-        let { details } = sanitized
+        const { details } = sanitized
         const action = sanitized.action
-        if (locationNames && gps) {
-            if (action === 'Pekerjaan dimulai') {
-                const p = gps.find(g => g.phase === 'start')
-                const loc = locationNames['start']
-                if (p && loc) details = `lokasi: ${loc}\n(${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})`
-            }
-            if (action === 'Tugas diselesaikan') {
-                const p = gps.find(g => g.phase === 'end')
-                const loc = locationNames['end']
-                if (p && loc) details = `lokasi: ${loc}\n(${p.lat.toFixed(5)}, ${p.lon.toFixed(5)})`
-            }
-        }
         return {
             name: action,
             timestamp: formatWIB(act.timestamp),
@@ -379,20 +351,28 @@ export function TicketDescription({ description }: { description?: string }) {
 
 // Informasi penugasan diekstrak dari aktivitas terbaru, bukan kolom terstruktur,
 // karena jadwal hanya ditulis sebagai detail aktivitas oleh alur assign.
+// Hanya tangkap tanggal+jam (YYYY-MM-DD HH:MM), bukan semua sisa teks setelah
+// "Jadwal:" — supaya "Jadwal: 2026-08-31 08:00. Alasan: ..." tetap jadi 2026-08-31 08:00
+// yang valid untuk new Date(). Regex longgar (.+) membuat new Date jadi NaN sehingga
+// guard jadwal (canTravel) tidak terkunci. (ponytail: tak perlu library tanggal.)
+const JADWAL_RE = /Jadwal:\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/
+
 export function getAssignmentInfo(items: { action: string; details?: string }[]): { teknisi?: string; jadwal?: string } {
+    const toJadwal = (detail: string): string | undefined => {
+        const m = detail.match(JADWAL_RE)
+        return m ? `${m[1]} ${m[2]}` : undefined
+    }
     for (const act of [...items].reverse()) {
         const detail = act.details || ''
         if (act.action.startsWith('Tiket ditugaskan ke')) {
-            const jadwal = detail.match(/Jadwal:\s*(.+)/)?.[1]
-            return { teknisi: act.action.replace('Tiket ditugaskan ke', '').trim(), jadwal }
+            return { teknisi: act.action.replace('Tiket ditugaskan ke', '').trim(), jadwal: toJadwal(detail) }
         }
         if (detail.startsWith('Ditugaskan ke')) {
-            const jadwal = detail.match(/Jadwal:\s*(.+)/)?.[1]
             const teknisi = detail.match(/^Ditugaskan ke (.+?)\.(?:\s*Jadwal:)?/)?.[1]?.trim()
-            return { teknisi, jadwal }
+            return { teknisi, jadwal: toJadwal(detail) }
         }
         if (detail.startsWith('Jadwal:')) {
-            return { jadwal: detail.match(/Jadwal:\s*(.+)/)?.[1] }
+            return { jadwal: toJadwal(detail) }
         }
     }
     return {}
@@ -421,7 +401,7 @@ export function AssignmentCard({ items }: { items: { action: string; details?: s
 
 const PHOTO_SRC_RE = FILE_TOKEN_RE
 
-function extractAttachments(items: { timestamp: string; action: string; details?: string }[]): { src: string; when: string }[] {
+export function extractAttachments(items: { timestamp: string; action: string; details?: string }[]): { src: string; when: string }[] {
     const all: { src: string; when: string }[] = []
     for (const act of items) {
         if (!act.details) continue

@@ -25,6 +25,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/users': 'Pengguna',
   '/admin/master-data': 'Master Data',
   '/admin/reports': 'Laporan',
+  '/admin/ratings': 'Penilaian Helpdesk',
   '/customer': 'Dashboard',
   '/customer/report': 'Lapor Kendala',
 }
@@ -129,7 +130,7 @@ export default function MobileLayout() {
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Top Bar */}
-      <header className="sticky top-0 z-40 h-15 flex items-center justify-between px-5 border-b border-border bg-background/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-40 h-16 flex items-center justify-between px-5 border-b border-border bg-background/80 backdrop-blur-xl">
         <h1 className="text-lg font-display font-bold tracking-tight truncate">{pageTitle}</h1>
         <div className="flex items-center gap-1">
           {/* Ganti Role — hanya untuk multi-role */}
@@ -150,7 +151,7 @@ export default function MobileLayout() {
           >
             <Bell className="h-5 w-5" />
             {notifCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 h-4.5 min-w-[18px] px-1 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold grid place-items-center">
+              <span className="absolute top-1.5 right-1.5 h-4.5 min-w-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold grid place-items-center">
                 {notifCount > 9 ? '9+' : notifCount}
               </span>
             )}
@@ -167,7 +168,7 @@ export default function MobileLayout() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 pb-16 px-4 py-3">
+      <main className="flex-1 px-4 py-3 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>

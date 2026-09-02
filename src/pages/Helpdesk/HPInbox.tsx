@@ -33,7 +33,6 @@ export default function HPInbox() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
-    const [openCategoryId, setOpenCategoryId] = useState('')
 
     // State Modals
     const [showVoidModal, setShowVoidModal] = useState(false)
@@ -41,6 +40,7 @@ export default function HPInbox() {
     const [showRemoteModal, setShowRemoteModal] = useState(false)
     const [showValidationModal, setShowValidationModal] = useState(false)
     const [showConfirmPath, setShowConfirmPath] = useState(false)
+    const [showEscalateModal, setShowEscalateModal] = useState(false)
 
     // State Forms
     const [voidReason, setVoidReason] = useState('')
@@ -50,12 +50,16 @@ export default function HPInbox() {
     const [remoteNotes, setRemoteNotes] = useState('')
     const [remoteDuration, setRemoteDuration] = useState('')
     const [remoteResult, setRemoteResult] = useState<'success' | 'fail' | ''>('')
+    const [remoteCategoryId, setRemoteCategoryId] = useState('')
     const [validationAction, setValidationAction] = useState<'close' | 'rework'>('close')
     const [reworkReason, setReworkReason] = useState('')
     const [reworkError, setReworkError] = useState('')
     const [voidError, setVoidError] = useState('')
     const [dupError, setDupError] = useState('')
     const [remoteError, setRemoteError] = useState('')
+    const [escCategoryId, setEscCategoryId] = useState('')
+    const [escPriority, setEscPriority] = useState<Priority | ''>('')
+    const [escErrors, setEscErrors] = useState<{ category?: string; priority?: string }>({})
 
     // State Form Internal
     const [formData, setFormData] = useState({
@@ -102,10 +106,6 @@ export default function HPInbox() {
         })
         return () => { alive = false }
     }, [])
-
-    useEffect(() => {
-        setOpenCategoryId(selectedTicket?.categoryId || '')
-    }, [selectedTicket])
 
     // FILTER & SORT LOGIC
     const activeSegmentStatuses = SEGMENTS.find(s => s.key === activeSegment)?.statuses || null
@@ -160,11 +160,6 @@ export default function HPInbox() {
         return false
     }
 
-    const handleOpenCategory = (v: string) => {
-        setOpenCategoryId(v)
-        if (selectedTicket) setTicketCatalog(selectedTicket.id, v).then(ok => { if (!ok) toast.error('Gagal menyimpan Kategori Kendala.') })
-    }
-
     const handleValidateOpen = async () => {
         if (!selectedTicket) return
         const wa = parseDescription(selectedTicket.description).waPelapor
@@ -176,11 +171,31 @@ export default function HPInbox() {
             return
         }
         if (wa) {
-            if (waWin) waWin.location.href = waMeLink(wa, `Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`)
-            else window.open(waMeLink(wa, `Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`), '_blank')
+            if (waWin) waWin.location.href = waMeLink(wa, `Halo, Kami Atap Care. Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`)
+            else window.open(waMeLink(wa, `Halo, Kami Atap Care. Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah kami terima dan sedang diproses.`), '_blank')
         } else {
             toast.info('Nomor WA pelapor tidak tersedia.')
         }
+    }
+
+    const handleCloseTicket = async () => {
+        if (!liveTicket) return
+        const wa = parseDescription(liveTicket.description).waPelapor
+        const waWin = wa ? window.open('', '_blank') : null
+        const ok = await updateTicketStatus(liveTicket.id, 'CLOSED', 'Tiket divalidasi dan ditutup oleh Helpdesk.')
+        if (!ok) {
+            waWin?.close()
+            toast.error('Gagal menutup tiket.')
+            return
+        }
+        if (wa) {
+            const msg = `Halo, Kami Atap Care. Kepada Yth ${liveTicket.customer}, tiket ${liveTicket.code} telah selesai dan kami tutup. Terima kasih atas laporannya.`
+            if (waWin) waWin.location.href = waMeLink(wa, msg)
+            else window.open(waMeLink(wa, msg), '_blank')
+        } else {
+            toast.info('Nomor WA pelapor tidak tersedia.')
+        }
+        setSelectedTicket(null)
     }
 
     const closeCreateModal = () => {
@@ -302,6 +317,7 @@ export default function HPInbox() {
     const handleRemoteSubmit = () => {
         if (!remoteResult) { setRemoteError('Mohon pilih hasil remote'); return }
         setRemoteError('')
+        if (remoteCategoryId) setTicketCatalog(selectedTicket!.id, remoteCategoryId)
         if (remoteResult === 'fail') {
             updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', `Remote Gagal. Catatan: ${remoteNotes}`)
             setShowRemoteModal(false); setSelectedTicket(null)
@@ -309,6 +325,17 @@ export default function HPInbox() {
             updateTicketStatus(selectedTicket!.id, 'RESOLVED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit.`)
             setShowConfirmPath(true)
         }
+    }
+
+    const handleEscalate = () => {
+        const errs: { category?: string; priority?: string } = {}
+        if (!escCategoryId) errs.category = 'Pilih kategori kendala'
+        if (!escPriority) errs.priority = 'Pilih prioritas'
+        if (Object.keys(errs).length) { setEscErrors(errs); return }
+        setEscErrors({})
+        setTicketCatalog(selectedTicket!.id, escCategoryId)
+        updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', 'Eskalasi ke PM', escPriority as Priority)
+        setShowEscalateModal(false); setSelectedTicket(null)
     }
 
     const handleConfirmPathA = () => {
@@ -515,32 +542,13 @@ export default function HPInbox() {
                             )}
                             {liveTicket.status === 'OPEN' && (
                                 <>
-                                    <div className="space-y-2">
-                                        <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Kategori Kendala</label>
-                                            <Select value={openCategoryId} onValueChange={handleOpenCategory}>
-                                                <SelectTrigger className="w-full px-3 py-2 border border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
-                                                <SelectContent className="z-[130] border-border bg-card text-foreground">
-                                                    {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Prioritas</label>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                 {(['Critical', 'Medium', 'Low'] as const).map(p => (
-                                                     <button key={p} onClick={() => updateTicketStatus(liveTicket.id, 'OPEN', `Prioritas ditetapkan: ${p}`, p)} className={`py-2.5 rounded-[3px] border font-bold transition ${liveTicket.priority === p ? (p === 'Critical' ? 'bg-red-600 text-white border-red-600' : p === 'Medium' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600') : 'bg-card border-border hover:border-foreground/40'}`}>{p}</button>
-                                                 ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <button onClick={() => { setRemoteError(''); setShowRemoteModal(true); }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Remote Support</button>
-                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'UNASSIGNED'); setSelectedTicket(null); }} disabled={!liveTicket.priority || !openCategoryId} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium transition disabled:opacity-40 disabled:cursor-not-allowed">Eskalasi ke PM</button>
+                                    <button onClick={() => { setEscCategoryId(liveTicket.categoryId || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
+                                    <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Remote Support</button>
                                 </>
                             )}
                             {liveTicket.status === 'RESOLVED' && (
                                 <>
-                                    <button onClick={() => { updateTicketStatus(liveTicket.id, 'CLOSED', 'Tiket divalidasi dan ditutup oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-emerald-600 text-white rounded-[3px] font-bold hover:bg-emerald-700 transition">Validasi & Tutup</button>
+                                    <button onClick={handleCloseTicket} className="w-full py-2.5 bg-emerald-600 text-white rounded-[3px] font-bold hover:bg-emerald-700 transition">Validasi & Tutup</button>
                                     <button onClick={() => { setValidationAction('rework'); setReworkReason(''); setReworkError(''); setShowValidationModal(true); }} className="w-full py-2.5 bg-red-600 text-white rounded-[3px] font-medium hover:bg-red-700 transition">Kembalikan / Rework</button>
                                 </>
                             )}
@@ -624,11 +632,52 @@ export default function HPInbox() {
                     </div>
                 </div>
             ), document.body)}
+            {showEscalateModal && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Send className="w-5 h-5" /> Eskalasi ke PM</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Kategori Kendala</label>
+                                <Select value={escCategoryId} onValueChange={v => { setEscCategoryId(v); setEscErrors(prev => ({ ...prev, category: undefined })) }}>
+                                    <SelectTrigger className={`w-full mt-1 px-3 py-2 border ${escErrors.category ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                                    <SelectContent className="z-[130] border-border bg-card text-foreground">
+                                        {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                                <FieldError msg={escErrors.category} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Prioritas</label>
+                                <div className="grid grid-cols-3 gap-3 mt-1">
+                                    {(['Critical', 'Medium', 'Low'] as const).map(p => (
+                                        <button key={p} onClick={() => { setEscPriority(p); setEscErrors(prev => ({ ...prev, priority: undefined })) }} className={`py-2.5 rounded-[3px] border font-bold transition ${escPriority === p ? (p === 'Critical' ? 'bg-red-600 text-white border-red-600' : p === 'Medium' ? 'bg-amber-500 text-white border-amber-500' : 'bg-blue-600 text-white border-blue-600') : 'bg-card border-border hover:border-foreground/40'}`}>{p}</button>
+                                    ))}
+                                </div>
+                                <FieldError msg={escErrors.priority} />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setShowEscalateModal(false)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
+                                <button onClick={handleEscalate} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Lanjutkan Eskalasi</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
             {showRemoteModal && !showConfirmPath && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-4">Remote Support</h3>
                         <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-muted-foreground">Kategori Kendala</label>
+                                <Select value={remoteCategoryId} onValueChange={setRemoteCategoryId}>
+                                    <SelectTrigger className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                                    <SelectContent className="z-[130] border-border bg-card text-foreground">
+                                        {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Durasi (Menit)</label><input type="number" value={remoteDuration} onChange={e => setRemoteDuration(e.target.value)} className="w-full mt-1 px-3 py-2 border border-border rounded" /></div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Catatan</label><textarea value={remoteNotes} onChange={e => setRemoteNotes(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border rounded"></textarea></div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Hasil</label><div className="grid grid-cols-2 gap-2 mt-1"><button onClick={() => { setRemoteResult('success'); setRemoteError('') }} className={`py-2 rounded border text-sm ${remoteResult === 'success' ? 'bg-emerald-100 text-emerald-700 border-emerald-300' : 'bg-card border-border'}`}>Berhasil</button><button onClick={() => { setRemoteResult('fail'); setRemoteError('') }} className={`py-2 rounded border text-sm ${remoteResult === 'fail' ? 'bg-red-100 text-red-700 border-red-300' : 'bg-card border-border'}`}>Gagal</button></div><FieldError msg={remoteError} /></div>

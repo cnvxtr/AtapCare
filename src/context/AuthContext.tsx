@@ -13,6 +13,7 @@ export interface UserProfile {
     last_login: string | null
     avatar_url?: string | null
     wa_number?: string | null
+    customer_id?: string | null
 }
 
 interface AuthContextType {
@@ -21,8 +22,7 @@ interface AuthContextType {
     lastLoginTime: string | null
     loading: boolean
     login: (username: string, password: string) => Promise<{ error: string | null }>
-    loginWithGoogle: () => Promise<{ error: string | null }>
-    register: (name: string, email: string, phone: string, password: string) => Promise<{ error: string | null; ok?: boolean }>
+    register: (name: string, email: string, phone: string, password: string, companyCode?: string) => Promise<{ error: string | null; ok?: boolean }>
     logout: () => Promise<void>
     switchRole: (role: string) => Promise<{ error: string | null }>
 }
@@ -144,16 +144,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return { error: 'Login gagal' }
     }
 
-    const loginWithGoogle = async () => {
-        // Login sekaligus daftar otomatis: user Google baru diprovision
-        // oleh trigger DB (supabase/google-user-trigger.sql) sebagai customer.
-        const { error } = await supabase.auth.signInWithOAuth({
-            provider: 'google',
-            options: { redirectTo: window.location.origin },
-        })
-        return { error: error?.message ?? null }
-    }
-
     const logout = async () => {
         await supabase.auth.signOut()
         setUser(null)
@@ -163,10 +153,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         navigate('/')
     }
 
-    const register = async (name: string, email: string, phone: string, password: string) => {
+    const register = async (name: string, email: string, phone: string, password: string, companyCode?: string) => {
         registeringRef.current = true
         try {
-            // 1. Buat auth user dulu lewat Supabase Auth
+            // 0. Pre-check server-side SEBELUM signUp agar akun Auth tidak dibuat
+            //    bila validasi gagal (anti akun "yatim" yang menempati email).
+            const pre = await supabase.rpc('precheck_register', {
+                p_name: name,
+                p_email: email,
+                p_company_code: companyCode || null,
+            })
+            if (pre.error) return { error: authErrorMessage(pre.error.message) }
+            const pv = pre.data as { error?: string; ok?: boolean }
+            if (pv?.error) return { error: pv.error }
+
+            // 1. Buat auth user lewat Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
@@ -184,6 +185,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 p_email: email,
                 p_phone: phone,
                 p_user_id: authData.user.id,
+                p_company_code: companyCode || null,
             })
             if (error) return { error: authErrorMessage(error.message) }
             const res = data as { error?: string; ok?: boolean }
@@ -215,7 +217,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, loginWithGoogle, register, logout, switchRole }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole }}>
             {children}
         </AuthContext.Provider>
     )
