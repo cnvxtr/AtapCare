@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
-import { Camera, Lock, Save, User, Mail, AtSign, Shield, Clock, Filter, Eye, EyeOff, ArrowRight, LogOut } from 'lucide-react'
+import { Camera, Lock, Save, User, Mail, AtSign, Shield, Clock, Filter, Eye, EyeOff, ArrowRight, LogOut, Trash2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { ROLE_LABELS } from '../services/users'
@@ -17,7 +17,7 @@ type ProfileField = { key: string; label: string; oldVal: string; newVal: string
 const FIELD_LABELS: Record<string, string> = { fullName: 'Nama Lengkap', username: 'Username', waNumber: 'No. Telepon' }
 
 export default function Profile() {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
 
   // Profile edit state
   const [fullName, setFullName] = useState(user?.full_name || '')
@@ -29,6 +29,9 @@ export default function Profile() {
   // Confirm save
   const [showConfirmSave, setShowConfirmSave] = useState(false)
   const [pendingChanges, setPendingChanges] = useState<ProfileField[]>([])
+
+  // Confirm logout
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
   // Password state
   const [currentPassword, setCurrentPassword] = useState('')
@@ -229,34 +232,88 @@ export default function Profile() {
     }
   }
 
+  const handleAvatarDelete = async () => {
+    if (!user?.avatar_url) return
+    setAvatarUploading(true)
+    try {
+      const { error: removeError } = await supabase.storage.from('avatars').remove([user.avatar_url])
+      if (removeError) {
+        toast.error('Gagal menghapus foto dari penyimpanan.')
+        return
+      }
+      const { error: updateError } = await supabase.from('users').update({ avatar_url: null }).eq('id', user.id)
+      if (updateError) {
+        toast.error('Foto dihapus, tapi gagal memperbarui profil.')
+        return
+      }
+      toast.success('Foto profil dihapus.')
+      window.location.reload()
+    } catch {
+      toast.error('Gagal menghapus foto.')
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
-      <h1 className="text-2xl font-display font-bold tracking-tight">Profile {roleLabel}</h1>
+      <h1 className="text-2xl font-display font-bold tracking-tight">Profil {roleLabel}</h1>
 
       {/* Avatar Card */}
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center gap-5">
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={avatarUploading}
-            className="relative group shrink-0"
-          >
-            {resolvedAvatar ? (
-              <img src={resolvedAvatar} alt="Avatar" className="h-20 w-20 rounded-full object-cover border-2 border-border" />
-            ) : (
+          {/* Belum ada foto: klik langsung pilih foto (tanpa menu) */}
+          {!user?.avatar_url ? (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={avatarUploading}
+              className="relative group shrink-0"
+            >
               <div className="h-20 w-20 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-2xl font-bold">
                 {initials}
               </div>
-            )}
-            <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
-              {avatarUploading ? (
-                <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Camera className="h-5 w-5 text-white" />
-              )}
-            </div>
-            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
-          </button>
+              <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                {avatarUploading ? (
+                  <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Camera className="h-5 w-5 text-white" />
+                )}
+              </div>
+            </button>
+          ) : (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  disabled={avatarUploading}
+                  className="relative group shrink-0"
+                >
+                  <img src={resolvedAvatar} alt="Avatar" className="h-20 w-20 rounded-full object-cover border-2 border-border" />
+                  <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                    {avatarUploading ? (
+                      <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Camera className="h-5 w-5 text-white" />
+                    )}
+                  </div>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[180px] bg-card border-border text-card-foreground space-y-0.5">
+                <DropdownMenuItem
+                  onClick={() => fileInputRef.current?.click()}
+                  className="cursor-pointer flex items-center gap-2"
+                >
+                  <Camera className="h-4 w-4" /> Edit Foto Profil
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleAvatarDelete}
+                  className="cursor-pointer flex items-center gap-2 text-red-500 focus:text-red-500 [&_svg]:text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" /> Hapus Foto Profil
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleAvatarUpload} />
           <div className="min-w-0">
             <p className="text-lg font-bold text-foreground truncate">{user?.full_name}</p>
             <p className="text-sm text-muted-foreground">{user?.email}</p>
@@ -380,12 +437,35 @@ export default function Profile() {
 
       {/* Keluar */}
       <button
-        onClick={async () => { await supabase.auth.signOut(); window.location.href = '/login'; }}
-        className="w-full rounded-lg border border-destructive/30 bg-card p-4 flex items-center gap-3 text-destructive hover:bg-destructive/5 transition cursor-pointer"
+        onClick={() => setShowLogoutConfirm(true)}
+        className="w-full rounded-lg border border-red-200 bg-card p-4 flex items-center gap-3 text-red-500 hover:bg-red-50 transition cursor-pointer"
       >
         <LogOut className="h-5 w-5" />
         <span className="text-sm font-semibold">Keluar</span>
       </button>
+
+      {/* MODAL KONFIRMASI KELUAR */}
+      {showLogoutConfirm && createPortal((
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in">
+          <div className="bg-card border border-border w-full max-w-sm rounded-lg shadow-2xl p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-50 border border-red-200 rounded-full flex items-center justify-center mx-auto mb-4">
+              <LogOut className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-display font-bold text-foreground mb-2">Keluar dari Aplikasi?</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Apakah Anda yakin ingin keluar? Anda harus login kembali untuk mengakses sistem.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowLogoutConfirm(false)} className="flex-1 px-4 py-2.5 bg-card border border-border text-muted-foreground hover:bg-muted rounded text-sm font-semibold transition-colors">
+                Batal
+              </button>
+              <button onClick={logout} className="flex-1 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 rounded text-sm font-bold transition-colors">
+                Ya, Keluar
+              </button>
+            </div>
+          </div>
+        </div>
+      ), document.body)}
 
       {/* MODAL KONFIRMASI SIMPAN */}
       {showConfirmSave && createPortal((

@@ -36,6 +36,7 @@ export default function Privacy() {
                 <li>Alamat email;</li>
                 <li>Nomor telepon aktif (disimpan dalam format terstandar);</li>
                 <li>Kata sandi disimpan hanya dalam bentuk terenkripsi satu arah dan tidak pernah dapat dibaca oleh siapa pun, termasuk kami;</li>
+                <li>Kode unik perusahaan yang digunakan saat pendaftaran, untuk menghubungkan akun Anda dengan perusahaan/klien Anda dan membuka daftar lokasi (site) milik perusahaan tersebut.</li>
                 <li>Foto profil (opsional).</li>
               </ul>
               <p><strong>Saat Anda mengirimkan laporan kendala</strong>, kami mengumpulkan:</p>
@@ -61,6 +62,7 @@ export default function Privacy() {
               <li>Menghubungi Anda terkait perkembangan laporan melalui saluran resmi (WhatsApp Group atau kontak yang terdaftar);</li>
               <li>Menugaskan petugas yang tepat untuk menangani kendala di lokasi Anda;</li>
               <li>Mendokumentasikan hasil pekerjaan, termasuk berita acara serah terima digital;</li>
+              <li>Mengolah penilaian dan ulasan Anda atas layanan guna pemantauan dan perbaikan mutu layanan;</li>
               <li>Menjaga keamanan akun dan mencegah penyalahgunaan layanan;</li>
               <li>Memenuhi kewajiban hukum yang berlaku.</li>
             </ul>
@@ -109,7 +111,7 @@ export default function Privacy() {
           </Section>
 
           <Section title="9. Perlindungan Identitas dalam Dokumentasi">
-            <p>Dokumentasi pekerjaan (foto, berita acara, catatan penyelesaian) hanya dapat diakses oleh Anda dan petugas berwenang. Nomor telepon dan identitas pelapor ditampilkan dalam bentuk yang dilindungi (sebagian angka disembunyikan) pada tampilan sistem, dan dokumen arsip lama dianonimkan sesuai ketentuan retensi.</p>
+            <p>Dokumentasi pekerjaan (foto, berita acara, catatan penyelesaian) hanya dapat diakses oleh Anda dan petugas berwenang. Identitas pribadi (seperti nomor telepon) dilindungi dan dianonimkan secara permanen setelah periode retensi tertentu, sementara catatan teknis pekerjaan tetap tersimpan untuk kepentingan riwayat unit.</p>
           </Section>
 
           <Section title="10. Cookie dan Penyimpanan Lokal">

@@ -18,6 +18,7 @@ import { AdminDashboard } from './pages/Admin/AdminDashboard'
 import { AdminUsers } from './pages/Admin/AdminUsers'
 import { AdminMasterData } from './pages/Admin/AdminMasterData'
 import { AdminReports } from './pages/Admin/AdminReports'
+import AdminRatings from './pages/Admin/AdminRatings'
 
 import Landing from './pages/indexclient'
 import Privacy from './pages/Privacy'
@@ -128,6 +129,7 @@ function AppRoutes() {
         <Route path="/admin/users" element={<RoleGate roles={['admin']}><AdminUsers /></RoleGate>} />
         <Route path="/admin/master-data" element={<RoleGate roles={['admin']}><AdminMasterData /></RoleGate>} />
         <Route path="/admin/reports" element={<RoleGate roles={['admin']}><AdminReports /></RoleGate>} />
+        <Route path="/admin/ratings" element={<RoleGate roles={['admin']}><AdminRatings /></RoleGate>} />
 
         <Route path="/customer" element={<RoleGate roles={['customer']}><CustomerDashboard /></RoleGate>} />
         <Route path="/customer/report" element={<RoleGate roles={['customer']}><CustomerReport /></RoleGate>} />

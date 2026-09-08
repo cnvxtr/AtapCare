@@ -9,10 +9,10 @@ import { cn } from "@/lib/utils";
 const Select = SelectPrimitive.Root;
 
 export const selectTriggerFilter =
-  "px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground w-[120px] gap-1";
+  "px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full w-[72px] sm:w-[120px] gap-1 flex-1 sm:flex-none";
 
 export const selectTriggerFilterSm =
-  "px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground w-[80px] gap-1";
+  "px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full w-[60px] sm:w-[80px] gap-1 flex-1 sm:flex-none";
 
 const SelectGroup = SelectPrimitive.Group;
 

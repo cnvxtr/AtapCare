@@ -1,6 +1,6 @@
 # AtapCare — Database Schema
 
-> Reconstructed from 57 migration files. Reflects **final** state after all `CREATE OR REPLACE` and `ALTER TABLE`.
+> Reconstructed from 60 migration files. Reflects **final** state after all `CREATE OR REPLACE` and `ALTER TABLE`.
 
 ## Extensions
 
@@ -67,6 +67,8 @@ Extended from Supabase auth.users.
 | rework_flag | boolean | `false` | |
 | rating | int | NULL | 1-5 |
 | review | text | NULL | |
+| rating_helpdesk_user_id | uuid | NULL | FK → users(id) ON DELETE SET NULL; helpdesk who validated (NEW→OPEN), migration 61 |
+| rating_helpdesk_name | text | NULL | Helpdesk name attribution from validation, migration 61 |
 | frt_minutes | numeric | NULL | First Response Time |
 | confirm_sent_at | timestamptz | NULL | WA confirmation sent |
 | closed_at | timestamptz | NULL | |
@@ -340,7 +342,7 @@ users ──→ customers (customer_id FK)
 
 | Function | Signature | Purpose |
 |----------|-----------|---------|
-| `create_public_ticket` | `(p_reporter_name, p_position, p_phone, p_site, p_unit, p_description, p_photos[]) → json` | Create ticket from public portal (SECURITY DEFINER) |
+| `create_public_ticket` | `(p_reporter_name, p_position, p_phone, p_site, p_unit, p_description, p_photos[]) → json` | Create ticket from public portal (SECURITY DEFINER); auth'd customer scoped to own company + `company` = company name (migration 59) |
 | `create_internal_ticket` | `(p_code, p_customer, p_company, p_site, p_unit, p_status, p_priority, p_description, p_activity_action, p_activity_details, p_category?, p_location?, p_photo_url?) → tickets` | Create ticket internally |
 | `update_ticket_status` | `(p_ticket_id, p_new_status, p_new_priority?, p_resolved_by?, p_rejection_reason?, p_activity_action?, p_activity_details?, p_duplicate_of?) → void` | Main state machine transition + notifications |
 | `assign_ticket` | `(p_ticket_id, p_technician_id, p_activity_action?, p_activity_details?, p_support_ids[]?) → void` | Assign/reassign ticket (PM only) |
@@ -369,7 +371,8 @@ users ──→ customers (customer_id FK)
 | `admin_save_user` | `(p_id, p_email, p_username, p_name, p_wa_number, p_role, p_status, p_roles?) → json` | Admin create/update user |
 | `admin_delete_user` | `(p_id) → json` | Soft-delete user (blocks if active tickets) |
 | `switch_role` | `(p_role) → json` | Switch active role |
-| `register_customer` | `(p_name, p_email, p_phone, p_user_id) → json` | Customer self-registration |
+| `register_customer` | `(p_name, p_email, p_phone, p_user_id, p_company_code?) → json` | Customer self-registration (validates unique company code, migration 59) |
+| `precheck_register` | `(p_name, p_email, p_company_code?) → json` | Server-side pre-check before auth.signUp (anti orphan account), migration 60 |
 | `is_username_available` | `(p_username) → boolean` | Check username uniqueness |
 
 ### SLA & Calculations
@@ -445,6 +448,7 @@ users ──→ customers (customer_id FK)
 | Table | Index | Columns |
 |-------|-------|---------|
 | users | `users_username_lower_key` | (lower(username)) UNIQUE |
+| customers | `customers_code_unique_key` | (lower(code)) UNIQUE WHERE code IS NOT NULL AND trim(code) <> '' (migration 59) |
 | users | `idx_users_customer_id` | (customer_id) |
 | tickets | `idx_tickets_category` | (category_id) |
 | tickets | `idx_tickets_root_cause` | (root_cause_id) |

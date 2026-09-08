@@ -15,6 +15,7 @@ import { getTechnicians } from '../../services/users'
 import { getPendingAlarm, getPendingHours } from '../../lib/pendingAlarm'
 import { getBackupRequest, approveBackup, rejectBackup, getSupportMemberIds, type BackupRequest } from '../../services/ticketService'
 import { SEGMENTS } from '../../lib/constants'
+import { useIsMobile } from '../../lib/platform'
 
 // SEGMEN STATUS FLOW TIKET (persis helpdesk)
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
@@ -22,6 +23,7 @@ const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
 
 export default function PMCommandCenter() {
     const { tickets, updateTicketStatus, assignTicket, refreshTickets } = useTickets()
+    const isMobile = useIsMobile()
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
     const [activeSegment, setActiveSegment] = useState('semua')
     const [prioritySel, setPrioritySel] = useState<Record<string, boolean>>({ all: true })
@@ -210,8 +212,8 @@ export default function PMCommandCenter() {
     return (
         <div className={`space-y-6 flex flex-col ${viewMode === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
             {/* HEADER */}
-            <div className="flex justify-end gap-4">
-                <div className="flex gap-2">
+            <div className="flex justify-end gap-4 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
                     <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                         {needAssign + needPending} Perlu Tindakan
@@ -282,41 +284,41 @@ export default function PMCommandCenter() {
             {/* KANBAN / LIST */}
             {viewMode === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
-                    <div className="flex gap-2 overflow-x-auto flex-1 min-h-0">
+                    <div className={`flex gap-2 flex-1 min-h-0 ${isMobile ? 'overflow-x-auto snap-x snap-mandatory pb-2' : 'overflow-x-auto'}`}>
                         {KANBAN_COLUMNS.map(col => {
                             const items = baseTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className="flex-1 min-w-[110px] rounded-lg border border-border bg-card/50 flex flex-col">
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px]'}`}>
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
-                                            {col.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">({col.role})</span>}
+                                            {!isMobile && col.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">({col.role})</span>}
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
-                                    <div className="p-1.5 space-y-1.5 min-h-[100px] flex-1 overflow-y-auto  max-h-[390px]">
+                                    <div className={`space-y-1.5 min-h-[100px] flex-1 overflow-y-auto max-h-[390px] ${isMobile ? 'p-1' : 'p-1.5'}`}>
                                         {items.map(t => {
                                             const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             const isPendingCritical = t.status === 'PENDING' && (getPendingHours(t.updatedAt) ?? 0) >= 72
                                             return (
-                                                <div key={t.id} className={`rounded border p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${isPendingCritical ? 'bg-red-50 border-red-300' : 'bg-card'}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
+                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${isPendingCritical ? 'bg-red-50 border-red-300' : 'bg-card'}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                     <div className="flex items-center justify-between gap-1 mb-1">
-                                                        <span className="font-mono text-[8px] text-muted-foreground truncate">{t.code}</span>
+                                                        <span className={`font-mono text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.code}</span>
                                                         <Badge type="priority" value={t.priority || '-'} small />
                                                     </div>
-                                                    <p className="text-[9px] font-medium truncate">{t.site} - {t.unit}</p>
+                                                    <p className={`font-medium truncate ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>{t.site} - {t.unit}</p>
                                                     {t.status === 'PENDING' && getPendingAlarm(t.updatedAt) && (
-                                                        <div className={`mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold ${isPendingCritical ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                        <div className={`mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] font-bold ${isPendingCritical ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'} ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
                                                             <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
                                                         </div>
                                                     )}
                                                     <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
                                                         <div className="flex items-center gap-1 min-w-0">
                                                             <User className="h-2 w-2 shrink-0 text-muted-foreground" />
-                                                            <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
-                                                     </div>
-                                                </div>
+                                                            <span className={`text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.customer}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             )
                                         })}
@@ -546,7 +548,8 @@ export default function PMCommandCenter() {
                                             date={scheduleDate}
                                             time={scheduleTime}
                                             onDate={d => { setScheduleDate(d); setAssignErrors(prev => ({ ...prev, date: undefined })) }}
-                                            onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })); setCalendarOpen(false) }}
+                                            onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
+                                            onConfirm={() => setCalendarOpen(false)}
                                         />
                                     </PopoverContent>
                                 </Popover>
@@ -694,7 +697,8 @@ export default function PMCommandCenter() {
                                             date={scheduleDate}
                                             time={scheduleTime}
                                             onDate={d => { setScheduleDate(d); setReassignErrors(prev => ({ ...prev, date: undefined })) }}
-                                            onTime={t => { setScheduleTime(t); setReassignErrors(prev => ({ ...prev, time: undefined })); setCalendarOpen(false) }}
+                                            onTime={t => { setScheduleTime(t); setReassignErrors(prev => ({ ...prev, time: undefined })) }}
+                                            onConfirm={() => setCalendarOpen(false)}
                                         />
                                     </PopoverContent>
                                 </Popover>

@@ -235,7 +235,7 @@ function CatalogPanel({
                 setPage(1);
               }}
               placeholder="Cari…"
-              className="pl-9 pr-4 h-9 rounded-[3px] border border-border bg-card text-sm outline-none focus:border-ring transition w-72 text-foreground"
+              className="pl-9 pr-4 h-9 rounded-[3px] border border-border bg-card text-sm outline-none focus:border-ring transition w-full sm:w-72 text-foreground"
             />
           </div>
           <button

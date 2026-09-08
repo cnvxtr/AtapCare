@@ -140,14 +140,14 @@ export async function getLandingStats(): Promise<LandingStats> {
   ) as LandingStats
 }
 
-export async function recordGps(ticketId: string, lat: number, lon: number, phase: 'start' | 'end') {
+export async function recordGps(ticketId: string, lat: number, lon: number, phase: 'start' | 'end'): Promise<{ ok: boolean; error: string | null }> {
   const { error } = await supabase.rpc("record_gps", {
     p_ticket_id: ticketId,
     p_lat: lat,
     p_lon: lon,
     p_phase: phase,
   })
-  return !error
+  return { ok: !error, error: error?.message ?? null }
 }
 
 export interface GpsPoint {

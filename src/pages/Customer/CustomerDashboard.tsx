@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useTickets } from '../../context/TicketContext'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
+import { useEffect, useState } from 'react'
 import { Badge } from '../../components/Badge'
 import { ClipboardCheck, ChevronRight, AlertTriangle, CheckCircle2, Plus } from 'lucide-react'
 
@@ -8,9 +10,17 @@ export default function CustomerDashboard() {
     const navigate = useNavigate()
     const { user } = useAuth()
     const { tickets } = useTickets()
+    const [companyName, setCompanyName] = useState('')
+
+    useEffect(() => {
+        if (!user?.customer_id) { setCompanyName(''); return }
+        supabase.from('customers').select('name').eq('id', user.customer_id).single().then(({ data }) => {
+            setCompanyName((data as { name: string } | null)?.name || '')
+        })
+    }, [user?.customer_id])
 
     const myTickets = tickets.filter(t =>
-        t.customer === user?.full_name || t.company === user?.full_name
+        companyName && (t.company === companyName || t.customer === user?.full_name)
     )
 
     const openCount = myTickets.filter(t => !['RESOLVED', 'CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(t.status)).length
@@ -18,7 +28,7 @@ export default function CustomerDashboard() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-2xl font-display font-bold tracking-tight">Selamat datang, {user?.full_name}</p>
                 <button onClick={() => navigate('/customer/report')} className="px-4 py-2.5 bg-foreground text-background rounded-[3px] text-sm font-semibold hover:opacity-90 transition inline-flex items-center gap-2">
                     <Plus className="h-5 w-5" /> Lapor Kendala
@@ -67,7 +77,7 @@ export default function CustomerDashboard() {
                                     <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-sm font-semibold font-mono">{ticket.code}</span>
                                         <Badge type="status" value={ticket.status} />
                                         {ticket.priority && <Badge type="priority" value={ticket.priority} />}

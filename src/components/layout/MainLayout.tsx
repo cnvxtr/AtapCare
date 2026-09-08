@@ -7,7 +7,7 @@ import Logo from '../Logo'
 import {
   LayoutDashboard, Inbox, ClipboardList, LayoutGrid,
   ChevronRight, Bell, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
-  Users, Building2, FileBarChart2, Sun, Moon, Check
+  Users, Building2, FileBarChart2, Sun, Moon, Check, Star
 } from 'lucide-react'
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '../../components/ui/tooltip'
 import {
@@ -42,6 +42,7 @@ const menuItems = (role?: string) =>
         { icon: Users, label: 'Manajemen Pengguna', path: '/admin/users' },
         { icon: Building2, label: 'Master Data', path: '/admin/master-data' },
         { icon: FileBarChart2, label: 'Laporan', path: '/admin/reports' },
+        { icon: Star, label: 'Penilaian Helpdesk', path: '/admin/ratings' },
       ]
     : role === 'customer'
       ? [
@@ -170,7 +171,7 @@ export default function MainLayout() {
   return (
     <div className="max-w-full min-h-screen bg-background text-foreground flex">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex ${collapsed ? 'w-16' : 'w-64'} shrink-0 flex-col border-r border-border bg-card transition-all duration-200 overflow-hidden lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 ${collapsed ? 'lg:w-16' : ''} shrink-0 flex-col border-r border-border bg-card transition-all duration-200 overflow-hidden lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo */}
         <div className={`h-16 flex items-center gap-2 px-5 border-b border-border ${collapsed ? 'justify-center px-0' : ''}`}>
           <div className={`relative shrink-0 cursor-pointer`} onClick={collapsed ? () => setCollapsed(false) : () => navigate(user?.role === 'admin' ? '/admin' : '/dashboard')} onMouseEnter={() => setHoverLogo(true)} onMouseLeave={() => setHoverLogo(false)} role={collapsed ? 'button' : undefined} tabIndex={collapsed ? 0 : undefined}>
@@ -293,7 +294,7 @@ export default function MainLayout() {
                 )}
                 <div className="border-t border-border" />
                     <button onClick={() => { setShowDropdown(false); navigate('/profile') }} className="w-full flex items-center justify-between gap-2.5 px-3 py-2.5 text-sm text-foreground hover:bg-foreground hover:text-background transition-colors text-left">
-                      <span className="font-medium">Profile</span>
+                      <span className="font-medium">Profil</span>
                       <ChevronRight className="h-4 w-4 text-muted-foreground" />
                     </button>
                 <div className="border-t border-border" />
@@ -309,7 +310,7 @@ export default function MainLayout() {
       {/* Main */}
       <div className={`flex-1 min-w-0 flex flex-col pt-16 ${collapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
         {/* Top bar */}
-        <header className={`h-16 fixed top-0 right-0 z-30 border-b border-border bg-background ${collapsed ? 'lg:left-16' : 'lg:left-64'}`}>
+        <header className={`h-16 fixed top-0 left-0 right-0 z-30 border-b border-border bg-background ${collapsed ? 'lg:left-16' : 'lg:left-64'}`}>
           <div className="h-full px-4 sm:px-6 flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="p-3 sm:p-2 -ml-2 rounded hover:bg-accent transition lg:hidden">
               <Menu className="h-5 w-5" />
@@ -331,7 +332,7 @@ export default function MainLayout() {
                 <button className="relative h-11 w-11 sm:h-9 sm:w-9 grid place-items-center rounded border border-border hover:bg-accent transition">
                   <Bell className="h-4 w-4" />
                   {notifCount > 0 && (
-                    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold grid place-items-center">
+                    <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-red-600 text-white text-[9px] font-bold grid place-items-center">
                       {notifCount > 9 ? '9+' : notifCount}
                     </span>
                   )}
