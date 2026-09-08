@@ -7,9 +7,11 @@ import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard } from 
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 import TrendChart from '../../components/TrendChart'
 import AnimatedNumber from '../../components/AnimatedNumber'
+import { useIsMobile } from '../../lib/platform'
 
 export default function ExecutiveDashboard() {
     const { tickets, getTicketCount } = useTickets()
+    const isMobile = useIsMobile()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
 
@@ -60,7 +62,7 @@ export default function ExecutiveDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Baru (Perlu Validasi)</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('NEW')} /></h3>
+                            <h3 className="text-3xl sm:text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('NEW')} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><Inbox className="w-5 h-5 text-foreground" /></div>
                     </div>
@@ -70,7 +72,7 @@ export default function ExecutiveDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Sedang Diproses</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('OPEN')} /></h3>
+                            <h3 className="text-3xl sm:text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('OPEN')} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><Wrench className="w-5 h-5 text-foreground" /></div>
                     </div>
@@ -80,7 +82,7 @@ export default function ExecutiveDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Menunggu Validasi</p>
-                            <h3 className="text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('RESOLVED')} /></h3>
+                            <h3 className="text-3xl sm:text-4xl font-display font-bold mt-2 tracking-tight"><AnimatedNumber value={getTicketCount('RESOLVED')} /></h3>
                         </div>
                         <div className="p-2 bg-muted border border-border rounded-lg"><ClipboardCheck className="w-5 h-5 text-foreground" /></div>
                     </div>
@@ -89,7 +91,7 @@ export default function ExecutiveDashboard() {
                     <div className="flex justify-between items-start">
                         <div>
                             <p className="text-[10px] font-black text-white uppercase tracking-wider">Rata-rata FRT</p>
-                            <h3 className="text-4xl font-display font-black text-white mt-2 tracking-tight">{Math.round(avgFrt)}m</h3>
+                            <h3 className="text-3xl sm:text-4xl font-display font-black text-white mt-2 tracking-tight">{Math.round(avgFrt)}m</h3>
                         </div>
                         <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
                     </div>
@@ -120,7 +122,7 @@ export default function ExecutiveDashboard() {
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={statusData} layout="vertical" margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                                 <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} allowDecimals={false} />
-                                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} width={85} />
+                                <YAxis type="category" dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#6b7280', fontSize: 11 }} width={isMobile ? 70 : 85} />
                                 <Tooltip cursor={{ fill: '#f3f4f6' }} contentStyle={{ backgroundColor: 'black', borderColor: '#333', borderRadius: '8px', fontSize: '12px', color: 'white' }} labelStyle={{ color: 'white' }} itemStyle={{ color: 'white' }} />
                                 <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20} animationDuration={700} animationEasing="ease-out">
                                     {statusData.map((entry, index) => (<Cell key={`cell-${index}`} fill={entry.color} />))}

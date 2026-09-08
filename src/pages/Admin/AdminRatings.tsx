@@ -59,7 +59,8 @@ export default function AdminRatings() {
         {leaderboard.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-muted-foreground">Belum ada penilaian.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full text-sm min-w-[640px]">
             <thead>
               <tr className="border-b border-border text-left text-xs font-mono uppercase tracking-widest text-muted-foreground">
                 <th className="px-5 py-3">#</th>
@@ -83,6 +84,7 @@ export default function AdminRatings() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

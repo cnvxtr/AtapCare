@@ -228,7 +228,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                     options={sites.map((s) => ({ value: s.id, label: s.name }))}
                     selected={selectedRecord(filters.siteId)}
                     onToggle={(v) => toggleFilterValue("siteId", v)}
-                    className={selectTriggerFilter}
+                    className={`${selectTriggerFilter} max-md:min-w-[100px]`}
                   />
                 </FilterGroup>
                 <FilterGroup label="Prioritas">
@@ -237,7 +237,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                     options={PRIORITY_OPTIONS}
                     selected={selectedRecord(filters.priority)}
                     onToggle={(v) => toggleFilterValue("priority", v)}
-                    className={selectTriggerFilterSm}
+                    className={`${selectTriggerFilterSm} max-md:min-w-[90px]`}
                   />
                 </FilterGroup>
                 <button
@@ -387,7 +387,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
             {activeDrawerTab === 'detail' && (
               <div className="space-y-4">
                 <AssignmentCard items={acts} />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="bg-muted/60 p-4 rounded-lg border border-border">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Pelapor</p>
                     <p className="font-medium text-sm">{live?.customer || selectedTicket.customer}</p>

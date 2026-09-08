@@ -85,7 +85,6 @@ src/
   lib/
     constants.ts                  # Status filter groups
     export.ts                     # CSV/XLSX export utilities
-    geocode.ts                    # Reverse geocoding via Nominatim
     pendingAlarm.ts               # PENDING ticket stale alarm (>8h)
     platform.ts                   # isNativePlatform() + useIsMobile()
     pushNotifications.ts          # Web Push subscription + chime audio

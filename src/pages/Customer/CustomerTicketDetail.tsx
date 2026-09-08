@@ -269,7 +269,7 @@ export default function CustomerTicketDetail() {
 
       {/* Header */}
       <div className="bg-card border border-border rounded-lg p-6">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3 mb-2 flex-wrap">
           <h1 className="text-xl font-display font-bold font-mono">{ticket.code}</h1>
           <Badge type="status" value={ticket.status} />
           {ticket.priority && <Badge type="priority" value={ticket.priority} />}
@@ -287,7 +287,7 @@ export default function CustomerTicketDetail() {
           const { waPelapor, deskripsi } = parseDescription(ticket.description)
           return (
             <>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {ticket.company && <InfoCard label="Perusahaan" value={ticket.company} />}
                 {ticket.site && <InfoCard label="Site" value={ticket.site} />}
                 {ticket.unit && <InfoCard label="Unit" value={ticket.unit} />}

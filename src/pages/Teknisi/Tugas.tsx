@@ -23,7 +23,7 @@ const TABS = [
     { key: 'masuk', icon: ClipboardList, label: 'Masuk', color: 'text-black', statuses: ['SCHEDULED', 'EN_ROUTE'] },
     { key: 'dikerjakan', icon: Wrench, label: 'Dikerjakan', color: 'text-black', statuses: ['WORKING', 'RESOLVED'] },
     { key: 'pending', icon: Pause, label: 'Dijeda', color: 'text-black', statuses: ['PENDING'] },
-    { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-emerald-600', statuses: ['CLOSED'] },
+    { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-black', statuses: ['CLOSED'] },
 ]
 
 export default function TugasTeknisi() {
@@ -124,8 +124,8 @@ export default function TugasTeknisi() {
                 const { latitude, longitude } = position.coords
                 setGpsError('')
                 setIsLoading(null)
-                const ok = await recordGps(ticket.id, latitude, longitude, 'start')
-                if (!ok) toast.error('Lokasi awal gagal disimpan.')
+                const res = await recordGps(ticket.id, latitude, longitude, 'start')
+                if (!res.ok) toast.error(res.error ? `Lokasi gagal disimpan: ${res.error}` : 'Lokasi awal gagal disimpan.')
                 handleStatusUpdate(ticket.id, 'WORKING', `Pekerjaan dimulai — lokasi terverifikasi (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
             },
             () => {

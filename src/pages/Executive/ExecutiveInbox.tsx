@@ -7,11 +7,13 @@ import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFil
 import { selectTriggerFilter } from '../../components/ui/select'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 import { SEGMENTS } from '../../lib/constants'
+import { useIsMobile } from '../../lib/platform'
 
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 
 export default function ExecutiveInbox() {
     const { tickets, getTicketCount } = useTickets()
+    const isMobile = useIsMobile()
     const [activeSegment, setActiveSegment] = useState('semua')
     const [view, setView] = useState<'list' | 'kanban'>('kanban')
     const [prioritySel, setPrioritySel] = useState<Record<string, boolean>>({ all: true })
@@ -109,16 +111,16 @@ export default function ExecutiveInbox() {
             {/* KANBAN / LIST */}
             {view === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
-                    <div className="flex gap-2 overflow-x-auto flex-1 min-h-0">
+                    <div className={`flex gap-2 flex-1 min-h-0 ${isMobile ? 'overflow-x-auto snap-x snap-mandatory pb-2' : 'overflow-x-auto'}`}>
                         {KANBAN_COLUMNS.map(col => {
                             const items = kanbanTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className="flex-1 min-w-[110px] rounded-lg border border-border bg-card/50 flex flex-col">
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px]'}`}>
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
-                                            {col.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">({col.role})</span>}
+                                            {!isMobile && col.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">({col.role})</span>}
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
@@ -126,21 +128,21 @@ export default function ExecutiveInbox() {
                                         {items.map(t => {
                                             const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             return (
-                                                <div key={t.id} className={`rounded border border-border bg-card p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
+                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} bg-card`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                 <div className="flex items-center justify-between gap-1 mb-1">
-                                                    <span className="font-mono text-[8px] text-muted-foreground truncate">{t.code}</span>
+                                                    <span className={`font-mono text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.code}</span>
                                                     <Badge type="priority" value={t.priority || '-'} small />
                                                 </div>
-                                                <p className="text-[9px] font-medium truncate">{t.site} - {t.unit}</p>
+                                                <p className={`font-medium truncate ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>{t.site} - {t.unit}</p>
                                                 {t.status === 'PENDING' && getPendingAlarm(t.updatedAt) && (
-                                                    <div className="mt-1 flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold">
+                                                    <div className={`mt-1 flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-[3px] font-bold ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
                                                         <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
                                                     </div>
                                                 )}
                                                 <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
                                                     <div className="flex items-center gap-1 min-w-0">
                                                         <User className="h-2 w-2 shrink-0 text-muted-foreground" />
-                                                        <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
+                                                        <span className={`text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.customer}</span>
                                                      </div>
                                                 </div>
                                             </div>

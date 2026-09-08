@@ -138,22 +138,57 @@ html {
         pointer-events: none;
     }
 
-    /* Pulse Ring Animation */
+    /* Hero Mesh — gradasi conic/kontras ikut theme (foreground = putih dlm dark, abu tua dlm light) */
+    .hero-mesh {
+        position: absolute;
+        inset: 0;
+        background: conic-gradient(from 90deg at 50% 50%,
+            color-mix(in oklab, var(--foreground) 26%, transparent) 0deg,
+            color-mix(in oklab, var(--foreground) 18%, transparent) 90deg,
+            color-mix(in oklab, var(--foreground) 30%, transparent) 180deg,
+            color-mix(in oklab, var(--foreground) 16%, transparent) 270deg,
+            color-mix(in oklab, var(--foreground) 26%, transparent) 360deg);
+        pointer-events: none;
+    }
+
+    /* Critical ticket: blinking emergency halo (does not resize the card) */
     .pulse-ring {
-        animation: pulse-ring 2s infinite;
+        animation: pulse-ring 1s infinite;
     }
 
     @keyframes pulse-ring {
         0% {
-            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7);
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.55);
         }
 
-        70% {
-            box-shadow: 0 0 0 10px rgba(220, 38, 38, 0);
+        50% {
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.2);
         }
 
         100% {
-            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+        }
+    }
+
+    /* Small indicator dot: expands without break */
+    .pulse-dot {
+        animation: pulse-dot 2s infinite;
+    }
+
+    @keyframes pulse-dot {
+        0% {
+            transform: scale(1);
+            opacity: 0.9;
+        }
+
+        70% {
+            transform: scale(2.4);
+            opacity: 0;
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 0;
         }
     }
 
@@ -217,6 +252,16 @@ html {
     .input:focus {
         border-color: hsl(var(--foreground) / 0.4);
         box-shadow: 0 0 0 2px hsl(var(--foreground) / 0.1);
+    }
+
+    /* Mobile: input 16px agar iOS tidak auto-scale/zoom saat fokus.
+       Desktop (>=768px) tidak terpengaruh; murni CSS, tanpa sentuh logic. */
+    @media (max-width: 767px) {
+        input,
+        select,
+        textarea {
+            font-size: 16px !important;
+        }
     }
 
     /* Reveal: muncul saat elemen masuk viewport (dikontrol komponen <Reveal/>) */

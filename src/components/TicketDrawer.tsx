@@ -339,7 +339,7 @@ export function TicketDescription({ description }: { description?: string }) {
     return (
         <div className="space-y-4">
             {(jabatan || waPelapor) && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {jabatan && <InfoCard label="Jabatan" value={jabatan} />}
                     {waPelapor && <InfoCard label="WA Pelapor" value={waPelapor} />}
                 </div>
@@ -390,7 +390,7 @@ export function AssignmentCard({ items }: { items: { action: string; details?: s
     if (!teknisi && !jadwal) return null
     return (
         <>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {teknisi && <div className="bg-muted p-4 rounded-lg border border-border"><p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Ditugaskan ke</p><p className="font-medium text-sm">{teknisi}</p></div>}
                 {jadwal && <div className="bg-muted p-4 rounded-lg border border-border"><p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Dijadwalkan</p><p className="font-medium text-sm">{formatJadwal(jadwal)}</p></div>}
             </div>

@@ -16,6 +16,7 @@ import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 
 import { SEGMENTS } from '../../lib/constants'
+import { useIsMobile } from '../../lib/platform'
 
 // KOLOM KANBAN = grup segmen alur status (tanpa 'Semua')
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
@@ -26,6 +27,7 @@ const readOnlyInputCls = 'input read-only:bg-muted read-only:text-muted-foregrou
 
 export default function HPInbox() {
     const { tickets, updateTicketStatus, getTicketCount, addTicket } = useTickets()
+    const isMobile = useIsMobile()
     const [activeSegment, setActiveSegment] = useState('semua')
     const [view, setView] = useState<'list' | 'kanban'>('kanban')
     const [prioritySel, setPrioritySel] = useState<Record<string, boolean>>({ all: true })
@@ -80,13 +82,11 @@ export default function HPInbox() {
     const [mdLoading, setMdLoading] = useState(true)
 
     // State Alur Buat Tiket Internal
-    const [createStep, setCreateStep] = useState<'form' | 'review' | 'remote' | 'path' | 'void'>('form')
+    const [createStep, setCreateStep] = useState<'form' | 'review' | 'remote' | 'path'>('form')
     const [submitting, setSubmitting] = useState(false)
-    const [newVoidReason, setNewVoidReason] = useState('')
     const [newTicketId, setNewTicketId] = useState<string | null>(null)
     const [formErrors, setFormErrors] = useState<{ reporterName?: string; noWaPelapor?: string; site?: string; unit?: string; description?: string; priority?: string; photos?: string }>({})
     const [remoteCreateErrors, setRemoteCreateErrors] = useState<{ result?: string; duration?: string }>({})
-    const [voidCreateError, setVoidCreateError] = useState('')
 
     useEffect(() => {
         const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3')
@@ -199,9 +199,9 @@ export default function HPInbox() {
     }
 
     const closeCreateModal = () => {
-        setIsModalOpen(false); setCreateStep('form'); setSubmitting(false); setNewVoidReason(''); setNewTicketId(null)
+        setIsModalOpen(false); setCreateStep('form'); setSubmitting(false); setNewTicketId(null)
         setRemoteMedia('WA'); setRemoteNotes(''); setRemoteDuration(''); setRemoteResult('')
-        setFormErrors({}); setRemoteCreateErrors({}); setVoidCreateError('')
+        setFormErrors({}); setRemoteCreateErrors({})
         resetForm()
     }
 
@@ -248,18 +248,6 @@ export default function HPInbox() {
         toast.success("Template WA terkirim ke pelanggan! Tiket auto-close dalam 24 jam jika tidak ada balasan.")
         if (newTicketId) await setConfirmSent(newTicketId)
         closeCreateModal()
-    }
-
-    const handleVoidClick = () => {
-        if (!validateForm() || !requirePriority()) return
-        setNewVoidReason('')
-        setCreateStep('void')
-    }
-
-    const handleNewVoidSubmit = async () => {
-        if (!newVoidReason.trim()) { setVoidCreateError('Mohon isi alasan pembatalan'); return }
-        setVoidCreateError('')
-        if (await doAddTicket('VOID', `Dibatalkan (VOID): ${newVoidReason}`)) closeCreateModal()
     }
 
     const resetForm = () => {
@@ -434,16 +422,16 @@ export default function HPInbox() {
             {/* KANBAN / LIST */}
             {view === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
-                    <div className="flex gap-2 overflow-x-auto flex-1 min-h-0">
+                    <div className={`flex gap-2 flex-1 min-h-0 ${isMobile ? 'overflow-x-auto snap-x snap-mandatory pb-2' : 'overflow-x-auto'}`}>
                         {KANBAN_COLUMNS.map(col => {
                             const items = kanbanTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className="flex-1 min-w-[110px] rounded-lg border border-border bg-card/50 flex flex-col">
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px]'}`}>
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
-                                            {col.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">({col.role})</span>}
+                                            {!isMobile && col.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">({col.role})</span>}
                                         </span>
                                         <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
                                     </div>
@@ -451,21 +439,21 @@ export default function HPInbox() {
                                         {items.map(t => {
                                             const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             return (
-                                                <div key={t.id} className={`rounded border border-border bg-card p-2 hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isUrgent ? 'pulse-ring border-red-200' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
+                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} bg-card`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                 <div className="flex items-center justify-between gap-1 mb-1">
-                                                    <span className="font-mono text-[8px] text-muted-foreground truncate">{t.code}</span>
+                                                    <span className={`font-mono text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.code}</span>
                                                     <Badge type="priority" value={t.priority || '-'} small />
                                                 </div>
-                                                <p className="text-[9px] font-medium truncate">{t.site} - {t.unit}</p>
+                                                <p className={`font-medium truncate ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>{t.site} - {t.unit}</p>
                                                 {t.status === 'PENDING' && getPendingAlarm(t.updatedAt) && (
-                                                    <div className="mt-1 flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-[3px] text-[8px] font-bold">
+                                                    <div className={`mt-1 flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-[3px] font-bold ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
                                                         <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
                                                     </div>
                                                 )}
                                                 <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
                                                     <div className="flex items-center gap-1 min-w-0">
                                                         <User className="h-2 w-2 shrink-0 text-muted-foreground" />
-                                                        <span className="text-[8px] text-muted-foreground truncate">{t.customer}</span>
+                                                        <span className={`text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.customer}</span>
                                                      </div>
                                             {formErrors.photos && <p className="text-[11px] text-red-500 mt-1.5">{formErrors.photos}</p>}
                                         </div>
@@ -729,12 +717,11 @@ export default function HPInbox() {
                                     {createStep === 'review' && 'Koreksi terakhir sebelum data dieskalasi (BR-12J).'}
                                     {createStep === 'remote' && 'Catat detail sesi remote support.'}
                                     {createStep === 'path' && 'Remote berhasil. Pilih jalur konfirmasi.'}
-                                    {createStep === 'void' && 'Berikan alasan pembatalan.'}
                                 </p>
                             </div>
                             <div className="flex items-center gap-2">
                                 <span className="inline-flex items-center px-2 py-1 rounded-md bg-muted text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                                    {createStep === 'form' ? 'Mode · Data' : createStep === 'review' ? 'Mode · Eskalasi' : createStep === 'remote' ? 'Mode · Remote' : createStep === 'path' ? 'Mode · Jalur' : 'Mode · Void'}
+                                    {createStep === 'form' ? 'Mode · Data' : createStep === 'review' ? 'Mode · Eskalasi' : createStep === 'remote' ? 'Mode · Remote' : 'Mode · Jalur'}
                                 </span>
                                 <button onClick={closeCreateModal} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                             </div>
@@ -894,22 +881,18 @@ export default function HPInbox() {
 
                                 <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl">
                                     <p className="text-[10px] font-mono font-semibold text-muted-foreground uppercase tracking-widest mb-3">Tindakan</p>
-                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                        <button onClick={handleSaveNew} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-border bg-card hover:border-foreground/50 hover:shadow-sm transition-colors group disabled:opacity-50">
-                                            <span className="inline-flex p-2 rounded-full bg-muted group-hover:bg-accent transition"><CheckCircle2 className="w-4 h-4 text-muted-foreground group-hover:text-foreground" /></span>
-                                            <span className="text-xs font-bold text-muted-foreground group-hover:text-foreground">Simpan Baru</span>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <button onClick={handleSaveNew} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] bg-neutral-600 text-white hover:bg-neutral-700 transition-colors group disabled:opacity-50">
+                                            <span className="inline-flex p-2 rounded-full bg-white/20 group-hover:bg-white/30 transition"><CheckCircle2 className="w-4 h-4" /></span>
+                                            <span className="text-xs font-bold">Simpan Baru</span>
                                         </button>
-                                        <button onClick={handleEskalasiClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-blue-200 bg-card hover:border-blue-400 hover:shadow-sm hover:bg-blue-50/40 transition-colors group disabled:opacity-50">
-                                            <span className="inline-flex p-2 rounded-full bg-blue-50 group-hover:bg-blue-100 transition"><Send className="w-4 h-4 text-blue-600" /></span>
-                                            <span className="text-xs font-bold text-blue-700">Eskalasi PM</span>
+                                        <button onClick={handleEskalasiClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] bg-blue-600 text-white hover:bg-blue-700 transition-colors group disabled:opacity-50">
+                                            <span className="inline-flex p-2 rounded-full bg-white/20 group-hover:bg-white/30 transition"><Send className="w-4 h-4" /></span>
+                                            <span className="text-xs font-bold">Eskalasi PM</span>
                                         </button>
-                                        <button onClick={handleRemoteClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-emerald-200 bg-card hover:border-emerald-400 hover:shadow-sm hover:bg-emerald-50/40 transition-colors group disabled:opacity-50">
-                                            <span className="inline-flex p-2 rounded-full bg-emerald-50 group-hover:bg-emerald-100 transition"><Headset className="w-4 h-4 text-emerald-600" /></span>
-                                            <span className="text-xs font-bold text-emerald-700">Selesai Remote</span>
-                                        </button>
-                                        <button onClick={handleVoidClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] border border-red-200 bg-card hover:border-red-400 hover:shadow-sm hover:bg-red-50/40 transition-colors group disabled:opacity-50">
-                                            <span className="inline-flex p-2 rounded-full bg-red-50 group-hover:bg-red-100 transition"><AlertTriangle className="w-4 h-4 text-red-600" /></span>
-                                            <span className="text-xs font-bold text-red-700">Dibatalkan</span>
+                                        <button onClick={handleRemoteClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] bg-emerald-600 text-white hover:bg-emerald-700 transition-colors group disabled:opacity-50">
+                                            <span className="inline-flex p-2 rounded-full bg-white/20 group-hover:bg-white/30 transition"><Headset className="w-4 h-4" /></span>
+                                            <span className="text-xs font-bold">Selesai Remote</span>
                                         </button>
                                     </div>
                                 </div>
@@ -988,28 +971,6 @@ export default function HPInbox() {
                                 </div>
                                 <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl">
                                     <button onClick={() => setCreateStep('remote')} className="w-full py-2.5 bg-card border border-border rounded-[3px] text-sm font-semibold hover:border-foreground/50 transition-colors">Kembali</button>
-                                </div>
-                            </>
-                        )}
-
-                        {createStep === 'void' && (
-                            <>
-                                <div className="p-5 space-y-4 overflow-y-auto flex-1">
-                                    <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                                        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                                        <span>Tiket akan dibatalkan (VOID) dan menjadi final permanen. Tidak dapat diubah kembali.</span>
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Alasan Pembatalan</label>
-                                        <textarea value={newVoidReason} onChange={e => { setNewVoidReason(e.target.value); setVoidCreateError('') }} rows={3} className={`w-full px-3 py-2.5 bg-background border rounded-[3px] text-sm outline-none transition focus:ring-2 resize-none ${voidCreateError ? 'border-red-500 focus:border-red-500 focus:ring-red-500/10' : 'border-red-300 focus:border-red-500 focus:ring-red-500/10'}`} placeholder="Contoh: Pelapor mengirim laporan ganda..." />
-                                        <FieldError msg={voidCreateError} />
-                                    </div>
-                                </div>
-                                <div className="px-5 py-4 border-t border-border bg-card/90 backdrop-blur-xl rounded-b-2xl flex gap-3">
-                                    <button onClick={() => setCreateStep('form')} className="flex-1 py-2.5 bg-card border border-border rounded-[3px] text-sm font-semibold hover:border-foreground/50 transition-colors">Batal</button>
-                                    <button onClick={handleNewVoidSubmit} disabled={submitting} className="flex-1 py-2.5 bg-red-600 text-white border border-red-700 rounded-[3px] text-sm font-semibold hover:bg-red-700 flex items-center justify-center gap-2 transition-colors disabled:opacity-50">
-                                        <AlertTriangle className="w-4 h-4" /> Ya, Dibatalkan
-                                    </button>
                                 </div>
                             </>
                         )}

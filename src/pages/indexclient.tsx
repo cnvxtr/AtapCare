@@ -14,17 +14,7 @@ const ADMIN_PHONE_LINK = "6282280000694";
 
 const SOCIALS: { href: string; label: string; children: React.ReactNode }[] = [
   {
-    href: "https://facebook.com",
-    label: "Facebook",
-    children: <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />,
-  },
-  {
-    href: "https://twitter.com",
-    label: "Twitter",
-    children: <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />,
-  },
-  {
-    href: "https://linkedin.com",
+    href: "https://www.linkedin.com/company/atapteknologi/",
     label: "LinkedIn",
     children: (
       <>
@@ -35,7 +25,7 @@ const SOCIALS: { href: string; label: string; children: React.ReactNode }[] = [
     ),
   },
   {
-    href: "https://instagram.com",
+    href: "https://www.instagram.com/aptek.id?igsi=MXh4ZXQ1YXprcDY3Nw==",
     label: "Instagram",
     children: (
       <>
@@ -132,12 +122,13 @@ export default function Landing() {
         {/* LAYARAN BACKGROUND HERO */}
 
         <div className="absolute inset-0 hero-blob z-0" />
+        <div className="absolute inset-0 hero-mesh z-0" />
         <div className="absolute inset-0 grid-bg opacity-40 z-0" />
         <div className="absolute inset-0 noise-overlay z-0" />
         <div className="relative z-10 max-w-4xl mx-auto w-full">
           <Reveal>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass border border-border text-xs font-mono uppercase tracking-widest mb-6">
-              <span className="h-1.5 w-1.5 rounded-full bg-success pulse-ring" />
+              <span className="h-2 w-2 bg-red-600 rounded-full pulse-dot" />
               {badgeText}
             </div>
           </Reveal>
@@ -180,7 +171,7 @@ export default function Landing() {
           {FLOW_STEPS.map(({ n, title, desc, Icon }, i) => (
             <Reveal key={n} delay={i * 70}>
               <div className="sweep group relative h-full rounded-xl border border-border bg-card/60 backdrop-blur-sm p-5 transition-all duration-300 hover:-translate-y-1 hover:border-foreground/40 hover:bg-card">
-                <span className="font-mono text-3xl font-bold text-muted-foreground/30 group-hover:text-foreground/20 transition-colors duration-300">
+                <span className="font-mono text-3xl font-bold text-foreground opacity-90 transition-opacity duration-300 group-hover:opacity-100">
                   {n}
                 </span>
                 <div className="mt-3 flex items-start gap-3">
@@ -203,7 +194,7 @@ export default function Landing() {
         <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4">
           <div className="space-y-4">
             <Reveal>
-              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6">
+              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6 sweep group relative transition-all duration-300 hover:-translate-y-1 hover:border-foreground/40 hover:bg-card">
                 <h2 className="text-lg font-display font-bold tracking-tight">
                   Informasi Penting
                 </h2>
@@ -235,7 +226,7 @@ export default function Landing() {
             </Reveal>
 
             <Reveal delay={90}>
-              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6">
+              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6 sweep group relative transition-all duration-300 hover:-translate-y-1 hover:border-foreground/40 hover:bg-card">
                 <h2 className="text-lg font-display font-bold tracking-tight">
                   Kontak Kami
                 </h2>

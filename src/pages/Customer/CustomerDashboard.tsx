@@ -28,7 +28,7 @@ export default function CustomerDashboard() {
 
     return (
         <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
                 <p className="text-2xl font-display font-bold tracking-tight">Selamat datang, {user?.full_name}</p>
                 <button onClick={() => navigate('/customer/report')} className="px-4 py-2.5 bg-foreground text-background rounded-[3px] text-sm font-semibold hover:opacity-90 transition inline-flex items-center gap-2">
                     <Plus className="h-5 w-5" /> Lapor Kendala
@@ -77,7 +77,7 @@ export default function CustomerDashboard() {
                                     <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-sm font-semibold font-mono">{ticket.code}</span>
                                         <Badge type="status" value={ticket.status} />
                                         {ticket.priority && <Badge type="priority" value={ticket.priority} />}

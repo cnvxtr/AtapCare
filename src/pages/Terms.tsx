@@ -34,7 +34,7 @@ export default function Terms() {
                 <li>Pembuatan dan pengelolaan akun pelanggan (pendaftaran, login, pemulihan kata sandi, dan pengaturan profil);</li>
                 <li>Formulir pelaporan kendala terkait layanan VMS (Vessel Monitoring System) dan INTANK (Intelligent Tank Monitoring System) yang dikelola oleh PT Atap Teknologi Indonesia;</li>
                 <li>Fitur pelacakan status tiket menggunakan ID Tiket unik;</li>
-                <li>Komunikasi tindak lanjut melalui saluran resmi kami.</li>
+                <li>Komunikasi tindak lanjut melalui saluran resmi kami, termasuk WhatsApp; tiket yang tidak mendapat balasan dalam jangka waktu tertentu dapat ditutup otomatis.</li>
               </ul>
             </SubSection>
             <SubSection title="2.2 Untuk Operasional Internal">
@@ -50,7 +50,7 @@ export default function Terms() {
           <Section title="3. Akun & Keamanan">
             <SubSection title="3.1 Akun Pelanggan">
               <ul>
-                <li>Akun pelanggan dibuat oleh Anda sendiri melalui formulir pendaftaran resmi di Portal Publik;</li>
+                <li>Akun pelanggan dibuat oleh Anda sendiri melalui formulir pendaftaran resmi di Portal Publik dengan menyertakan kode unik perusahaan yang diberikan oleh klien/penyelenggara; kode ini menghubungkan akun Anda dengan perusahaan tersebut dan membuka lokasi (site) yang berhak Anda laporkan;</li>
                 <li>Anda bertanggung jawab menjaga kerahasiaan nama pengguna dan kata sandi Anda, serta atas seluruh aktivitas yang dilakukan melalui akun Anda;</li>
                 <li>Kata sandi dapat dipulihkan melalui fitur lupa kata sandi menggunakan email terdaftar;</li>
                 <li>Anda wajib memberikan data yang benar dan memperbarui data profil bila ada perubahan.</li>
@@ -114,7 +114,10 @@ export default function Terms() {
               <p>Setiap laporan yang berhasil dikirim akan mendapatkan ID Tiket unik dengan format acak (contoh: ATC-20260724-X7K9). Simpan ID Tiket ini untuk keperluan pelacakan status. ID Tiket bersifat rahasia; hanya Anda dan pihak internal perusahaan yang dapat mengakses detail tiket terkait.</p>
             </SubSection>
             <SubSection title="6.4 Deteksi Duplikasi">
-              <p>Sistem kami akan mendeteksi laporan duplikat (site + unit + deskripsi serupa dalam waktu singkat). Jika terdeteksi, sistem akan meminta konfirmasi. Laporan duplikat yang dikonfirmasi akan digabungkan dengan tiket utama, dan Anda akan diberitahu melalui saluran resmi.</p>
+              <p>Laporan yang teridentifikasi sebagai duplikat dari laporan lain akan ditandai dan digabungkan oleh tim kami ke tiket utama, dan Anda akan diberitahu melalui saluran resmi.</p>
+            </SubSection>
+            <SubSection title="6.5 Penilaian Layanan">
+              <p>Setelah tiket dinyatakan selesai (tertutup), Anda dapat memberikan penilaian berbentuk bintang (1–5) disertai ulasan opsional. Penilaian bersifat sukarela dan digunakan untuk pemantauan serta peningkatan mutu layanan.</p>
             </SubSection>
           </Section>
 

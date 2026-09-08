@@ -212,8 +212,8 @@ export default function PMCommandCenter() {
     return (
         <div className={`space-y-6 flex flex-col ${viewMode === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
             {/* HEADER */}
-            <div className="flex justify-end gap-4">
-                <div className="flex gap-2">
+            <div className="flex justify-end gap-4 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
                     <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
                         <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
                         {needAssign + needPending} Perlu Tindakan
@@ -289,7 +289,7 @@ export default function PMCommandCenter() {
                             const items = baseTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[45vw] snap-start shrink-0' : 'flex-1 min-w-[110px]'}`}>
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px]'}`}>
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
