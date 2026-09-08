@@ -70,3 +70,9 @@ Desktop.ini
 
 # Mac OS files
 .DS_Store
+
+# ==========================================
+# LOCAL AI TOOL CONFIG (bukan kode produk)
+# ==========================================
+opencode.json
+opencode.jsonc
