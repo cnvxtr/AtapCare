@@ -401,12 +401,12 @@ export function AssignmentCard({ items }: { items: { action: string; details?: s
 
 const PHOTO_SRC_RE = FILE_TOKEN_RE
 
-export function extractAttachments(items: { timestamp: string; action: string; details?: string }[]): { src: string; when: string }[] {
+export function extractAttachments(items: { timestamp?: string; action?: string; details?: string }[]): { src: string; when: string }[] {
     const all: { src: string; when: string }[] = []
     for (const act of items) {
         if (!act.details) continue
         for (const m of act.details.matchAll(PHOTO_SRC_RE)) {
-            all.push({ src: m[0], when: act.timestamp })
+            all.push({ src: m[0], when: act.timestamp ?? '' })
         }
     }
     return all

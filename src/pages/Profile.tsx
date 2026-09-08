@@ -287,7 +287,7 @@ export default function Profile() {
                   disabled={avatarUploading}
                   className="relative group shrink-0"
                 >
-                  <img src={resolvedAvatar} alt="Avatar" className="h-20 w-20 rounded-full object-cover border-2 border-border" />
+                  <img src={resolvedAvatar ?? undefined} alt="Avatar" className="h-20 w-20 rounded-full object-cover border-2 border-border" />
                   <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
                     {avatarUploading ? (
                       <div className="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin" />

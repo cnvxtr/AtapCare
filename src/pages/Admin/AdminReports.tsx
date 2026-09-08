@@ -381,7 +381,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
             activeTab={activeDrawerTab}
             onTabChange={setActiveDrawerTab}
             activities={live?.activities}
-            duplicateCode={live?.duplicateCode}
+            duplicateCode={live?.duplicateOf ?? undefined}
             footer={<p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>}
           >
             {activeDrawerTab === 'detail' && (
@@ -397,7 +397,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                     <p className="font-medium text-sm">{live?.site || selectedTicket.site} - {live?.unit || selectedTicket.unit}</p>
                   </div>
                 </div>
-                <TicketDescription description={live?.description || selectedTicket.description || ''} />
+                <TicketDescription description={live?.description || ''} />
               </div>
             )}
             {activeDrawerTab === 'timeline' && <TicketTimeline items={acts} isFinal={isFinal} />}
