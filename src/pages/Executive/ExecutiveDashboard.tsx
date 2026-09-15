@@ -3,7 +3,7 @@ import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, Inbox, Wrench, ClipboardCheck } from 'lucide-react'
 import { Badge } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards } from '../../components/TicketDrawer'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 import TrendChart from '../../components/TrendChart'
 import AnimatedNumber from '../../components/AnimatedNumber'
@@ -207,6 +207,7 @@ export default function ExecutiveDashboard() {
                                 <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
                             </div>
                         </div>
+                        <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} />
                         <TicketDescription description={selectedTicket.description} />
                     </div>
                 )}

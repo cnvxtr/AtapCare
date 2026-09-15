@@ -6,6 +6,7 @@ import { resolvePhotos } from '../services/photoService'
 import { getTicketGps, type GpsPoint } from '../services/ticketService'
 import { OrderTracking } from './ui/order-tracking'
 import { useIsMobile } from '../lib/platform'
+import { problemCategoriesApi, rootCausesApi } from '../services/master-data'
 
 export type DrawerTab = 'detail' | 'timeline'
 
@@ -349,6 +350,38 @@ export function TicketDescription({ description }: { description?: string }) {
     )
 }
 
+// Katalog Temuan Awal/Akhir ditampilkan sebagai kartu kecil; guard null agar
+// tiket tanpa katalog tidak menambah baris kosong di drawer.
+export function TicketCatalogCards({ categoryId, rootCauseId, rootCauseNote }: { categoryId?: string | null; rootCauseId?: string | null; rootCauseNote?: string | null }) {
+    const [categories, setCategories] = useState<Map<string, string>>(new Map())
+    const [roots, setRoots] = useState<Map<string, string>>(new Map())
+    useEffect(() => {
+        problemCategoriesApi.getAll().then((c) => setCategories(new Map(c.map((i) => [i.id, i.name]))))
+        rootCausesApi.getAll().then((r) => setRoots(new Map(r.map((i) => [i.id, i.name]))))
+    }, [])
+    if (!categoryId && !rootCauseId && !rootCauseNote) return null
+    return (
+        <>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Awal</p>
+                    <p className="font-medium text-sm">{categoryId ? categories.get(categoryId) || '—' : '—'}</p>
+                </div>
+                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Akhir</p>
+                    <p className="font-medium text-sm">{rootCauseId ? roots.get(rootCauseId) || '—' : '—'}</p>
+                </div>
+            </div>
+            {rootCauseNote && (
+                <div className="bg-muted/60 p-4 rounded-lg border border-border mt-4">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Temuan Akhir</p>
+                    <p className="text-sm text-foreground">{rootCauseNote}</p>
+                </div>
+            )}
+        </>
+    )
+}
+
 // Informasi penugasan diekstrak dari aktivitas terbaru, bukan kolom terstruktur,
 // karena jadwal hanya ditulis sebagai detail aktivitas oleh alur assign.
 // Hanya tangkap tanggal+jam (YYYY-MM-DD HH:MM), bukan semua sisa teks setelah
@@ -401,12 +434,24 @@ export function AssignmentCard({ items }: { items: { action: string; details?: s
 
 const PHOTO_SRC_RE = FILE_TOKEN_RE
 
-export function extractAttachments(items: { timestamp?: string; action?: string; details?: string }[]): { src: string; when: string }[] {
-    const all: { src: string; when: string }[] = []
+// Asal lampiran ditentukan dari ACTION aktivitas, bukan path storage: foto keluhan
+// (portal RPC 59 maupun tiket internal helpdesk) selalu ditulis di aktivitas
+// "Tiket dibuat…" / "Foto keluhan…", sedangkan dokumentasi teknisi di "Tugas
+// diselesaikan" / "Tiket dijeda". Path lama dipakai sebagai fallback untuk
+// aktivitas lain (tiket lama/unknown) agar klasifikasi tetap aman.
+export function isClientActivity(action?: string): boolean {
+    if (!action) return false
+    return action.startsWith('Foto keluhan') || action.startsWith('Tiket dibuat')
+}
+
+export const isClientPhotoPath = (src: string) => src.startsWith('data:image') || src.startsWith('ticket-photos/guest/')
+
+export function extractAttachments(items: { timestamp?: string; action?: string; details?: string }[]): { src: string; when: string; isClient: boolean }[] {
+    const all: { src: string; when: string; isClient: boolean }[] = []
     for (const act of items) {
         if (!act.details) continue
         for (const m of act.details.matchAll(PHOTO_SRC_RE)) {
-            all.push({ src: m[0], when: act.timestamp ?? '' })
+            all.push({ src: m[0], when: act.timestamp ?? '', isClient: isClientActivity(act.action) || isClientPhotoPath(m[0]) })
         }
     }
     return all
@@ -422,9 +467,8 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
     const resolved = usePhotoResolver(all.map((p) => p.src))
     const [preview, setPreview] = useState<{ images: string[]; index: number; titles?: string[] } | null>(null)
 
-    const isClientPhoto = (src: string) => src.startsWith('data:image') || src.startsWith('ticket-photos/guest/')
-    const clientPhotos = photos.filter((p) => isClientPhoto(p.src))
-    const internalPhotos = photos.filter((p) => !isClientPhoto(p.src))
+    const clientPhotos = photos.filter((p) => p.isClient)
+    const internalPhotos = photos.filter((p) => !p.isClient)
 
     const isClosed = status === 'RESOLVED' || status === 'CLOSED'
     const completionAct = isClosed ? items.find(a => a.details?.startsWith('Selesai')) : null
@@ -436,7 +480,8 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
 
     const clientReady = clientPhotos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
     const internalReady = internalPhotos.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
-    const filesReady = files.map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
+    const clientFilesReady = files.filter(p => p.isClient).map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
+    const internalFilesReady = files.filter(p => !p.isClient).map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
 
     const thumbs = (list: { url: string; src: string }[], open: (images: string[], titles: string[]) => void) => (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -460,9 +505,28 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
         </div>
     )
 
-    const hasClient = clientReady.length > 0
-    const hasTeknisi = internalReady.length > 0 || filesReady.length > 0 || catatan || sparepart
+    const hasClient = clientReady.length > 0 || clientFilesReady.length > 0
+    const hasTeknisi = internalReady.length > 0 || internalFilesReady.length > 0 || catatan || sparepart
     if (!hasClient && !hasTeknisi) return null
+
+    const fileList = (list: { url: string; src: string }[]) => (
+        <div className="grid grid-cols-1 gap-2 mt-3 mb-3">
+            {list.map((p, i) => {
+                const name = p.src.split('/').pop() ?? 'file'
+                return (
+                    <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border">
+                        <div className="flex items-center gap-2 min-w-0">
+                            {getFileIcon(p.src)}
+                            <span className="text-xs font-mono truncate">{name}</span>
+                        </div>
+                        <button onClick={() => downloadFromUrl(p.url!, name)} className="p-1.5 rounded hover:bg-muted transition shrink-0" aria-label={`Download ${name}`}>
+                            <Download className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                        </button>
+                    </div>
+                )
+            })}
+        </div>
+    )
 
     return (
         <>
@@ -473,6 +537,7 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
                         <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Kendala Pelanggan</h4>
                     </div>
                     {thumbs(clientReady, (images, titles) => setPreview({ images, index: 0, titles }))}
+                    {clientFilesReady.length > 0 && fileList(clientFilesReady)}
                 </div>
             )}
             {hasTeknisi && (
@@ -484,24 +549,7 @@ export function PhotoGallery({ items, status }: { items: { timestamp: string; ac
                     {internalReady.length > 0 && (
                         <div className="mb-3">{thumbs(internalReady, (images, titles) => setPreview({ images, index: 0, titles }))}</div>
                     )}
-                    {filesReady.length > 0 && (
-                        <div className="grid grid-cols-1 gap-2 mb-3">
-                            {filesReady.map((p, i) => {
-                                const name = p.src.split('/').pop() ?? 'file'
-                                return (
-                                    <div key={i} className="flex items-center justify-between gap-2 p-2 rounded-lg bg-background border border-border">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                            {getFileIcon(p.src)}
-                                            <span className="text-xs font-mono truncate">{name}</span>
-                                        </div>
-                                        <button onClick={() => downloadFromUrl(p.url!, name)} className="p-1.5 rounded hover:bg-muted transition shrink-0" aria-label={`Download ${name}`}>
-                                            <Download className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                                        </button>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    )}
+                    {internalFilesReady.length > 0 && fileList(internalFilesReady)}
                     {catatan && (
                         <div className="bg-background border border-border rounded-lg p-3 mb-2">
                             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Hasil</p>

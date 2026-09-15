@@ -6,9 +6,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3";
 
+const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+const supabaseSecretKey = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!)["default"];
+
 const supabase = createClient(
-  Deno.env.get("SUPABASE_URL")!,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  supabaseUrl,
+  supabaseSecretKey,
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 
@@ -96,16 +99,35 @@ Deno.serve(async (req) => {
 
     const { data: subs } = await supabase
       .from("push_subscriptions")
-      .select("endpoint, keys_p256dh, keys_auth")
-      .eq("user_id", rec.user_id);
+      .select("id, endpoint, keys_p256dh, keys_auth")
+      .eq("user_id", rec.user_id)
+      .order("created_at", { ascending: true });
+
+    // ponytail: jaga maks 20 sub terbaru per user. Bug lama (resubscribe tiap
+    // login) menumpuk ratusan endpoint mati per user, membuat tiap notif harus
+    // mengirim buruh request dan kena limit waktu 150s. Upgrade: retensi per
+    // perangkat nyata bila perangkat > 20/user.
+    const all = subs || [];
+    const stale = all.length > 20 ? all.slice(0, all.length - 20) : [];
+    if (stale.length > 0) {
+      await supabase.from("push_subscriptions").delete().in(
+        "id",
+        stale.map((s) => s.id),
+      );
+    }
+    const toPush = all.slice(-20);
 
     const pushPayload = { title, body, url: deepLink };
 
     let sent = 0;
-    for (const s of subs || []) {
+    const pushTimeout = (ms: number) => new Promise((_, reject) => setTimeout(() => reject(new Error("push timeout")), ms));
+    for (const s of toPush) {
       const sub = { endpoint: s.endpoint, keys: { p256dh: s.keys_p256dh, auth: s.keys_auth } };
       try {
-        await webpush.sendNotification(sub, JSON.stringify(pushPayload));
+        await Promise.race([
+          webpush.sendNotification(sub, JSON.stringify(pushPayload)),
+          pushTimeout(5000),
+        ]);
         sent++;
       } catch (err: unknown) {
         const e = err as { statusCode?: number; status?: number };

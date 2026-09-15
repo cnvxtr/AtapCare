@@ -109,7 +109,7 @@ export async function getSupportMemberIds(ticketId: string): Promise<string[]> {
   return (data ?? []).map((r) => r.user_id)
 }
 
-// Isi kategori/akar kendala tiket (RPC terpisah dari transisi status).
+// Isi temuan awal/akhir tiket (RPC terpisah dari transisi status).
 export async function setTicketCatalog(
   ticketId: string,
   categoryId?: string | null,

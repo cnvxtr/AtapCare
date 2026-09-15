@@ -3,7 +3,7 @@ import { supabase } from "@/lib/supabase";
 export interface ReportFilters {
   from?: string;
   to?: string;
-  siteId?: string[];
+  company?: string[];
   status?: string[];
   priority?: string[];
 }
@@ -25,6 +25,7 @@ export const STATUS_FILTER_GROUPS: Record<string, string[]> = {
 export interface TicketReportRow {
   code: string;
   customer: string;
+  company: string;
   site: string;
   unit: string;
   serial: string;
@@ -34,15 +35,19 @@ export interface TicketReportRow {
   assignee: string;
   createdAt: string;
   closedAt: string;
+  problemDesc: string;
+  resultDesc: string;
 }
 
-export const TICKET_REPORT_HEADERS = [
+// Tabel layar: tanpa kolom deskripsi (deskripsi hanya muncul di export).
+export const TICKET_REPORT_TABLE_HEADERS = [
   "ID Tiket",
   "Pelanggan",
+  "Perusahaan",
   "Site",
   "Unit",
   "Serial Number",
-  "Kategori",
+  "Temuan Awal",
   "Prioritas",
   "Status",
   "Teknisi",
@@ -50,7 +55,29 @@ export const TICKET_REPORT_HEADERS = [
   "Tanggal Keluar",
 ];
 
-export const ROOTCAUSE_HEADERS = ["Akar Kendala", "Jumlah", "% Total"];
+// Urutan kolom export tiket: deskripsi disisipkan, tabel layar tidak berubah.
+export const TICKET_REPORT_HEADERS = [
+  "ID Tiket",
+  "Pelanggan",
+  "Perusahaan",
+  "Site",
+  "Unit",
+  "Serial Number",
+  "Deskripsi Masalah",
+  "Temuan Awal",
+  "Deskripsi Hasil",
+  "Prioritas",
+  "Status",
+  "Teknisi",
+  "Tanggal Masuk",
+  "Tanggal Keluar",
+];
+
+// Indeks ulang kolom: dari urutan properti TicketReportRow (Object.values) ke
+// urutan export. problemDesc (12) → kolom 7, resultDesc (13) → kolom 9.
+export const TICKET_EXPORT_INDEXES = [0, 1, 2, 3, 4, 5, 12, 6, 13, 7, 8, 9, 10, 11];
+
+export const ROOTCAUSE_HEADERS = ["Temuan Akhir", "Jumlah", "% Total"];
 
 export const SERIAL_NUMBER_HEADERS = ["ID Tiket", "Teknisi", "Tanggal", "Site", "Serial Number"];
 
@@ -81,17 +108,21 @@ function dayEnd(date: string): string {
   return new Date(`${date.slice(0, 10)}T23:59:59`).toISOString();
 }
 
-async function resolveSiteNames(siteIds?: string[]): Promise<string[]> {
-  if (!siteIds?.length) return [];
-  const { data: sites } = await supabase.from("sites").select("name").in("id", siteIds);
-  return (sites || []).map((s) => s.name).filter(Boolean);
+// Daftar perusahaan (distinct dari tiket) untuk opsi filter laporan.
+// 'Internal' (fallback tiket yang dibuat helpdesk tanpa pilihan) tidak
+// ditampilkan — tiket internal menyimpan nama perusahaan asli sejak 2026.
+export async function getReportCompanies(): Promise<string[]> {
+  const { data } = await supabase.from("tickets").select("company").order("company");
+  return [
+    ...new Set((data || []).map((r) => r.company).filter((c): c is string => Boolean(c) && c !== "Internal")),
+  ];
 }
 
 async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
-      "id, code, customer, site, unit, category, priority, status, assigned_to, rejection_reason, created_at, closed_at",
+      "id, code, customer, company, site, unit, category, category_id, problem_categories(name), description, priority, status, assigned_to, rejection_reason, created_at, closed_at",
     )
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
@@ -101,8 +132,7 @@ async function buildTicketQuery(filters: ReportFilters) {
     if (raws.length) q = q.in("status", raws);
   }
   if (filters.priority?.length) q = q.in("priority", filters.priority);
-  const siteNames = await resolveSiteNames(filters.siteId);
-  if (siteNames.length) q = q.in("site", siteNames);
+  if (filters.company?.length) q = q.in("company", filters.company);
   return q;
 }
 
@@ -110,9 +140,12 @@ function toTicketRow(
   t: {
     code: string;
     customer: string;
+    company: string;
     site: string;
     unit: string;
     category?: string | null;
+    problem_categories?: { name?: string } | { name?: string }[] | null;
+    description?: string | null;
     priority: string;
     status: string;
     created_at: string;
@@ -122,19 +155,76 @@ function toTicketRow(
   names?: Map<string, string>,
   serials?: Map<string, string>,
 ): TicketReportRow {
+  // Deskripsi masalah: buang baris metadata (Jabatan/WA Pelapor) yang ditulis
+  // RPC pembuatan tiket, sisakan keluhan dari pelapor / catatan helpdesk.
+  const rawDesc = (t.description || "").trim();
+  const problemDesc = rawDesc
+    .replace(/^Jabatan:\s*.+\n?/m, "")
+    .replace(/^WA Pelapor:\s*.+\n?/m, "")
+    .replace(/^\n+/, "")
+    .trim() || "—";
+  const catName = Array.isArray(t.problem_categories)
+    ? t.problem_categories[0]?.name
+    : t.problem_categories?.name;
   return {
     code: t.code,
     customer: t.customer,
+    company: t.company || "—",
     site: t.site || "—",
     unit: t.unit || "—",
     serial: serials?.get(`${t.site ?? ""}|${t.unit ?? ""}`) ?? "—",
-    category: t.category || "—",
+    // Temuan Awal dari relasi category_id, bukan kolom legacy `category`
+    // (yang pernah diisi nama unit oleh RPC lama create_public_ticket).
+    category: catName || "—",
     priority: t.priority || "Low",
     status: t.status,
     assignee: t.assigned_to ? names?.get(t.assigned_to) ?? "—" : "—",
     createdAt: fmt(t.created_at),
     closedAt: t.closed_at ? fmt(t.closed_at) : "—",
+    problemDesc,
+    resultDesc: "—",
   };
+}
+
+// Deskripsi hasil: catatan penyelesaian dari aktivitas teknisi ("Selesai: …")
+// atau catatan remote helpdesk ("Remote Berhasil …"). Ambil segmen "Selesai"
+// bila ada; selain itu segmen pertama (tanpa prefix "Catatan Internal:").
+// Segmen foto/serial number tidak boleh bocor ke laporan.
+function extractResultDesc(details?: string): string {
+  if (!details) return "—";
+  const d = details.replace(/^Catatan Internal:\s*/, "").trim();
+  const segments = d.split(" | ").map((s) => s.trim()).filter(Boolean);
+  if (segments.length === 0) return "—";
+  const resolved = segments.find((s) => /^Selesai\b/.test(s));
+  const first = resolved ?? segments[0];
+  if (/^Foto \(|^Serial Number:/.test(first)) return "—";
+  return first.replace(/^Selesai:\s*/, "").replace(/^Selesai\b/, "").trim() || "—";
+}
+
+export async function getTicketReport(filters: ReportFilters): Promise<TicketReportRow[]> {
+  const [res, usersRes, serials] = await Promise.all([
+    buildTicketQuery(filters),
+    supabase.from("users").select("id, full_name"),
+    loadSerialMap(),
+  ]);
+  const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
+  const raw = res.data || [];
+  const resultById = new Map<string, string>();
+  const ids = raw.map((t) => t.id).filter(Boolean);
+  if (ids.length) {
+    const { data: acts } = await supabase
+      .from("activities")
+      .select("ticket_id, created_at, action, details")
+      .in("ticket_id", ids)
+      .in("action", ["Tugas diselesaikan", "Tiket dibuat dengan status Selesai"])
+      .order("created_at", { ascending: false });
+    const latestByTicket = new Map<string, { created_at: string; details?: string }>();
+    for (const a of acts || []) {
+      if (!latestByTicket.has(a.ticket_id)) latestByTicket.set(a.ticket_id, a);
+    }
+    for (const [ticketId, a] of latestByTicket) resultById.set(ticketId, extractResultDesc(a.details));
+  }
+  return raw.map((t) => ({ ...toTicketRow(t, names, serials), resultDesc: resultById.get(t.id) ?? "—" }));
 }
 
 // ponytail: relasi tiket→unit lewat kecocokan nama (site|unit), bukan FK —
@@ -152,16 +242,6 @@ async function loadSerialMap(): Promise<Map<string, string>> {
     map.set(`${site}|${u.name}`, u.serial_number);
   }
   return map;
-}
-
-export async function getTicketReport(filters: ReportFilters): Promise<TicketReportRow[]> {
-  const [res, usersRes, serials] = await Promise.all([
-    buildTicketQuery(filters),
-    supabase.from("users").select("id, full_name"),
-    loadSerialMap(),
-  ]);
-  const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
-  return (res.data || []).map((t) => toTicketRow(t, names, serials));
 }
 
 export async function getKpiReport(filters: ReportFilters): Promise<Record<string, string | number>[]> {
@@ -199,17 +279,16 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
   return rows;
 }
 
-// ── Top 10 Akar Kendala ──
+// ── Top 10 Temuan Akhir ──
 export async function getRootCauseReport(
   filters: ReportFilters,
 ): Promise<Record<string, string | number>[]> {
   let q = supabase
     .from("tickets")
-    .select("root_cause_id, root_causes(name), created_at, site");
+    .select("root_cause_id, root_causes(name), created_at, company");
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
   if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
-  const siteNames = await resolveSiteNames(filters.siteId);
-  if (siteNames.length) q = q.in("site", siteNames);
+  if (filters.company?.length) q = q.in("company", filters.company);
   const { data } = await q;
   const rows = data || [];
 
@@ -225,13 +304,13 @@ export async function getRootCauseReport(
     .sort((a, b) => b[1] - a[1])
     .slice(0, 10)
     .map(([name, count]) => ({
-      "Akar Kendala": name,
+      "Temuan Akhir": name,
       Jumlah: count,
       "% Total": Math.round((count / total) * 100),
     }));
   if (noCause > 0) {
     top.push({
-      "Akar Kendala": "Tanpa akar kendala",
+      "Temuan Akhir": "Tanpa temuan akhir",
       Jumlah: noCause,
       "% Total": Math.round((noCause / total) * 100),
     });

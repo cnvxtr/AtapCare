@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket, type Priority, type TicketStatus } from '../../context/TicketContext'
 import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, ImagePlus, MapPin, FileText, Info } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, parseDescription } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, parseDescription } from '../../components/TicketDrawer'
 import { waMeLink } from '../../services/wa'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, selectTriggerFilter } from '../../components/ui/select'
 import { Combobox } from '../../components/ui/combobox'
@@ -130,7 +130,7 @@ export default function HPInbox() {
         setSubmitting(true)
         const catatan = [extraDetail, formData.catatanInternal].filter(Boolean).join('\n') || undefined
         const created = await addTicket({
-            reporterName: formData.reporterName, company: 'Internal', site: formData.site, unit: formData.unit,
+            reporterName: formData.reporterName, company: mdCustomers.find(c => c.id === formData.company)?.name || 'Internal', site: formData.site, unit: formData.unit,
             priority: (formData.priority || undefined) as Priority | undefined,
             description: `Jabatan: ${formData.jabatan}\nWA Pelapor: +62${formData.noWaPelapor}\n\n${formData.description}`,
             photoUrl: undefined, initialStatus,
@@ -317,7 +317,7 @@ export default function HPInbox() {
 
     const handleEscalate = () => {
         const errs: { category?: string; priority?: string } = {}
-        if (!escCategoryId) errs.category = 'Pilih kategori kendala'
+        if (!escCategoryId) errs.category = 'Pilih temuan awal'
         if (!escPriority) errs.priority = 'Pilih prioritas'
         if (Object.keys(errs).length) { setEscErrors(errs); return }
         setEscErrors({})
@@ -562,6 +562,7 @@ export default function HPInbox() {
                                     <p className="font-medium text-sm">{liveTicket.site} - {liveTicket.unit}</p>
                                 </div>
                             </div>
+                            <TicketCatalogCards categoryId={liveTicket.categoryId} rootCauseId={liveTicket.rootCauseId} rootCauseNote={liveTicket.rootCauseNote} />
                             <TicketDescription description={liveTicket.description} />
                             {liveTicket.rejectionReason && (
                                 <div className="bg-red-50/60 p-4 rounded-lg border border-red-200">
@@ -626,9 +627,9 @@ export default function HPInbox() {
                         <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Send className="w-5 h-5" /> Eskalasi ke PM</h3>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-foreground">Kategori Kendala</label>
+                                <label className="text-xs font-semibold text-foreground">Temuan Awal</label>
                                 <Select value={escCategoryId} onValueChange={v => { setEscCategoryId(v); setEscErrors(prev => ({ ...prev, category: undefined })) }}>
-                                    <SelectTrigger className={`w-full mt-1 px-3 py-2 border ${escErrors.category ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                                    <SelectTrigger className={`w-full mt-1 px-3 py-2 border ${escErrors.category ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}><SelectValue placeholder="Pilih temuan awal..." /></SelectTrigger>
                                     <SelectContent className="z-[130] border-border bg-card text-foreground">
                                         {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
                                     </SelectContent>
@@ -658,9 +659,9 @@ export default function HPInbox() {
                         <h3 className="text-lg font-bold mb-4">Remote Support</h3>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Kategori Kendala</label>
+                                <label className="text-xs font-semibold text-muted-foreground">Temuan Awal</label>
                                 <Select value={remoteCategoryId} onValueChange={setRemoteCategoryId}>
-                                    <SelectTrigger className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih kategori..." /></SelectTrigger>
+                                    <SelectTrigger className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih temuan awal..." /></SelectTrigger>
                                     <SelectContent className="z-[130] border-border bg-card text-foreground">
                                         {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
                                     </SelectContent>

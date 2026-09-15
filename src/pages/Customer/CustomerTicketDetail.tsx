@@ -108,7 +108,7 @@ function splitAttachments(activities: { details?: string }[]): { client: string[
   for (const a of all) {
     if (seen.has(a.src)) continue // de-duplikasi: path bisa muncul di >1 aktivitas
     seen.add(a.src)
-    if (a.src.startsWith('data:image') || a.src.startsWith('ticket-photos/guest/')) client.push(a.src)
+    if (a.isClient) client.push(a.src)
     else internal.push(a.src)
   }
   return { client, internal }
@@ -348,7 +348,7 @@ export default function CustomerTicketDetail() {
             <p className="text-sm font-semibold text-foreground mb-3">Hasil Pekerjaan</p>
 
             {ticket.rootCauseId && rootCauseMap.has(ticket.rootCauseId) && (
-              <InfoCard label="Akar Masalah" value={rootCauseMap.get(ticket.rootCauseId)!} />
+              <InfoCard label="Temuan Akhir" value={rootCauseMap.get(ticket.rootCauseId)!} />
             )}
 
             {(() => {

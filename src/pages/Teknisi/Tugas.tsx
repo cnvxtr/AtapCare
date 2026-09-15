@@ -20,10 +20,10 @@ import { problemCategoriesApi, rootCausesApi } from '../../services/master-data'
 type TabType = 'detail' | 'timeline'
 
 const TABS = [
-    { key: 'masuk', icon: ClipboardList, label: 'Masuk', color: 'text-black', statuses: ['SCHEDULED', 'EN_ROUTE'] },
-    { key: 'dikerjakan', icon: Wrench, label: 'Dikerjakan', color: 'text-black', statuses: ['WORKING', 'RESOLVED'] },
-    { key: 'pending', icon: Pause, label: 'Dijeda', color: 'text-black', statuses: ['PENDING'] },
-    { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-black', statuses: ['CLOSED'] },
+    { key: 'masuk', icon: ClipboardList, label: 'Masuk', color: 'text-muted-foreground', statuses: ['SCHEDULED', 'EN_ROUTE'] },
+    { key: 'dikerjakan', icon: Wrench, label: 'Dikerjakan', color: 'text-muted-foreground', statuses: ['WORKING', 'RESOLVED'] },
+    { key: 'pending', icon: Pause, label: 'Dijeda', color: 'text-muted-foreground', statuses: ['PENDING'] },
+    { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-muted-foreground', statuses: ['CLOSED'] },
 ]
 
 export default function TugasTeknisi() {
@@ -62,7 +62,7 @@ export default function TugasTeknisi() {
             .then(({ data }) => setSupportTickets(new Set((data ?? []).map(d => d.ticket_id))))
     }, [user])
 
-    // Katalog untuk dropdown & label akar kendala/kategori di drawer.
+    // Katalog untuk dropdown & label temuan awal/akhir di drawer.
     useEffect(() => {
         Promise.all([problemCategoriesApi.getAll(), rootCausesApi.getAll()]).then(([c, r]) => {
             setCatalogItems({
@@ -160,7 +160,7 @@ export default function TugasTeknisi() {
     const handleComplete = async () => {
         if (!selectedTicket) return
         if (!completeNote.trim()) { toast.error('Catatan Hasil wajib diisi.'); return }
-        if (!completeRootCause) { toast.error('Akar Kendala wajib diisi.'); return }
+        if (!completeRootCause) { toast.error('Temuan Akhir wajib diisi.'); return }
         if (photos.length === 0) { toast.error('Foto & File Dokumentasi wajib diunggah.'); return }
         setSubmitting(true)
         try {
@@ -178,7 +178,7 @@ export default function TugasTeknisi() {
             await handleStatusUpdate(selectedTicket.id, 'RESOLVED', parts.join(' | '))
             if (completeRootCause) {
                 const ok = await setTicketCatalog(selectedTicket.id, null, completeRootCause, completeRootNote.trim() || null)
-                if (!ok) toast.error('Akar kendala gagal disimpan.')
+                if (!ok) toast.error('Temuan akhir gagal disimpan.')
             }
         } catch {
             toast.error('Gagal mengunggah foto. Coba lagi.')
@@ -423,17 +423,17 @@ export default function TugasTeknisi() {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
-                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Kategori</p>
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Awal</p>
                                     <p className="font-medium text-sm">{selectedTicket.categoryId ? catalogItems.categories.get(selectedTicket.categoryId) || '—' : '—'}</p>
                                 </div>
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
-                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Akar Kendala</p>
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Akhir</p>
                                     <p className="font-medium text-sm">{selectedTicket.rootCauseId ? catalogItems.roots.get(selectedTicket.rootCauseId) || '—' : '—'}</p>
                                 </div>
                             </div>
                             {selectedTicket.rootCauseNote && (
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border mt-4">
-                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Akar Kendala</p>
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Temuan Akhir</p>
                                     <p className="text-sm text-foreground">{selectedTicket.rootCauseNote}</p>
                                 </div>
                             )}
@@ -522,17 +522,17 @@ export default function TugasTeknisi() {
                                     className="input" placeholder="Serial number unit baru..." />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5">Akar Kendala</label>
+                                <label className="block text-xs font-medium mb-1.5">Temuan Akhir</label>
                                 <Combobox
                                     options={rootOptions}
                                     value={completeRootCause}
                                     onChange={setCompleteRootCause}
-                                    placeholder="Pilih akar kendala..."
-                                    emptyText="Tidak ada akar kendala"
+                                    placeholder="Pilih temuan akhir..."
+                                    emptyText="Tidak ada temuan akhir"
                                 />
                                 <input value={completeRootNote} onChange={e => setCompleteRootNote(e.target.value)}
                                     className="input mt-2"
-                                    placeholder="Catatan akar kendala (opsional)" />
+                                    placeholder="Catatan temuan akhir (opsional)" />
                             </div>
                             <div>
                                 <label className="block text-xs font-medium mb-1.5">Foto & File Dokumentasi</label>

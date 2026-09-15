@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, Table, LayoutGrid, Filter, User, Ban, AlertTriangle, ChevronDown, Check, X } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
@@ -448,6 +448,7 @@ export default function PMCommandCenter() {
                                     <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
                                 </div>
                             </div>
+                            <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} />
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}

@@ -56,7 +56,7 @@ import {
 type FormMode = "customer" | "site" | "unit";
 type ActionVariant = "green" | "neutral" | "red" | "brand";
 type WizardStep = 1 | 2 | 3;
-type MasterTab = "assets" | "categories" | "rootcauses" | "customersites";
+type MasterTab = "assets" | "categories" | "rootcauses";
 type CatalogTable = "problem_categories" | "root_causes";
 
 const NEW_ID = "__new__";
@@ -68,9 +68,8 @@ const WIZARD_STEPS: Array<{ n: WizardStep; label: string }> = [
 
 const MASTER_TABS: Array<{ key: MasterTab; label: string; icon: React.ElementType }> = [
   { key: "assets", label: "Pohon Aset", icon: Building2 },
-  { key: "customersites", label: "Peta Site Pelanggan", icon: MapPin },
-  { key: "categories", label: "Kategori Kendala", icon: ListTree },
-  { key: "rootcauses", label: "Akar Kendala", icon: Tags },
+  { key: "categories", label: "Temuan Awal", icon: ListTree },
+  { key: "rootcauses", label: "Temuan Akhir", icon: Tags },
 ];
 
 const ITEMS_PER_PAGE = 20;
@@ -383,7 +382,7 @@ export function AdminMasterData() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // ─── Tab Master Data: Pohon Aset / Kategori Kendala / Akar Kendala ───
+  // ─── Tab Master Data: Pohon Aset / Temuan Awal / Temuan Akhir ───
   const [tab, setTab] = useState<MasterTab>("assets");
   const [cats, setCats] = useState<CatalogItem[]>([]);
   const [roots, setRoots] = useState<CatalogItem[]>([]);
@@ -397,13 +396,6 @@ export function AdminMasterData() {
   } | null>(null);
   const [catSaving, setCatSaving] = useState(false);
 
-  // ─── Customer Sites Mapping ───
-  const [csMappings, setCsMappings] = useState<Array<{ id: string; customer_id: string; customer_name: string; site_name: string }>>([]);
-  const [csLoading, setCsLoading] = useState(false);
-  const [csCustomerId, setCsCustomerId] = useState("");
-  const [csSiteId, setCsSiteId] = useState("");
-  const [csSaving, setCsSaving] = useState(false);
-
   async function loadCatalog(table: CatalogTable) {
     setCatLoading(true);
     const api = table === "problem_categories" ? problemCategoriesApi : rootCausesApi;
@@ -411,46 +403,6 @@ export function AdminMasterData() {
     if (table === "problem_categories") setCats(rows);
     else setRoots(rows);
     setCatLoading(false);
-  }
-
-  async function loadCustomerSites() {
-    setCsLoading(true);
-    const { data } = await supabase
-      .from("customer_sites_mapping")
-      .select("id, customer_id, site_name")
-      .order("customer_id");
-    const userIds = [...new Set((data || []).map((r: any) => r.customer_id))];
-    let nameMap = new Map<string, string>();
-    if (userIds.length) {
-      const { data: users } = await supabase.from("users").select("id, full_name").in("id", userIds);
-      nameMap = new Map((users || []).map((u: any) => [u.id, u.full_name]));
-    }
-    setCsMappings((data || []).map((r: any) => ({
-      id: r.id,
-      customer_id: r.customer_id,
-      customer_name: nameMap.get(r.customer_id) || r.customer_id,
-      site_name: r.site_name,
-    })));
-    setCsLoading(false);
-  }
-
-  async function handleAddCsMapping() {
-    if (!csCustomerId || !csSiteId.trim()) return;
-    setCsSaving(true);
-    const siteName = csSiteId.trim();
-    const { error } = await supabase.from("customer_sites_mapping").insert({ customer_id: csCustomerId, site_name: siteName });
-    setCsSaving(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Mapping ditambahkan");
-    setCsCustomerId(""); setCsSiteId("");
-    loadCustomerSites();
-  }
-
-  async function handleDeleteCsMapping(id: string) {
-    const { error } = await supabase.from("customer_sites_mapping").delete().eq("id", id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Mapping dihapus");
-    setCsMappings(prev => prev.filter(m => m.id !== id));
   }
 
   async function handleCatalogSave() {
@@ -528,7 +480,6 @@ export function AdminMasterData() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (tab === "categories" && cats.length === 0) loadCatalog("problem_categories");
     if (tab === "rootcauses" && roots.length === 0) loadCatalog("root_causes");
-    if (tab === "customersites" && csMappings.length === 0) loadCustomerSites();
     setCatPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
@@ -996,12 +947,12 @@ export function AdminMasterData() {
   return (
     <div className="space-y-4">
       {/* ─── Tab Master Data ───────────────────────────────────── */}
-      <div className="bg-card p-1 rounded-xl border border-border inline-flex gap-1 flex-wrap w-fit">
+      <div className="bg-card p-1 rounded-xl border border-border grid grid-cols-3 gap-1">
         {MASTER_TABS.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`px-3.5 h-8 rounded-[3px] text-xs font-medium transition inline-flex items-center gap-1.5 ${
+            className={`px-3.5 h-8 rounded-[3px] text-xs font-medium transition inline-flex items-center justify-center gap-1.5 ${
               tab === t.key
                 ? "bg-foreground text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent"
@@ -1260,7 +1211,7 @@ export function AdminMasterData() {
                                     </td>
                                   </tr>
                                 ))}
-                            </Fragment>
+                  </Fragment>
                           );
                         })}
                     </Fragment>
@@ -1312,7 +1263,7 @@ export function AdminMasterData() {
       </>
       )}
 
-      {/* ─── Katalog: Kategori Kendala & Akar Kendala ──────────── */}
+      {/* ─── Katalog: Temuan Awal & Temuan Akhir ──────────── */}
       {tab === "categories" && (
         <CatalogPanel
           items={cats}
@@ -1323,8 +1274,8 @@ export function AdminMasterData() {
           setPage={setCatPage}
           icon={ListTree}
           iconClass="bg-blue-50 text-blue-600"
-          addLabel="Tambah Kategori Kendala"
-          emptyHint="Gunakan tombol Tambah Kategori Kendala untuk memulai"
+          addLabel="Tambah Temuan Awal"
+          emptyHint="Gunakan tombol Tambah Temuan Awal untuk memulai"
           onAdd={() => setCatDialog({ table: "problem_categories", editingId: null, name: "" })}
           onEdit={(i) =>
             setCatDialog({ table: "problem_categories", editingId: i.id, name: i.name })
@@ -1343,8 +1294,8 @@ export function AdminMasterData() {
           setPage={setCatPage}
           icon={Tags}
           iconClass="bg-purple-50 text-purple-600"
-          addLabel="Tambah Akar Kendala"
-          emptyHint="Gunakan tombol Tambah Akar Kendala untuk memulai"
+          addLabel="Tambah Temuan Akhir"
+          emptyHint="Gunakan tombol Tambah Temuan Akhir untuk memulai"
           onAdd={() => setCatDialog({ table: "root_causes", editingId: null, name: "" })}
           onEdit={(i) => setCatDialog({ table: "root_causes", editingId: i.id, name: i.name })}
           onArchive={(i) => handleCatalogArchive("root_causes", i)}
@@ -1358,7 +1309,7 @@ export function AdminMasterData() {
           <DialogHeader className="mb-6">
             <DialogTitle className="text-foreground">
               {catDialog?.editingId ? "Edit" : "Tambah"}{" "}
-              {catDialog?.table === "problem_categories" ? "Kategori Kendala" : "Akar Kendala"}
+              {catDialog?.table === "problem_categories" ? "Temuan Awal" : "Temuan Akhir"}
             </DialogTitle>
           </DialogHeader>
           <div>
@@ -1424,57 +1375,6 @@ export function AdminMasterData() {
         />
       )}
 
-      {/* ─── Peta Site Pelanggan (Customer Sites Mapping) ─────── */}
-      {tab === "customersites" && (
-        <div className="space-y-4">
-          <div className="bg-card border border-border rounded-xl p-4">
-            <h3 className="text-sm font-semibold mb-3">Tambah Mapping</h3>
-            <div className="flex flex-wrap gap-2 items-end">
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-muted-foreground mb-1 block">Customer (user)</label>
-                <select value={csCustomerId} onChange={e => setCsCustomerId(e.target.value)}
-                  className="w-full h-9 px-3 rounded-[3px] border border-border bg-background text-sm">
-                  <option value="">Pilih customer...</option>
-                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <label className="text-xs text-muted-foreground mb-1 block">Nama Site</label>
-                <input value={csSiteId} onChange={e => setCsSiteId(e.target.value)} placeholder="contoh: Site Jakarta"
-                  className="w-full h-9 px-3 rounded-[3px] border border-border bg-background text-sm" />
-              </div>
-              <button onClick={handleAddCsMapping} disabled={csSaving || !csCustomerId || !csSiteId.trim()}
-                className="h-9 px-4 rounded-[3px] bg-foreground text-background text-xs font-semibold hover:opacity-90 transition disabled:opacity-50">
-                {csSaving ? "Menyimpan..." : "Tambah"}
-              </button>
-            </div>
-          </div>
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
-              <h3 className="text-sm font-semibold">Mapping Aktif</h3>
-            </div>
-            {csLoading ? (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">Memuat...</div>
-            ) : csMappings.length === 0 ? (
-              <div className="px-4 py-8 text-center text-sm text-muted-foreground">Belum ada mapping</div>
-            ) : (
-              <div className="divide-y divide-border">
-                {csMappings.map(m => (
-                  <div key={m.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-muted/50 transition">
-                    <div className="text-sm">
-                      <span className="font-medium">{m.customer_name}</span>
-                      <span className="text-muted-foreground mx-2">&rarr;</span>
-                      <span className="font-mono text-xs">{m.site_name}</span>
-                    </div>
-                    <button onClick={() => handleDeleteCsMapping(m.id)}
-                      className="text-xs text-red-500 hover:text-red-700 transition">Hapus</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
                   </Fragment>
                 ))}
               </div>

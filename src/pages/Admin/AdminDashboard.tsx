@@ -46,13 +46,13 @@ function KpiCard({
           : "bg-muted text-muted-foreground";
   return (
     <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 mb-1">
-        <span className={`h-8 w-8 grid place-items-center rounded-lg ${toneClass}`}>{icon}</span>
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+      <div className="flex items-center gap-2 mb-1 min-w-0">
+        <span className={`h-8 w-8 shrink-0 grid place-items-center rounded-lg ${toneClass}`}>{icon}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
           {label}
         </span>
       </div>
-      <p className="text-3xl font-bold text-foreground mt-3">
+      <p className="text-3xl sm:text-4xl font-display font-bold text-foreground mt-3">
         {typeof value === "number" ? <AnimatedNumber value={value} decimals={decimals} /> : value}
         {typeof value === "number" && suffix && (
           <span className="text-base font-medium text-muted-foreground">{suffix}</span>

@@ -67,7 +67,7 @@ export default function BottomTabs({ role }: { role: string }) {
   return (
     <>
       <nav className="fixed bottom-0 inset-x-0 z-50 border-t border-border bg-background/80 backdrop-blur-xl safe-area-pb">
-        <div className="flex items-stretch justify-around h-14">
+        <div className="grid grid-flow-col auto-cols-fr h-14">
           {tabs.map((tab) => {
             const active = activePath === tab.path && !profileActive
             const Icon = tab.icon
@@ -75,21 +75,23 @@ export default function BottomTabs({ role }: { role: string }) {
               <button
                 key={tab.path}
                 onClick={() => navigate(tab.path)}
-                className="relative flex flex-1 flex-col items-center justify-center gap-0.5 outline-none tap-highlight-transparent"
+                className="relative flex flex-col items-center justify-center gap-0.5 outline-none tap-highlight-transparent"
               >
-                {active && (
-                  <motion.div
-                    layoutId="tab-indicator"
-                    className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-full bg-foreground"
-                    transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                <span className="relative flex justify-center">
+                  {active && (
+                    <motion.div
+                      layoutId="tab-indicator"
+className="absolute -top-3 left-1/2 -ml-4 h-[2px] w-8 rounded-full bg-foreground"
+                      transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                    />
+                  )}
+                  <Icon
+                    className={`h-5 w-5 transition-colors duration-200 ${
+                      active ? 'text-foreground' : 'text-muted-foreground'
+                    }`}
+                    strokeWidth={active ? 2.2 : 1.8}
                   />
-                )}
-                <Icon
-                  className={`h-5 w-5 transition-colors duration-200 ${
-                    active ? 'text-foreground' : 'text-muted-foreground'
-                  }`}
-                  strokeWidth={active ? 2.2 : 1.8}
-                />
+                </span>
                 <span
                   className={`text-[10px] leading-none transition-colors duration-200 ${
                     active ? 'text-foreground font-semibold' : 'text-muted-foreground'
@@ -104,22 +106,24 @@ export default function BottomTabs({ role }: { role: string }) {
           {/* Profil tab — always last */}
           <button
             onClick={() => navigate('/profile')}
-            className="relative flex flex-1 flex-col items-center justify-center gap-0.5 outline-none tap-highlight-transparent"
+            className="relative flex flex-col items-center justify-center gap-0.5 outline-none tap-highlight-transparent"
           >
-            {profileActive && (
-              <motion.div
-                layoutId="tab-indicator"
-                className="absolute top-0 left-1/2 -translate-x-1/2 h-[2px] w-8 rounded-full bg-foreground"
-                transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-              />
-            )}
-            {resolvedAvatar ? (
-              <img src={resolvedAvatar} alt="Avatar" className={`h-6 w-6 rounded-full object-cover border ${profileActive ? 'border-foreground' : 'border-border'}`} />
-            ) : (
-              <div className="h-6 w-6 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-[9px] font-bold">
-                {initials}
-              </div>
-            )}
+            <span className="relative flex justify-center">
+              {profileActive && (
+                <motion.div
+                  layoutId="tab-indicator"
+                  className="absolute -top-3 left-1/2 -ml-4 h-[2px] w-8 rounded-full bg-foreground"
+                  transition={{ type: 'spring', stiffness: 500, damping: 35 }}
+                />
+              )}
+              {resolvedAvatar ? (
+                <img src={resolvedAvatar} alt="Avatar" className={`h-6 w-6 rounded-full object-cover border ${profileActive ? 'border-foreground' : 'border-border'}`} />
+              ) : (
+                <div className="h-6 w-6 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-[9px] font-bold">
+                  {initials}
+                </div>
+              )}
+            </span>
             <span
               className={`text-[10px] leading-none transition-colors duration-200 ${
                 profileActive ? 'text-foreground font-semibold' : 'text-muted-foreground'

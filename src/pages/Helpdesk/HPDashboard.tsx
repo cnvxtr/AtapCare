@@ -6,7 +6,7 @@ import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 
 import { AlertTriangle, Inbox, ArrowUpRight, Wrench, ClipboardCheck, X, Copy } from 'lucide-react'
 import { Badge } from '../../components/Badge'
 import { FIELD_STATUSES } from '../../lib/status'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards } from '../../components/TicketDrawer'
 import FieldError from '../../components/FieldError'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
@@ -265,6 +265,7 @@ export default function HPDashboard() {
                                     <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
                                 </div>
                             </div>
+                            <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} />
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}

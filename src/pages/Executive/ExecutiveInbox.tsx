@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, AlertTriangle, Table, LayoutGrid, User, Filter } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards } from '../../components/TicketDrawer'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { selectTriggerFilter } from '../../components/ui/select'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
@@ -225,6 +225,7 @@ export default function ExecutiveInbox() {
                                     <p className="font-medium text-sm">{liveTicket.site} - {liveTicket.unit}</p>
                                 </div>
                             </div>
+                            <TicketCatalogCards categoryId={liveTicket.categoryId} rootCauseId={liveTicket.rootCauseId} rootCauseNote={liveTicket.rootCauseNote} />
                             <TicketDescription description={liveTicket.description} />
                             {liveTicket.rejectionReason && (
                                 <div className="bg-red-50/60 p-4 rounded-lg border border-red-200">

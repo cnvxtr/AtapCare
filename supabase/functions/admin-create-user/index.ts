@@ -5,11 +5,12 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+const supabaseAnonKey = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS")!)["default"];
+const supabaseSecretKey = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS")!)["default"];
 
 const supabase = createClient(
   supabaseUrl,
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  supabaseSecretKey,
   { auth: { persistSession: false, autoRefreshToken: false } },
 );
 

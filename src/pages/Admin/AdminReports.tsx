@@ -25,8 +25,10 @@ import {
   getKpiReport,
   getRootCauseReport,
   getSerialNumberReport,
-  getSites,
+  getReportCompanies,
   TICKET_REPORT_HEADERS,
+  TICKET_REPORT_TABLE_HEADERS,
+  TICKET_EXPORT_INDEXES,
   KPI_HEADERS,
   ROOTCAUSE_HEADERS,
   SERIAL_NUMBER_HEADERS,
@@ -35,7 +37,6 @@ import {
   type ReportFilters,
   type TicketReportRow,
 } from "@/services";
-import type { SiteRow } from "@/services";
 
 type ExportCell = string | number | null | undefined;
 type TabKey = "tickets" | "kpi" | "rootcause" | "sparepart";
@@ -50,11 +51,11 @@ const PRIORITY_OPTIONS = ["Critical", "Medium", "Low"].map((p) => ({ value: p, l
 const DATASETS: Array<{ key: TabKey; label: string }> = [
   { key: "tickets", label: "Tiket & Penanganan" },
   { key: "kpi", label: "KPI Agregat" },
-  { key: "rootcause", label: "Akar Kendala" },
+  { key: "rootcause", label: "Temuan Akhir" },
   { key: "sparepart", label: "Serial Number" },
 ];
 
-// Per-role dataset: admin semua; helpdesk tiket + akar kendala.
+// Per-role dataset: admin semua; helpdesk tiket + temuan akhir.
 function datasetsFor(mode: "admin" | "helpdesk") {
   return DATASETS.filter((d) =>
     mode === "admin" ? true : d.key === "tickets" || d.key === "rootcause",
@@ -62,13 +63,13 @@ function datasetsFor(mode: "admin" | "helpdesk") {
 }
 
 const PRIORITY_COLS: Record<TabKey, number[]> = {
-  tickets: [6],
+  tickets: [7],
   kpi: [0],
   rootcause: [],
   sparepart: [],
 };
 const STATUS_COLS: Record<TabKey, number[]> = {
-  tickets: [7],
+  tickets: [8],
   kpi: [],
   rootcause: [],
   sparepart: [],
@@ -89,7 +90,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [tab, setTab] = useState<TabKey>("tickets");
   const [filters, setFilters] = useState<ReportFilters>({});
   const [search, setSearch] = useState("");
-  const [sites, setSites] = useState<SiteRow[]>([]);
+  const [companies, setCompanies] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [loadedKeys, setLoadedKeys] = useState<Partial<Record<TabKey, string>>>({});
@@ -102,7 +103,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [audits, setAudits] = useState<Array<Record<string, string>>>([]);
 
   useEffect(() => {
-    getSites().then(setSites);
+    getReportCompanies().then(setCompanies);
   }, []);
 
   const loadDataset = useCallback(async () => {
@@ -142,14 +143,18 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     );
   }, [activeRows, search]);
 
+  // Tabel layar memakai subset header (tanpa kolom deskripsi); export memakai
+  // header penuh (termasuk Deskripsi Masalah/Hasil).
   const activeHeaders: string[] =
     tab === "tickets"
-      ? TICKET_REPORT_HEADERS
+      ? TICKET_REPORT_TABLE_HEADERS
       : tab === "kpi"
         ? KPI_HEADERS
         : tab === "rootcause"
             ? ROOTCAUSE_HEADERS
             : SERIAL_NUMBER_HEADERS;
+  const exportHeaders: string[] =
+    tab === "tickets" ? TICKET_REPORT_HEADERS : activeHeaders;
 
   const stamp = todayStamp();
   const baseName = `atapcare-${tab}-${stamp}`;
@@ -159,14 +164,28 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   // tengah tidak mengekspor dataset yang salah.
   function doExport() {
     if (exporting || visibleRows.length === 0) return;
-    const rows = visibleRows.map((r) => [...r]);
-    const headers = [...activeHeaders];
+    // Export tiket pakai urutan kolom sendiri (deskripsi disisipkan);
+    // tabel layar tetap memakai urutan aslinya.
+    const rows =
+      tab === "tickets"
+        ? visibleRows.map((r) => TICKET_EXPORT_INDEXES.map((i) => r[i]))
+        : visibleRows.map((r) => [...r]);
+    const headers = tab === "tickets" ? [...TICKET_REPORT_HEADERS] : [...exportHeaders];
     const name = baseName;
     const label = datasetLabel;
     const periodText =
       filters.from && filters.to
         ? `${fmtIso(filters.from)} – ${fmtIso(filters.to)}`
         : "Semua Periode";
+    // Kolom prioritas/status ikut bergeser di export tiket.
+    const priorityCols =
+      tab === "tickets"
+        ? PRIORITY_COLS[tab].map((c) => TICKET_EXPORT_INDEXES.indexOf(c) + 1)
+        : PRIORITY_COLS[tab].map((c) => c + 1);
+    const statusCols =
+      tab === "tickets"
+        ? STATUS_COLS[tab].map((c) => TICKET_EXPORT_INDEXES.indexOf(c) + 1)
+        : STATUS_COLS[tab].map((c) => c + 1);
     setExporting(true);
     toast.info(`Menyiapkan unduhan XLSX "${label}"…`);
     exportStyledXlsx({
@@ -175,8 +194,8 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       sheetName: label,
       baseName: name,
       bandTitle: `${label} — ${periodText}`,
-      priorityCols: PRIORITY_COLS[tab].map((c) => c + 1),
-      statusCols: STATUS_COLS[tab].map((c) => c + 1),
+      priorityCols,
+      statusCols,
     })
       .then(() => toast.success(`XLSX "${label}" berhasil diunduh (${rows.length} baris)`))
       .catch(() => toast.error("Gagal membuat file XLSX."))
@@ -192,7 +211,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     return { all: false, ...Object.fromEntries(arr.map((v) => [v, true])) };
   }
 
-  function toggleFilterValue(key: "siteId" | "status" | "priority", value: string) {
+  function toggleFilterValue(key: "company" | "status" | "priority", value: string) {
     setFilters((f) => {
       if (value === "all") return { ...f, [key]: undefined };
       const cur = (f[key] as string[] | undefined) ?? [];
@@ -222,12 +241,12 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
             </FilterGroup>
             {(tab === "tickets" || tab === "kpi") && (
               <>
-                <FilterGroup label="Site">
+                <FilterGroup label="Perusahaan">
                   <MultiSelectFilter
                     label="Semua"
-                    options={sites.map((s) => ({ value: s.id, label: s.name }))}
-                    selected={selectedRecord(filters.siteId)}
-                    onToggle={(v) => toggleFilterValue("siteId", v)}
+                    options={companies.map((c) => ({ value: c, label: c }))}
+                    selected={selectedRecord(filters.company)}
+                    onToggle={(v) => toggleFilterValue("company", v)}
                     className={`${selectTriggerFilter} max-md:min-w-[100px]`}
                   />
                 </FilterGroup>
@@ -337,7 +356,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                         <TableBody className="divide-y divide-border">
                           {visibleRows.map((r, i) => (
                             <TableRow key={i} className="hover:bg-muted cursor-pointer" onClick={() => { if (tab === 'tickets') { setSelectedTicket(tickets[i]); setActiveDrawerTab('detail') } }}>
-                              {r.map((c, j) => (
+                              {r.slice(0, activeHeaders.length).map((c, j) => (
                                 <TableCell
                                   key={j}
                                   className="text-[10px] px-1.5 py-1.5"

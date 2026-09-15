@@ -43,6 +43,7 @@ export default function Profile() {
 
   // Avatar state
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [showAvatarPreview, setShowAvatarPreview] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Activities state
@@ -299,6 +300,12 @@ export default function Profile() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-[180px] bg-card border-border text-card-foreground space-y-0.5">
                 <DropdownMenuItem
+                  onClick={() => setShowAvatarPreview(true)}
+                  className="cursor-pointer flex items-center gap-2"
+                >
+                  <Eye className="h-4 w-4" /> Lihat Foto Profil
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={() => fileInputRef.current?.click()}
                   className="cursor-pointer flex items-center gap-2"
                 >
@@ -443,6 +450,21 @@ export default function Profile() {
         <LogOut className="h-5 w-5" />
         <span className="text-sm font-semibold">Keluar</span>
       </button>
+
+      {/* MODAL PREVIEW FOTO PROFIL */}
+      {showAvatarPreview && createPortal((
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowAvatarPreview(false)}>
+          <div className="relative" onClick={(e) => e.stopPropagation()}>
+            {resolvedAvatar ? (
+              <img src={resolvedAvatar} alt="Foto Profil" className="max-h-[60vh] max-w-[80vw] rounded-2xl object-contain shadow-2xl" />
+            ) : (
+              <div className="h-40 w-40 rounded-full bg-gradient-to-br from-foreground to-foreground/60 grid place-items-center text-background text-6xl font-bold shadow-2xl">
+                {initials}
+              </div>
+            )}
+          </div>
+        </div>
+      ), document.body)}
 
       {/* MODAL KONFIRMASI KELUAR */}
       {showLogoutConfirm && createPortal((
