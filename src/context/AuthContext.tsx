@@ -14,6 +14,8 @@ export interface UserProfile {
     avatar_url?: string | null
     wa_number?: string | null
     customer_id?: string | null
+    status: string
+    is_deleted?: boolean
 }
 
 interface AuthContextType {
@@ -51,6 +53,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // nonaktif → signUp langsung membuat sesi) agar tidak dianggap sudah login.
     const registeringRef = useRef(false)
 
+    // Akun nonaktif / ditandai terhapus dilarang login; sesi yang masih
+    // terbuka (login sebelum dinonaktifkan) juga harus ditutup.
+    const isDeactivated = (p: UserProfile) => p.status === 'nonaktif' || !!p.is_deleted
+
     const fetchUserProfile = async (userId: string) => {
         const { data, error } = await supabase
             .from('users')
@@ -70,7 +76,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const { data: { session } } = await supabase.auth.getSession()
             if (session?.user) {
                 const profile = await fetchUserProfile(session.user.id)
-                if (profile) {
+                if (profile && !isDeactivated(profile)) {
                     setUser(profile)
                     setAuditActor(profile.full_name)
                     setIsAuthenticated(true)
@@ -78,6 +84,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                         const date = new Date(profile.last_login)
                         setLastLoginTime(`${date.getDate()} ${date.toLocaleString('id-ID', { month: 'short' })} ${date.getFullYear()}, ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`)
                     }
+                } else if (profile) {
+                    await supabase.auth.signOut()
                 }
             }
             setLoading(false)
@@ -88,10 +96,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (registeringRef.current) return
             if (session?.user) {
                 const profile = await fetchUserProfile(session.user.id)
-                if (profile) {
+                if (profile && !isDeactivated(profile)) {
                     setUser(profile)
                     setAuditActor(profile.full_name)
                     setIsAuthenticated(true)
+                } else if (profile) {
+                    await supabase.auth.signOut()
                 }
             } else {
                 setUser(null)
@@ -127,12 +137,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
 
         if (data.user) {
+            const profile = await fetchUserProfile(data.user.id)
+            if (profile && isDeactivated(profile)) {
+                await supabase.auth.signOut()
+                return { error: 'Akun Anda dinonaktifkan. Hubungi administrator.' }
+            }
+
             const now = new Date()
             const timeString = `${now.getDate()} ${now.toLocaleString('id-ID', { month: 'short' })} ${now.getFullYear()}, ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
             await supabase.from('users').update({ last_login: new Date().toISOString() }).eq('id', data.user.id)
 
             setLastLoginTime(timeString)
-            const profile = await fetchUserProfile(data.user.id)
             if (profile) setAuditActor(profile.full_name)
             if (profile?.role === 'admin') navigate('/admin')
             else if (profile?.role === 'teknisi') navigate('/tugas')

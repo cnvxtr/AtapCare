@@ -36,6 +36,7 @@ export default function TugasTeknisi() {
     const [showPendingModal, setShowPendingModal] = useState(false)
     const [pendingReason, setPendingReason] = useState('')
     const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
+    const [pendingError, setPendingError] = useState('')
     const [pendingSubmitting, setPendingSubmitting] = useState(false)
     const [showCompleteModal, setShowCompleteModal] = useState(false)
     const [completeNote, setCompleteNote] = useState('')
@@ -137,8 +138,12 @@ export default function TugasTeknisi() {
     }
 
     const handlePending = async () => {
-        if (!pendingReason.trim() || !selectedTicket) return
-        if (pendingPhotos.length === 0) { toast.error('Foto & File Bukti wajib diunggah.'); return }
+        if (!selectedTicket) return
+        if (!pendingReason.trim() || pendingPhotos.length === 0) {
+            setPendingError('Mohon isi alasan dan upload foto/file bukti dulu.')
+            return
+        }
+        setPendingError('')
         setPendingSubmitting(true)
         try {
             let details = `Ditunda: ${pendingReason.trim()}`
@@ -453,9 +458,9 @@ export default function TugasTeknisi() {
                             <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
                                 <PauseCircle className="w-5 h-5" /> Ajukan Pending
                             </h3>
-                            <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]) }} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                            <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]); setPendingError('') }} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
-                        <textarea value={pendingReason} onChange={e => setPendingReason(e.target.value)}
+                        <textarea value={pendingReason} onChange={e => { setPendingReason(e.target.value); setPendingError('') }}
                             placeholder="Alasan pending (wajib)..."
                             rows={3} className="input resize-none mb-4" />
                         <div className="mb-4">
@@ -468,6 +473,7 @@ export default function TugasTeknisi() {
                                     className="hidden" onChange={e => {
                                         const files = Array.from(e.target.files || [])
                                         setPendingPhotos(prev => [...prev, ...files])
+                                        setPendingError('')
                                     }} />
                             </div>
                             {pendingPhotos.length > 0 && (
@@ -489,11 +495,12 @@ export default function TugasTeknisi() {
                                 </div>
                             )}
                         </div>
+                        {pendingError && <p className="text-xs text-red-500 mb-3">{pendingError}</p>}
                         <div className="flex gap-3">
-                            <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]) }}
+                            <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]); setPendingError('') }}
                                 disabled={pendingSubmitting}
                                 className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
-                            <button onClick={handlePending} disabled={!pendingReason.trim() || pendingPhotos.length === 0 || pendingSubmitting}
+                            <button onClick={handlePending} disabled={pendingSubmitting}
                                 className="flex-1 min-h-[44px] bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{pendingSubmitting ? 'Memproses...' : 'Simpan'}</button>
                         </div>
                     </div>

@@ -58,5 +58,15 @@ Deno.serve(async (req) => {
   const { error } = await probe.auth.signInWithPassword({ email, password });
   if (error) return json({ error: "invalid_credentials" }, 401);
 
+  // Akun nonaktif / ditandai terhapus tetap diblokir walau sandi benar.
+  const { data: account } = await service
+    .from("users")
+    .select("status, is_deleted")
+    .eq("email", email)
+    .maybeSingle();
+  if (!account || account.status === "nonaktif" || account.is_deleted) {
+    return json({ error: "invalid_credentials" }, 401);
+  }
+
   return json({ email });
 });

@@ -357,7 +357,7 @@ export default function MainLayout() {
                 ) : (
                   <div className="max-h-80 overflow-y-auto space-y-1.5">
                     {notifs.map((n) => {
-                      const actionable = user?.role === 'pm' && !!n.ticket_id
+                      const actionable = user?.role === 'pm' && !!n.ticket_id && n.title?.startsWith('Minta pengalihan:')
                       return (
                         <div key={n.id} className={`flex flex-col items-start py-2.5 px-3 bg-muted rounded-[5px] ${n.read ? 'opacity-60' : ''}`}>
                           <span className="text-sm font-medium text-foreground">{n.title}</span>

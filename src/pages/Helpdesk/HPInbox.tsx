@@ -43,6 +43,7 @@ export default function HPInbox() {
     const [showValidationModal, setShowValidationModal] = useState(false)
     const [showConfirmPath, setShowConfirmPath] = useState(false)
     const [showEscalateModal, setShowEscalateModal] = useState(false)
+    const [showConfirmReopen, setShowConfirmReopen] = useState(false)
 
     // State Forms
     const [voidReason, setVoidReason] = useState('')
@@ -303,14 +304,19 @@ export default function HPInbox() {
     }
 
     const handleRemoteSubmit = () => {
-        if (!remoteResult) { setRemoteError('Mohon pilih hasil remote'); return }
+        const missing: string[] = []
+        if (!remoteResult) missing.push('hasil remote')
+        if (!remoteCategoryId) missing.push('temuan awal')
+        if (!remoteDuration || Number(remoteDuration) <= 0) missing.push('durasi (menit)')
+        if (!remoteNotes.trim()) missing.push('catatan')
+        if (missing.length) { setRemoteError('Mohon diisi dulu: ' + missing.join(', ')); return }
         setRemoteError('')
-        if (remoteCategoryId) setTicketCatalog(selectedTicket!.id, remoteCategoryId)
+        setTicketCatalog(selectedTicket!.id, remoteCategoryId)
         if (remoteResult === 'fail') {
-            updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', `Remote Gagal. Catatan: ${remoteNotes}`)
+            updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', `Remote Gagal via ${remoteMedia} (${remoteDuration} menit). Catatan: ${remoteNotes}`)
             setShowRemoteModal(false); setSelectedTicket(null)
         } else {
-            updateTicketStatus(selectedTicket!.id, 'RESOLVED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit.`)
+            updateTicketStatus(selectedTicket!.id, 'RESOLVED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
             setShowConfirmPath(true)
         }
     }
@@ -324,6 +330,12 @@ export default function HPInbox() {
         setTicketCatalog(selectedTicket!.id, escCategoryId)
         updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', 'Eskalasi ke PM', escPriority as Priority)
         setShowEscalateModal(false); setSelectedTicket(null)
+    }
+
+    const handleReopen = () => {
+        if (!selectedTicket) return
+        updateTicketStatus(selectedTicket.id, 'WORKING', 'Tiket dibuka kembali (reopen) oleh Helpdesk.')
+        setShowConfirmReopen(false); setSelectedTicket(null)
     }
 
     const handleConfirmPathA = () => {
@@ -531,7 +543,7 @@ export default function HPInbox() {
                             {liveTicket.status === 'OPEN' && (
                                 <>
                                     <button onClick={() => { setEscCategoryId(liveTicket.categoryId || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
-                                    <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Remote Support</button>
+                                    <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
                                 </>
                             )}
                             {liveTicket.status === 'RESOLVED' && (
@@ -541,7 +553,7 @@ export default function HPInbox() {
                                 </>
                             )}
                             {liveTicket.status === 'CLOSED' && (
-                                <button onClick={() => { updateTicketStatus(liveTicket.id, 'WORKING', 'Tiket dibuka kembali (reopen) oleh Helpdesk.'); setSelectedTicket(null); }} className="w-full py-2.5 bg-blue-600 text-white rounded-[3px] font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
+                                <button onClick={() => setShowConfirmReopen(true)} className="w-full py-2.5 bg-blue-600 text-white rounded-[3px] font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
                             )}
                             {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
                                 <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
@@ -656,7 +668,7 @@ export default function HPInbox() {
             {showRemoteModal && !showConfirmPath && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
-                        <h3 className="text-lg font-bold mb-4">Remote Support</h3>
+                        <h3 className="text-lg font-bold mb-4">Selesaikan Remote</h3>
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Temuan Awal</label>
@@ -695,6 +707,18 @@ export default function HPInbox() {
                             <div className="grid grid-cols-2 gap-2"><button onClick={() => setValidationAction('close')} className={`py-3 rounded border font-medium ${validationAction === 'close' ? 'bg-emerald-100 border-emerald-500 text-emerald-700' : 'bg-card border-border'}`}>Close Ticket</button><button onClick={() => setValidationAction('rework')} className={`py-3 rounded border font-medium ${validationAction === 'rework' ? 'bg-amber-100 border-amber-500 text-amber-700' : 'bg-card border-border'}`}>Return Rework</button></div>
                             {validationAction === 'rework' && <div><label className="text-xs font-semibold text-muted-foreground">Alasan Rework</label><textarea value={reworkReason} onChange={e => { setReworkReason(e.target.value); setReworkError('') }} rows={2} className={`w-full mt-1 px-3 py-2 border ${reworkError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea><FieldError msg={reworkError} /></div>}
                             <div className="flex gap-3 pt-2"><button onClick={() => { setShowValidationModal(false); setReworkError('') }} className="flex-1 py-2 bg-muted rounded">Batal</button><button onClick={handleValidationSubmit} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Proses</button></div>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+            {showConfirmReopen && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                        <h3 className="text-lg font-bold mb-3">Reopen Tiket</h3>
+                        <p className="text-sm text-muted-foreground mb-6">Apakah Anda yakin ingin membuka kembali tiket ini? Status akan kembali ke <strong>Dikerjakan</strong> (WORKING).</p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowConfirmReopen(false)} className="flex-1 py-2 bg-muted rounded font-medium">Tidak</button>
+                            <button onClick={handleReopen} className="flex-1 py-2 bg-blue-600 text-white rounded font-bold">Ya, Reopen</button>
                         </div>
                     </div>
                 </div>
@@ -893,7 +917,7 @@ export default function HPInbox() {
                                         </button>
                                         <button onClick={handleRemoteClick} disabled={submitting} className="flex flex-col items-center justify-center gap-1.5 p-3.5 rounded-[3px] bg-emerald-600 text-white hover:bg-emerald-700 transition-colors group disabled:opacity-50">
                                             <span className="inline-flex p-2 rounded-full bg-white/20 group-hover:bg-white/30 transition"><Headset className="w-4 h-4" /></span>
-                                            <span className="text-xs font-bold">Selesai Remote</span>
+                                            <span className="text-xs font-bold">Selesaikan Remote</span>
                                         </button>
                                     </div>
                                 </div>

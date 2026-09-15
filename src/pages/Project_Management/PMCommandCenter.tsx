@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
-import { Search, Table, LayoutGrid, Filter, User, Ban, AlertTriangle, ChevronDown, Check, X } from 'lucide-react'
+import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
@@ -13,7 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/pop
 import SchedulePicker from '../../components/SchedulePicker'
 import { getTechnicians } from '../../services/users'
 import { getPendingAlarm, getPendingHours } from '../../lib/pendingAlarm'
-import { getBackupRequest, approveBackup, rejectBackup, getSupportMemberIds, type BackupRequest } from '../../services/ticketService'
+import { getBackupRequest, approveBackup, rejectBackup, approvePending, rejectPending, getSupportMemberIds, type BackupRequest } from '../../services/ticketService'
 import { SEGMENTS } from '../../lib/constants'
 import { useIsMobile } from '../../lib/platform'
 
@@ -22,7 +22,7 @@ const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
 
 export default function PMCommandCenter() {
-    const { tickets, updateTicketStatus, assignTicket, refreshTickets } = useTickets()
+    const { tickets, assignTicket, refreshTickets } = useTickets()
     const isMobile = useIsMobile()
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
     const [activeSegment, setActiveSegment] = useState('semua')
@@ -34,11 +34,14 @@ export default function PMCommandCenter() {
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [showReassignModal, setShowReassignModal] = useState(false)
-    const [showVetoModal, setShowVetoModal] = useState(false)
+    const [showPendingDecision, setShowPendingDecision] = useState(false)
+    const [pendingDecision, setPendingDecision] = useState<'approve' | 'reject' | null>(null)
+    const [pendingBusy, setPendingBusy] = useState(false)
+    const [pendingNote, setPendingNote] = useState('')
+    const [pendingErrors, setPendingErrors] = useState<{ decision?: string }>({})
     const [confirmAssign, setConfirmAssign] = useState<null | { teknisi: string; teknisiId: string; scheduleDate: string; scheduleTime: string; isOvertime: boolean; supportIds: string[] }>(null)
     const [assignErrors, setAssignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string }>({})
     const [reassignErrors, setReassignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string; reason?: string }>({})
-    const [vetoErrors, setVetoErrors] = useState<{ reason?: string }>({})
     const [backupReq, setBackupReq] = useState<BackupRequest | null>(null)
     const [backupBusy, setBackupBusy] = useState(false)
 
@@ -196,16 +199,45 @@ export default function PMCommandCenter() {
         closeModals()
     }
 
-    const handleVetoPending = () => {
-        if (!actionReason.trim()) { setVetoErrors({ reason: 'Mohon isi alasan veto' }); return }
-        setVetoErrors({})
-        updateTicketStatus(selectedTicket!.id, 'WORKING', `Veto Pending oleh PM. Alasan: ${actionReason}. SLA dilanjutkan.`)
-        closeModals()
+    const handlePendingApprove = async () => {
+        if (!selectedTicket || pendingBusy) return
+        setPendingBusy(true)
+        const ok = await approvePending(selectedTicket.id, pendingNote.trim() || undefined)
+        setPendingBusy(false)
+        if (ok) {
+            toast.success('Pengajuan pending disetujui.')
+            closeModals()
+            await refreshTickets()
+        } else {
+            toast.error('Gagal menyetujui pengajuan pending.')
+        }
+    }
+
+    const handlePendingReject = async () => {
+        if (!selectedTicket || pendingBusy) return
+        setPendingBusy(true)
+        const ok = await rejectPending(selectedTicket.id, pendingNote.trim() || undefined)
+        setPendingBusy(false)
+        if (ok) {
+            toast.success('Pengajuan pending ditolak — tiket lanjut kerja.')
+            closeModals()
+            await refreshTickets()
+        } else {
+            toast.error('Gagal menolak pengajuan pending.')
+        }
+    }
+
+    const handleSendPendingDecision = () => {
+        if (!pendingDecision) { setPendingErrors({ decision: 'Pilih keputusan dulu.' }); return }
+        setPendingErrors({})
+        if (pendingDecision === 'approve') handlePendingApprove()
+        else handlePendingReject()
     }
 
     const closeModals = () => {
-        setShowAssignModal(false); setShowReassignModal(false); setShowVetoModal(false)
-        setConfirmAssign(null); setAssignErrors({}); setReassignErrors({}); setVetoErrors({})
+        setShowAssignModal(false); setShowReassignModal(false); setShowPendingDecision(false)
+        setPendingDecision(null); setPendingNote(''); setPendingErrors({})
+        setConfirmAssign(null); setAssignErrors({}); setReassignErrors({})
         setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleTime(''); setCalendarOpen(false); setActionReason('')
     }
 
@@ -420,8 +452,8 @@ export default function PMCommandCenter() {
                                 </button>
                             )}
                             {selectedTicket.status === 'PENDING' && (
-                                <button onClick={() => setShowVetoModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-600 text-white rounded-[3px] font-bold hover:bg-red-700 transition">
-                                    <Ban className="w-4 h-4" /> Veto Pending (Lanjutkan Kerja)
+                                <button onClick={() => setShowPendingDecision(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-700 text-white rounded-[3px] font-bold hover:bg-neutral-800 transition">
+                                    <AlertTriangle className="w-4 h-4" /> Proses Pengajuan Pending
                                 </button>
                             )}
                             {['WORKING', 'RESOLVED'].includes(selectedTicket.status) && (
@@ -719,21 +751,49 @@ export default function PMCommandCenter() {
                 </div>
             ), document.body)}
             
-            {/* 3. MODAL VETO PENDING */}
-            {showVetoModal && createPortal((
+            {/* 3. MODAL PROSES PENGAJUAN PENDING */}
+            {showPendingDecision && selectedTicket && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-red-700"><Ban className="w-5 h-5" /> Veto Status Pending</h3>
-                        <p className="text-sm text-muted-foreground mb-4">Tindakan ini akan membatalkan status Pending dan mengembalikan tiket ke WORKING. SLA akan dilanjutkan.</p>
+                        <h3 className="text-lg font-bold mb-1 flex items-center gap-2 text-foreground"><AlertTriangle className="w-5 h-5 text-amber-600" /> Proses Pengajuan Pending</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Tiket <b className="text-foreground">{selectedTicket.code}</b></p>
+                        <div className="mb-4 p-3 bg-muted rounded-md text-sm">
+                            <span className="block text-xs font-semibold text-muted-foreground mb-1">Alasan teknisi mengajukan pending</span>
+                            <span className="whitespace-pre-wrap text-foreground">{(() => {
+                                const a = selectedTicket.activities?.find(x => x.details?.startsWith('Ditunda:'))
+                                return a?.details?.split(' | Foto')[0]?.replace(/^Ditunda:\s*/, '') || '-'
+                            })()}</span>
+                        </div>
                         <div className="space-y-4">
                             <div>
-                                <label className="text-xs font-semibold text-muted-foreground">Alasan Veto (Wajib)</label>
-                                <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setVetoErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border ${vetoErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Alasan pending tidak valid, segera lanjutkan pekerjaan"></textarea>
-                                <FieldError msg={vetoErrors.reason} />
+                                <label className="text-xs font-semibold text-muted-foreground">Keputusan PM</label>
+                                <div className="grid grid-cols-2 gap-3 mt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setPendingDecision('approve'); setPendingErrors(prev => ({ ...prev, decision: undefined })) }}
+                                        className={`flex flex-col items-center gap-1 py-3 rounded border font-bold text-sm transition ${pendingDecision === 'approve' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-border bg-card hover:bg-muted'}`}
+                                    >
+                                        <Check className="w-4 h-4" /> Boleh Pending
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setPendingDecision('reject'); setPendingErrors(prev => ({ ...prev, decision: undefined })) }}
+                                        className={`flex flex-col items-center gap-1 py-3 rounded border font-bold text-sm transition ${pendingDecision === 'reject' ? 'border-red-600 bg-red-50 text-red-700' : 'border-border bg-card hover:bg-muted'}`}
+                                    >
+                                        <X className="w-4 h-4" /> Tidak Boleh
+                                    </button>
+                                </div>
+                                <FieldError msg={pendingErrors.decision} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-muted-foreground">Catatan untuk teknisi (opsional)</label>
+                                <textarea value={pendingNote} onChange={e => setPendingNote(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm outline-none resize-none" placeholder={`Contoh: ${pendingDecision === 'approve' ? 'Alasan diterima, lanjut setelah kendala selesai.' : 'Alasan pending kurang valid, segera lanjutkan pekerjaan.'}`}></textarea>
                             </div>
                             <div className="flex gap-3 pt-2">
-                                <button onClick={() => setShowVetoModal(false)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
-                                <button onClick={handleVetoPending} className="flex-1 py-2 bg-red-600 text-white rounded font-bold">Veto & Lanjutkan</button>
+                                <button onClick={() => setShowPendingDecision(false)} disabled={pendingBusy} className="flex-1 py-2 bg-muted rounded font-medium disabled:opacity-50">Batal</button>
+                                <button onClick={handleSendPendingDecision} disabled={pendingBusy} className="flex-1 py-2 bg-neutral-700 text-white rounded font-bold disabled:opacity-50">
+                                    {pendingBusy ? 'Memproses...' : 'Kirim Keputusan'}
+                                </button>
                             </div>
                         </div>
                     </div>

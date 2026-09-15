@@ -17,6 +17,7 @@ export async function getTechnicians(): Promise<Array<{ id: string; name: string
     .select("id, full_name")
     .or("role.eq.teknisi,roles.like.%teknisi%")
     .eq("is_deleted", false)
+    .eq("status", "aktif")
     .order("full_name");
   return (data || []).map((u) => ({ id: u.id, name: u.full_name || u.id }));
 }

@@ -213,7 +213,7 @@ export default function MobileLayout() {
               ) : (
                 <div className="p-4 space-y-2">
                   {notifs.map((n) => {
-                    const actionable = n.ticket_id && notifCount > 0
+                    const actionable = n.ticket_id && n.title?.startsWith('Minta pengalihan:')
                     return (
                       <div key={n.id} className={`flex flex-col items-start py-3 px-3.5 bg-muted rounded-xl ${n.read ? 'opacity-60' : ''}`}>
                         <span className="text-sm font-medium text-foreground">{n.title}</span>

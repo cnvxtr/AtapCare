@@ -40,7 +40,6 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
 
 const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
   { value: "aktif", label: "Aktif" },
-  { value: "cuti", label: "Cuti" },
   { value: "nonaktif", label: "Nonaktif" },
 ];
 
@@ -553,9 +552,7 @@ export function AdminUsers() {
                         className={`text-[10px] font-medium px-2 py-0.5 rounded ${
                           u.status === "aktif"
                             ? "bg-green-100 text-green-700"
-                            : u.status === "cuti"
-                              ? "bg-yellow-100 text-yellow-700"
-                              : "bg-red-100 text-red-700"
+                            : "bg-red-100 text-red-700"
                         }`}
                       >
                         {STATUS_OPTIONS.find((s) => s.value === u.status)?.label || u.status}
@@ -765,9 +762,7 @@ export function AdminUsers() {
                         formStatus === s.value
                           ? s.value === "aktif"
                             ? "bg-green-600 text-white border-green-600"
-                            : s.value === "cuti"
-                              ? "bg-yellow-500 text-white border-yellow-500"
-                              : "bg-red-600 text-white border-red-600"
+                            : "bg-red-600 text-white border-red-600"
                           : "border-border text-muted-foreground hover:border-foreground/40"
                       }`}
                     >
