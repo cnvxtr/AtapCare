@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation } from 'react-router-dom'
 import { Star, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
@@ -8,22 +9,39 @@ import { supabase } from '../../lib/supabase'
 
 // Popup rating global untuk customer: muncul otomatis di halaman mana pun saat
 // tiket jadi CLOSED & belum dirating (data dari useTickets yang Realtime), tanpa
-// harus klik tiket dulu. "Nanti Saja" menahan tiket itu sampai halaman di-reload.
+// harus klik tiket dulu.
+// - Halaman non-detail: "Nanti Saja" menahan popup sampai reload / sampai buka detail.
+// - Halaman detail: popup hanya untuk tiket yang dibuka, sebagai reminder. Dismiss
+//   hanya menahan pada kunjungan itu (location.key); buka ulang → reminder kembali.
 export default function RatingWatcher() {
   const { user } = useAuth()
   const { tickets } = useTickets()
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set())
+  const location = useLocation()
+  const [globalDismissed, setGlobalDismissed] = useState<Set<string>>(new Set())
+  const [suppressedKey, setSuppressedKey] = useState<string | null>(null)
+
+  const viewingCode = location.pathname.startsWith('/customer/ticket/')
+    ? location.pathname.split('/')[3]
+    : null
 
   const target = useMemo(() => {
     if (user?.role !== 'customer') return null
+    const closedUnrated = (t: Ticket) => t.status === 'CLOSED' && t.rating == null
+    if (viewingCode) {
+      const t = tickets.find(x => x.code === viewingCode)
+      return t && closedUnrated(t) && location.key !== suppressedKey ? t : null
+    }
     return tickets
-      .filter(t => t.status === 'CLOSED' && t.rating == null && !dismissed.has(t.id))
+      .filter(t => closedUnrated(t) && !globalDismissed.has(t.id))
       .sort((a, b) => new Date(b.closedAt || b.createdAt).getTime() - new Date(a.closedAt || a.createdAt).getTime())[0] ?? null
-  }, [tickets, dismissed, user?.role])
+  }, [tickets, globalDismissed, viewingCode, suppressedKey, location.key, user?.role])
 
   if (!target) return null
 
-  const dismiss = () => setDismissed(prev => new Set(prev).add(target.id))
+  const dismiss = () => {
+    setGlobalDismissed(prev => new Set(prev).add(target.id))
+    if (viewingCode) setSuppressedKey(location.key)
+  }
 
   return <RatingModal key={target.id} ticket={target} onClose={dismiss} />
 }
