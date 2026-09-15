@@ -14,6 +14,7 @@ import { registerPush, playChime } from '../../lib/pushNotifications'
 import { ROLE_LABELS } from '../../services/users'
 import ErrorBoundary from '../ErrorBoundary'
 import BottomTabs from './BottomTabs'
+import RatingWatcher from '../customer/RatingWatcher'
 
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -312,6 +313,7 @@ export default function MobileLayout() {
           </div>
         </div>
       ), document.body)}
+      <RatingWatcher />
     </div>
   )
 }

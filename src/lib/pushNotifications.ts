@@ -2,6 +2,9 @@ import { supabase } from '@/lib/supabase'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
 
+// Key VAPID yang terakhir dipakai, untuk mendeteksi rotasi key (lihat doSubscribe).
+const VAPID_STORAGE_KEY = 'atap_vapid_key'
+
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   const padding = '='.repeat((4 - (base64.length % 4)) % 4)
   const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/')
@@ -32,12 +35,21 @@ async function doSubscribe(userId: string): Promise<void> {
     // Pakai subscription yang masih ada — jangan unsubscribe lalu subscribe ulang
     // tiap login: browser sering memberi endpoint baru sehingga baris menumpuk di DB.
     let sub = await reg.pushManager.getSubscription()
+    // Rotasi VAPID: subscription lama terikat key lama → push service menolak kiriman
+    // dengan key baru (403). Detek lewat localStorage; bila beda, unsubscribe lalu
+    // subscribe ulang SEKALI dengan key sekarang.
+    const storedVapid = localStorage.getItem(VAPID_STORAGE_KEY)
+    if (sub && storedVapid && storedVapid !== VAPID_PUBLIC_KEY) {
+      await sub.unsubscribe()
+      sub = null
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY!),
       })
     }
+    localStorage.setItem(VAPID_STORAGE_KEY, VAPID_PUBLIC_KEY!)
     await upsertSubscription(userId, sub)
 
     // Kunci berubah / endpoint kadaluarsa: resubscribe otomatis.

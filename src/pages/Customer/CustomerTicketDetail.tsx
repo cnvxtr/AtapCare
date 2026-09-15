@@ -4,7 +4,6 @@ import { useTickets } from '../../context/TicketContext'
 import { supabase } from '../../lib/supabase'
 import { Badge } from '../../components/Badge'
 import { ArrowLeft, Star, MessageSquare, Image, FileText, X, ChevronLeft, ChevronRight, Download } from 'lucide-react'
-import { toast } from 'sonner'
 import {
   InfoCard,
   formatWIB,
@@ -120,12 +119,8 @@ export default function CustomerTicketDetail() {
   const { tickets } = useTickets()
   const ticket = tickets.find(t => t.code === ticketCode)
 
-  const [rating, setRating] = useState(0)
-  const [review, setReview] = useState('')
-  const [existingRating, setExistingRating] = useState<number | null>(() => ticket?.rating ?? null)
-  const [existingReview, setExistingReview] = useState<string | null>(() => ticket?.review ?? null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [ratingOpen, setRatingOpen] = useState(false)
+  const existingRating = ticket?.rating ?? null
+  const existingReview = ticket?.review ?? null
   const [rootCauseMap, setRootCauseMap] = useState<Map<string, string>>(new Map())
   const [preview, setPreview] = useState<{ photos: { src: string; url: string }[]; index: number } | null>(null)
   const [gpsCoords, setGpsCoords] = useState<Record<string, string>>({})
@@ -139,13 +134,8 @@ export default function CustomerTicketDetail() {
     return () => { active = false }
   }, [ticket?.rootCauseId])
 
-  // Buka popup rating otomatis saat tiket CLOSED & belum dirated (reminder; bisa di-close,
-  // muncul lagi saat halaman dibuka ulang selama rating belum diisi).
-  useEffect(() => {
-    if (ticket?.status === 'CLOSED' && existingRating === null) {
-      setRatingOpen(true)
-    }
-  }, [ticket?.status, existingRating])
+  // Popup rating kini global via RatingWatcher (muncul di halaman mana pun saat
+  // tiket CLOSED & belum dirating); halaman ini hanya menampilkan hasil rating.
 
   // Fetch GPS coords for timeline location details
   useEffect(() => {
@@ -235,22 +225,6 @@ export default function CustomerTicketDetail() {
       }
     })
   }, [ticket, gpsCoords])
-
-  const handleSubmitRating = async () => {
-    if (!ticket || rating === 0) return
-    setIsSubmitting(true)
-    const { error } = await supabase.rpc('submit_rating', {
-      p_ticket_id: ticket.id,
-      p_rating: rating,
-      p_review: review.trim() || null,
-    })
-    setIsSubmitting(false)
-    if (error) { toast.error('Gagal mengirim rating.'); return }
-    setExistingRating(rating)
-    setExistingReview(review.trim() || null)
-    setRatingOpen(false)
-    toast.success('Rating berhasil dikirim!')
-  }
 
   if (!ticket) {
     return (
@@ -438,41 +412,6 @@ export default function CustomerTicketDetail() {
       </div>
 
       {/* Penilaian */}
-      {ratingOpen && createPortal(
-        <div className="fixed inset-0 z-[120] bg-black/80 flex items-center justify-center p-4 animate-[fade-in_0.2s_ease]" onClick={() => setRatingOpen(false)}>
-          <div className="bg-card w-full max-w-sm rounded-lg border border-border p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-4">
-              <h2 className="font-display font-bold flex items-center gap-2">
-                <Star className="h-4 w-4" /> Beri Penilaian
-              </h2>
-              <button onClick={() => setRatingOpen(false)} className="p-1.5 bg-foreground text-background rounded-[3px] hover:opacity-80 transition" aria-label="Tutup">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">Seberapa baik pelayanan yang Anda terima untuk tiket {ticket.code}?</p>
-            <div className="flex gap-1 mb-4">
-              {[1, 2, 3, 4, 5].map(star => (
-                <button key={star} onClick={() => setRating(star)}
-                  className={`p-1 transition ${star <= rating ? 'text-amber-400' : 'text-muted-foreground hover:text-amber-300'}`}>
-                  <Star className="h-6 w-6 fill-current" />
-                </button>
-              ))}
-            </div>
-            <textarea rows={3} value={review} onChange={e => setReview(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm resize-none mb-3"
-              placeholder="Tulis ulasan Anda..." />
-            <button onClick={handleSubmitRating} disabled={rating === 0 || isSubmitting}
-              className="w-full py-2 bg-foreground text-background rounded-[5px] text-sm font-semibold hover:opacity-90 transition disabled:opacity-50">
-              {isSubmitting ? 'Mengirim...' : 'Kirim Penilaian'}
-            </button>
-            <button onClick={() => setRatingOpen(false)} className="w-full py-2 mt-2 bg-muted text-foreground rounded-[5px] text-sm font-medium hover:opacity-90 transition">
-              Nanti Saja
-            </button>
-          </div>
-        </div>,
-        document.body,
-      )}
-
       {existingRating !== null && (
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="font-display font-bold mb-3 flex items-center gap-2">

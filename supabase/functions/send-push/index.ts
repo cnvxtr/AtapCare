@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
       } catch (err: unknown) {
         const e = err as { statusCode?: number; status?: number };
         const code = e?.statusCode ?? e?.status;
-        if (code === 404 || code === 410 || code === 403) {
+        if (code === 404 || code === 410) {
           await supabase.from("push_subscriptions").delete().eq("endpoint", s.endpoint);
         }
       }

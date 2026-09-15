@@ -22,6 +22,7 @@ import { approveBackup, rejectBackup } from '../../services/ticketService'
 import { getStoredTheme, setTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
 import ErrorBoundary from '../ErrorBoundary'
+import RatingWatcher from '../customer/RatingWatcher'
 import { ROLE_LABELS } from '../../services/users'
 import { resolveAvatarUrl } from '../../services/photoService'
 
@@ -443,6 +444,7 @@ export default function MainLayout() {
           </div>
         </div>
       ), document.body)}
+      <RatingWatcher />
     </div>
   )
 }

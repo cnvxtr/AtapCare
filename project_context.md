@@ -76,6 +76,7 @@ src/
     ui/                           # shadcn/ui primitives (20 files)
     Badge.tsx                     # Status/priority badge
     TicketDrawer.tsx              # Off-canvas ticket detail (540+ lines)
+    customer/RatingWatcher.tsx    # Global customer rating popup (any page, on CLOSED)
     Reveal.tsx                    # Scroll-reveal animation wrapper
     TroubleshootCards.tsx         # Landing page troubleshooting steps
     [SiteHeader, SiteFooter, DateRangePicker, FieldError, etc.]
@@ -87,7 +88,7 @@ src/
     export.ts                     # CSV/XLSX export utilities
     pendingAlarm.ts               # PENDING ticket stale alarm (>8h)
     platform.ts                   # isNativePlatform() + useIsMobile()
-    pushNotifications.ts          # Web Push subscription + chime audio
+    pushNotifications.ts          # Web Push subscription + chime audio + VAPID rotation resubscribe
     status.ts                     # Field statuses constant
     supabase.ts                   # Supabase client init
     theme.ts                      # Dark/light mode persistence
@@ -271,9 +272,17 @@ holidays → SLA calculation
 ## Known Technical Debt
 
 1. **Tickets reference site/unit by NAME not FK** — legacy design. Reports work around with name-matching maps.
-2. **Web push unreliable on mobile HTTP** — Chrome blocks notifications from non-HTTPS origins. Will use FCM via `@capacitor/push-notifications` for native app.
-3. **pg_net trigger broken** — `app.settings.service_role_key = null` in postgres.conf. DB Webhook used as alternative trigger for push.
-4. **Multiple stale push subscriptions** — Each login creates new subscription. Old ones accumulate. Need periodic cleanup.
+2. **Web push unreliable on mobile HTTP** — Chrome blocks notifications from non-HTTPS origins. `localhost` is a secure context (push works); native app will use FCM via `@capacitor/push-notifications`.
+3. **pg_net trigger broken** — `app.settings.service_role_key = null` in postgres.conf. DB Webhook used as alternative trigger for push. Response bodies readable via `net._http_response` (columns: `status_code`, `body`... verify with `information_schema`).
+4. **Stale push subscriptions** — mitigated: frontend reuses existing subscription, `send-push` keeps newest 20/user and deletes endpoints only on `404`/`410`, and `pushNotifications.ts` auto-resubscribes when the VAPID key changes. Periodic cleanup no longer urgent.
+
+## Push Notifications — Ops Notes
+
+- **VAPID key lives in 3 places and must match:** `.env` → `VITE_VAPID_PUBLIC_KEY`, Edge Function secret → `VAPID_PUBLIC_KEY`, and secret → `VAPID_PRIVATE_KEY` (`VAPID_SUBJECT` = `mailto:ops@atapcare.id`). Generate a pair with `node scripts/vapid-keys.mjs` (private key prints to stdout only).
+- **Mismatch symptom:** sends return 403 → `sent: 0` in `send-push`, no toast (in-app bell/chime keeps working via polling).
+- **After rotating the key:** `.env` change needs a dev-server restart (Vite reads env at startup). Existing browsers hold an old-key subscription; `doSubscribe` auto-resubscribes because the used key is stored in `localStorage` (`atap_vapid_key`). Manual fallback: DevTools → Application → Service Workers → Unregister + reset site notification permission + reload + Allow.
+- **Demo multi-role:** one browser profile per account (profile = isolated session + push endpoint). Do NOT use multiple InPrivate windows — they share one session. `push_subscriptions` row per user is correct only with separate profiles.
+- **DB webhook fires on `notifications` INSERT** (default `push = true`). In-app notifications for customer/executive come from `update_ticket_status` (migrations 49/61).
 
 ## Supabase Project
 
