@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { supabase } from '../lib/supabase'
 import { useAuth } from './AuthContext'
@@ -8,6 +8,10 @@ import { uploadAttachment } from '../services/photoService'
 
 export type TicketStatus = 'NEW' | 'OPEN' | 'UNASSIGNED' | 'SCHEDULED' | 'EN_ROUTE' | 'WORKING' | 'PENDING' | 'RESOLVED' | 'CLOSED' | 'VOID' | 'DUPLICATE' | 'REJECTED'
 export type Priority = 'Critical' | 'Medium' | 'Low'
+
+// Toast realtime ke teknisi: keputusan PM atas pengajuan pending-nya. Deteksi
+// lewat transisi `pending_requested_at` per tiket milik teknisi (snapshot ref
+// sekali pakai), BUKAN lewat string action — jadi tidak re-toast tiap fetch.
 
 export interface TicketActivity {
     id: string
@@ -157,10 +161,17 @@ interface TicketContextType {
 
 const TicketContext = createContext<TicketContextType | undefined>(undefined)
 
+// Snapshot nilai pending per tiket milik teknisi — buat deteksi transisi
+// (sedang menunggu keputusan PM → disetujui/ditolak) sekali pakai via ref,
+// biar toast realtime tidak re-trigger tiap fetch / noise realtime.
+type PendingSnapshot = Record<string, { status: string; pendingRequestedAt: string | null }>
+
 export const TicketProvider = ({ children }: { children: ReactNode }) => {
     const [tickets, setTickets] = useState<Ticket[]>([])
     const [loading, setLoading] = useState(true)
     const { user } = useAuth()
+
+    const prevPendingRef = useRef<PendingSnapshot>({})
 
     const fetchTickets = useCallback(async () => {
         const { data, error } = await supabase
@@ -172,10 +183,44 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             console.error('Error fetching tickets:', error)
         } else {
             const rows = (data || []) as SupabaseTicketRow[]
+            const current: PendingSnapshot = {}
+
+            for (const r of rows) {
+                current[r.id] = {
+                    status: r.status,
+                    pendingRequestedAt: r.pending_requested_at ?? null,
+                }
+            }
+
+            // Keputusan PM (approve/reject kepengajuan pending) → toast realtime ke
+            // teknisi pemilik tiket. Snapshot transisi sekali pakai via ref, jadi tidak
+            // re-toast tiap fetch/realtime noise. Submisi pending oleh teknisi sendiri
+            // tetap senyap (tidak ada transition dari prev yang ditolak).
+            if (user?.id) {
+                for (const r of rows) {
+                    if (r.assigned_to !== user.id) continue
+                    const prev = prevPendingRef.current[r.id]
+                    if (!prev) continue
+                    const now = current[r.id]
+                    if (prev.pendingRequestedAt) {
+                        if (now.pendingRequestedAt && now.status === 'PENDING' && prev.status !== 'PENDING') {
+                            toast.success('Pengajuan pending disetujui PM', {
+                                description: `${r.code}: tiket dialihkan ke status pending.`,
+                            })
+                        } else if (!now.pendingRequestedAt) {
+                            toast.error('Pengajuan pending ditolak PM', {
+                                description: `${r.code}: kembali ke pekerjaan.`,
+                            })
+                        }
+                    }
+                }
+            }
+
+            prevPendingRef.current = current
             setTickets(rows.map((r) => mapTicketRow(r)))
         }
         setLoading(false)
-    }, [])
+    }, [user])
 
     useEffect(() => {
         if (!user) {

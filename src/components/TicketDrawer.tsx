@@ -450,6 +450,10 @@ export function extractAttachments(items: { timestamp?: string; action?: string;
     const all: { src: string; when: string; isClient: boolean }[] = []
     for (const act of items) {
         if (!act.details) continue
+        // Foto bukti pengajuan pending cukup berada di form pengajuan saja beserta
+        // alasannya — jangan membanjiri galeri "Dokumentasi" drawer. Keputusan PM
+        // tetap di timeline drawer & bukti tetap terlihat oleh PM via PendingEvidence.
+        if (act.action === 'Pengajuan pending') continue
         for (const m of act.details.matchAll(PHOTO_SRC_RE)) {
             all.push({ src: m[0], when: act.timestamp ?? '', isClient: isClientActivity(act.action) || isClientPhotoPath(m[0]) })
         }
