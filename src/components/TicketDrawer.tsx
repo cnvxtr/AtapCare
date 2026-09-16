@@ -115,7 +115,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
     )
 }
 
-function PhotoLightbox({ images, index, onClose, titles }: { images: string[]; index: number; onClose: () => void; titles?: string[] }) {
+export function PhotoLightbox({ images, index, onClose, titles }: { images: string[]; index: number; onClose: () => void; titles?: string[] }) {
     const [current, setCurrent] = useState(index)
     const hasPrev = current > 0
     const hasNext = current < images.length - 1

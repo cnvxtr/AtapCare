@@ -267,6 +267,15 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
     ) => {
         if (!user) return false
 
+        const currentTicket = tickets.find(t => t.id === id)
+        const closedAt = currentTicket?.closedAt ? new Date(currentTicket.closedAt).getTime() : null
+        if (currentTicket?.status === 'CLOSED' && newStatus !== 'CLOSED') {
+            if (!closedAt || Date.now() - closedAt > 7 * 24 * 60 * 60 * 1000) {
+                toast.error('Tiket sudah ditutup dan tidak dapat di-reopen (sudah lebih dari 7 hari).')
+                return false
+            }
+        }
+
         const actionMap: Record<TicketStatus, string> = {
             'NEW': 'Status diubah ke Baru', 'OPEN': 'Tiket divalidasi',
             'UNASSIGNED': 'Tiket dieskalasi ke PM Lead', 'SCHEDULED': 'Tiket dijadwalkan',

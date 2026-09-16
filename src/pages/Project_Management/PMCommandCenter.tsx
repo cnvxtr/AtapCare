@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock, Download } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath, downloadFromUrl } from '../../components/TicketDrawer'
+import TicketDrawer, { PhotoLightbox, TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath, downloadFromUrl } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
@@ -25,12 +25,15 @@ const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
 // Bukti pengajuan pending yang dilihat PM: alasan (parse benar) + thumbnail foto/file dari teknisi.
 function PendingEvidence({ details }: { details?: string }) {
     const [urls, setUrls] = useState<Record<string, string>>({})
+    const [preview, setPreview] = useState<{ images: string[]; index: number } | null>(null)
     const tokens = useMemo(() => (details || '').split(/\r?\n/).filter(isFileToken), [details])
     useEffect(() => {
         let active = true
         resolvePhotos(tokens).then((m) => { if (active) setUrls(m) })
         return () => { active = false }
     }, [tokens])
+    const photoUrls = useMemo(() => tokens.map(t => isImageFileByPath(t) ? urls[t] : undefined).filter((u): u is string => !!u), [tokens, urls])
+    const photoTitles = useMemo(() => tokens.filter(t => isImageFileByPath(t)).map(t => t.split('/').pop() || 'foto'), [tokens])
     const reason = useMemo(() => (details || '').split(/\nFoto:| \| Foto/)[0].replace(/^Ditunda:\s*/, '').trim() || '-', [details])
     return (
         <>
@@ -44,7 +47,7 @@ function PendingEvidence({ details }: { details?: string }) {
                         return (
                             <div key={i} className="relative">
                                 {isImageFileByPath(p)
-                                    ? <a href={u} target="_blank" rel="noopener" className="block border border-border rounded overflow-hidden"><img src={u} alt={`Bukti ${i + 1}`} className="w-full h-16 object-cover" loading="lazy" /></a>
+                                    ? <button type="button" onClick={() => setPreview({ images: photoUrls, index: photoUrls.indexOf(u) }) } className="block w-full cursor-zoom-in bg-foreground/5 border border-border rounded overflow-hidden text-left"><img src={u} alt={`Bukti ${i + 1}`} className="w-full h-16 object-cover" loading="lazy" /></button>
                                     : <a href={u} target="_blank" rel="noopener" className="flex items-center justify-center px-2 py-3 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:border-foreground/40 transition text-center break-all">{name}</a>}
                                 <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadFromUrl(u, name) }} title="Download" aria-label="Download" className="absolute bottom-1 right-1 p-1 rounded bg-background/90 border border-border text-muted-foreground hover:text-foreground transition">
                                     <Download className="w-3 h-3" />
@@ -54,6 +57,7 @@ function PendingEvidence({ details }: { details?: string }) {
                     })}
                 </div>
             )}
+            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} titles={photoTitles} />}
         </>
     )
 }
