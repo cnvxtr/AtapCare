@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
@@ -14,12 +14,41 @@ import SchedulePicker from '../../components/SchedulePicker'
 import { getTechnicians } from '../../services/users'
 import { getPendingAlarm, getPendingHours } from '../../lib/pendingAlarm'
 import { getBackupRequest, approveBackup, rejectBackup, approvePending, rejectPending, getSupportMemberIds, type BackupRequest } from '../../services/ticketService'
+import { resolvePhotos } from '../../services/photoService'
 import { SEGMENTS } from '../../lib/constants'
 import { useIsMobile } from '../../lib/platform'
 
 // SEGMEN STATUS FLOW TIKET (persis helpdesk)
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
+
+// Bukti pengajuan pending yang dilihat PM: alasan (parse benar) + thumbnail foto/file dari teknisi.
+function PendingEvidence({ details }: { details?: string }) {
+    const [urls, setUrls] = useState<Record<string, string>>({})
+    const tokens = useMemo(() => (details || '').split(/\r?\n/).filter(isFileToken), [details])
+    useEffect(() => {
+        let active = true
+        resolvePhotos(tokens).then((m) => { if (active) setUrls(m) })
+        return () => { active = false }
+    }, [tokens])
+    const reason = useMemo(() => (details || '').split(/\nFoto:| \| Foto/)[0].replace(/^Ditunda:\s*/, '').trim() || '-', [details])
+    return (
+        <>
+            <span className="whitespace-pre-wrap text-foreground">{reason}</span>
+            {tokens.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                    {tokens.map((p, i) => {
+                        const u = urls[p]
+                        if (!u) return null
+                        return isImageFileByPath(p)
+                            ? <a key={i} href={u} target="_blank" rel="noopener" className="block border border-border rounded overflow-hidden"><img src={u} alt={`Bukti ${i + 1}`} className="w-full h-16 object-cover" loading="lazy" /></a>
+                            : <a key={i} href={u} target="_blank" rel="noopener" className="flex items-center justify-center px-2 py-3 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition break-all">{p.split('/').pop()}</a>
+                    })}
+                </div>
+            )}
+        </>
+    )
+}
 
 export default function PMCommandCenter() {
     const { tickets, assignTicket, refreshTickets, updateTicketStatus } = useTickets()
@@ -247,8 +276,11 @@ export default function PMCommandCenter() {
                 `Veto pending oleh PM${vetoNote.trim() ? ' — Catatan: ' + vetoNote.trim() : ''}. SLA dilanjutkan.`
             )
             if (done) {
+                toast.success('Veto diterapkan — tiket dilanjutkan ke Dikerjakan.')
                 setShowVetoResume(false)
                 setVetoNote('')
+                setSelectedTicket(null)
+                setBackupReq(null)
             }
         } finally {
             setVetoBusy(false)
@@ -792,12 +824,9 @@ export default function PMCommandCenter() {
                         <h3 className="text-lg font-bold mb-1 flex items-center gap-2 text-foreground"><AlertTriangle className="w-5 h-5 text-amber-600" /> Proses Pengajuan Pending</h3>
                         <p className="text-sm text-muted-foreground mb-4">Tiket <b className="text-foreground">{selectedTicket.code}</b></p>
                         <div className="mb-4 p-3 bg-muted rounded-md text-sm">
-                            <span className="block text-xs font-semibold text-muted-foreground mb-1">Alasan teknisi mengajukan pending</span>
-                            <span className="whitespace-pre-wrap text-foreground">{(() => {
-                                const a = selectedTicket.activities?.find(x => x.details?.startsWith('Ditunda:'))
-                                return a?.details?.split(' | Foto')[0]?.replace(/^Ditunda:\s*/, '') || '-'
-                            })()}</span>
-                        </div>
+                                <span className="block text-xs font-semibold text-muted-foreground mb-1">Alasan teknisi mengajukan pending</span>
+                                <PendingEvidence details={selectedTicket.activities?.find(x => x.details?.startsWith('Ditunda:'))?.details} />
+                            </div>
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Keputusan PM</label>
