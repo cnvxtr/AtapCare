@@ -108,6 +108,15 @@ export async function rejectPending(ticketId: string, note?: string): Promise<bo
   return !error
 }
 
+export async function requestPending(ticketId: string, reason: string, photoPaths: string[]): Promise<boolean> {
+  const { error } = await supabase.rpc("request_pending", {
+    p_ticket_id: ticketId,
+    p_reason: reason.trim() || null,
+    p_photo_paths: photoPaths.length ? photoPaths.join("\n") : null,
+  })
+  return !error
+}
+
 // Teknisi pendukung (role 'teknisi' di ticket_assignments) yang sedang ditugaskan.
 // Dipakai prefill form ganti teknisi; lead ada di tickets.assigned_to.
 export async function getSupportMemberIds(ticketId: string): Promise<string[]> {

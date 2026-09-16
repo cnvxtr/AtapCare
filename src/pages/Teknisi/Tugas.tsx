@@ -14,7 +14,7 @@ import { Badge } from '../../components/Badge'
 import { Combobox } from '../../components/ui/combobox'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime, formatJadwal } from '../../components/TicketDrawer'
 import { uploadAttachment } from '../../services/photoService'
-import { recordGps, requestBackup, setTicketCatalog } from '../../services/ticketService'
+import { recordGps, requestBackup, requestPending, setTicketCatalog } from '../../services/ticketService'
 import { problemCategoriesApi, rootCausesApi } from '../../services/master-data'
 
 type TabType = 'detail' | 'timeline'
@@ -28,7 +28,7 @@ const TABS = [
 
 export default function TugasTeknisi() {
     const { user } = useAuth()
-    const { tickets, updateTicketStatus } = useTickets()
+    const { tickets, updateTicketStatus, refreshTickets } = useTickets()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<TabType>('detail')
     const [activeSection, setActiveSection] = useState('masuk')
@@ -146,12 +146,16 @@ export default function TugasTeknisi() {
         setPendingError('')
         setPendingSubmitting(true)
         try {
-            let details = `Ditunda: ${pendingReason.trim()}`
-            if (pendingPhotos.length) {
-                const paths = await Promise.all(pendingPhotos.map((f) => uploadAttachment(f, selectedTicket.code)))
-                details += ` | Foto (${paths.length}):\n${paths.join('\n')}`
+            const paths = pendingPhotos.length
+                ? await Promise.all(pendingPhotos.map((f) => uploadAttachment(f, selectedTicket.code)))
+                : []
+            const ok = await requestPending(selectedTicket.id, pendingReason.trim(), paths)
+            if (!ok) {
+                toast.error('Gagal mengajukan pending. Pastikan belum ada pengajuan yang menunggu persetujuan PM.')
+            } else {
+                toast.success('Pengajuan pending terkirim — menunggu persetujuan PM.')
             }
-            await handleStatusUpdate(selectedTicket.id, 'PENDING', details)
+            await refreshTickets()
         } catch {
             toast.error('Gagal mengunggah foto bukti. Coba lagi.')
         } finally {
@@ -352,17 +356,28 @@ export default function TugasTeknisi() {
                             )}
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'EN_ROUTE' && (
                                 canTravel ? (
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <button onClick={() => setShowPendingModal(true)}
-                                            className="min-h-[44px] bg-transparent text-amber-600 border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
-                                            <PauseCircle className="w-4 h-4" /> Ajukan Pending
-                                        </button>
-                                        <button onClick={() => handleMulaiKerja(selectedTicket)}
-                                            disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
-                                            className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                                            {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
-                                        </button>
-                                    </div>
+                                    selectedTicket.pendingRequestedAt ? (
+                                        <div className="space-y-3">
+                                            <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa mulai bekerja.</p>
+                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
+                                                disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
+                                                className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                                {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => setShowPendingModal(true)}
+                                                className="min-h-[44px] bg-transparent text-amber-600 border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
+                                                <PauseCircle className="w-4 h-4" /> Ajukan Pending
+                                            </button>
+                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
+                                                disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
+                                                className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                                {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
+                                            </button>
+                                        </div>
+                                    )
                                 ) : (
                                     <p className="text-center text-sm text-muted-foreground italic">
                                         Belum waktunya mulai kerja. Jadwal {jadwal ? formatJadwal(jadwal) : '-'}.
@@ -370,19 +385,29 @@ export default function TugasTeknisi() {
                                 )
                             )}
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'WORKING' && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button onClick={() => setShowPendingModal(true)}
-                                        className="min-h-[44px] bg-card text-foreground border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-accent/50 transition">
-                                        <PauseCircle className="w-4 h-4" /> Ajukan Pending
-                                    </button>
-                                    <button onClick={() => setShowCompleteModal(true)}
-                                        className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
-                                        <CheckCircle2 className="w-4 h-4" /> Selesaikan
-                                    </button>
-                                </div>
+                                selectedTicket.pendingRequestedAt ? (
+                                    <div className="space-y-3">
+                                        <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa menyelesaikan pekerjaan.</p>
+                                        <button onClick={() => setShowCompleteModal(true)}
+                                            className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4" /> Selesaikan
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button onClick={() => setShowPendingModal(true)}
+                                            className="min-h-[44px] bg-card text-foreground border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-accent/50 transition">
+                                            <PauseCircle className="w-4 h-4" /> Ajukan Pending
+                                        </button>
+                                        <button onClick={() => setShowCompleteModal(true)}
+                                            className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4" /> Selesaikan
+                                        </button>
+                                    </div>
+                                )
                             )}
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'PENDING' && (
-                                <p className="text-center text-sm text-muted-foreground italic">Menunggu keputusan PM untuk melanjutkan.</p>
+                                <p className="text-center text-sm text-muted-foreground italic">Tiket dijeda — pengajuan disetujui PM. Lanjutkan setelah siap.</p>
                             )}
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'RESOLVED' && (
                                 <p className="text-center text-sm text-muted-foreground italic">Menunggu validasi Helpdesk</p>

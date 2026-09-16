@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
-import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X } from 'lucide-react'
+import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
@@ -22,7 +22,7 @@ const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
 
 export default function PMCommandCenter() {
-    const { tickets, assignTicket, refreshTickets } = useTickets()
+    const { tickets, assignTicket, refreshTickets, updateTicketStatus } = useTickets()
     const isMobile = useIsMobile()
     const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
     const [activeSegment, setActiveSegment] = useState('semua')
@@ -39,6 +39,9 @@ export default function PMCommandCenter() {
     const [pendingBusy, setPendingBusy] = useState(false)
     const [pendingNote, setPendingNote] = useState('')
     const [pendingErrors, setPendingErrors] = useState<{ decision?: string }>({})
+    const [showVetoResume, setShowVetoResume] = useState(false)
+    const [vetoNote, setVetoNote] = useState('')
+    const [vetoBusy, setVetoBusy] = useState(false)
     const [confirmAssign, setConfirmAssign] = useState<null | { teknisi: string; teknisiId: string; scheduleDate: string; scheduleTime: string; isOvertime: boolean; supportIds: string[] }>(null)
     const [assignErrors, setAssignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string }>({})
     const [reassignErrors, setReassignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string; reason?: string }>({})
@@ -234,6 +237,24 @@ export default function PMCommandCenter() {
         else handlePendingReject()
     }
 
+    const handleVetoResume = async () => {
+        if (!selectedTicket || vetoBusy) return
+        setVetoBusy(true)
+        try {
+            const done = await updateTicketStatus(
+                selectedTicket.id,
+                'WORKING',
+                `Veto pending oleh PM${vetoNote.trim() ? ' — Catatan: ' + vetoNote.trim() : ''}. SLA dilanjutkan.`
+            )
+            if (done) {
+                setShowVetoResume(false)
+                setVetoNote('')
+            }
+        } finally {
+            setVetoBusy(false)
+        }
+    }
+
     const closeModals = () => {
         setShowAssignModal(false); setShowReassignModal(false); setShowPendingDecision(false)
         setPendingDecision(null); setPendingNote(''); setPendingErrors({})
@@ -345,6 +366,11 @@ export default function PMCommandCenter() {
                                                             <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
                                                         </div>
                                                     )}
+                                                    {t.pendingRequestedAt && (
+                                                        <div className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] bg-sky-100 text-sky-700 ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
+                                                            <Clock className="h-2 w-2" /> Menunggu persetujuan PM
+                                                        </div>
+                                                    )}
                                                     <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
                                                         <div className="flex items-center gap-1 min-w-0">
                                                             <User className="h-2 w-2 shrink-0 text-muted-foreground" />
@@ -387,6 +413,9 @@ export default function PMCommandCenter() {
                                                 </td>
                                                 <td className="p-4">
                                                     <Badge type="status" value={ticket.status} />
+                                                    {ticket.pendingRequestedAt && (
+                                                        <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-sky-700"><Clock className="h-3 w-3" /> menunggu persetujuan PM</div>
+                                                    )}
                                                 </td>
                                             </tr>
                                         ))
@@ -451,9 +480,14 @@ export default function PMCommandCenter() {
                                     <User className="w-4 h-4" /> Ganti Teknisi
                                 </button>
                             )}
-                            {selectedTicket.status === 'PENDING' && (
-                                <button onClick={() => setShowPendingDecision(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-700 text-white rounded-[3px] font-bold hover:bg-neutral-800 transition">
+                            {['WORKING', 'EN_ROUTE'].includes(selectedTicket.status) && selectedTicket.pendingRequestedAt && (
+                                <button onClick={() => setShowPendingDecision(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-600 text-white rounded-[3px] font-bold hover:bg-amber-700 transition">
                                     <AlertTriangle className="w-4 h-4" /> Proses Pengajuan Pending
+                                </button>
+                            )}
+                            {selectedTicket.status === 'PENDING' && (
+                                <button onClick={() => setShowVetoResume(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-600 text-white rounded-[3px] font-bold hover:bg-red-700 transition">
+                                    <Pause className="w-4 h-4" /> Veto Pending (Lanjutkan Kerja)
                                 </button>
                             )}
                             {['WORKING', 'RESOLVED'].includes(selectedTicket.status) && (
@@ -795,6 +829,26 @@ export default function PMCommandCenter() {
                                     {pendingBusy ? 'Memproses...' : 'Kirim Keputusan'}
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* 4. MODAL VETO PENDING (Lanjutkan Kerja) */}
+            {showVetoResume && selectedTicket && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                        <h3 className="text-lg font-bold mb-1 flex items-center gap-2 text-foreground"><Pause className="w-5 h-5 text-red-600" /> Veto Pending (Lanjutkan Kerja)</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Tiket <b className="text-foreground">{selectedTicket.code}</b> kembali aktif (Dikerjakan) dan SLA dilanjutkan.</p>
+                        <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Catatan untuk teknisi (opsional)</label>
+                            <textarea value={vetoNote} onChange={e => setVetoNote(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm outline-none resize-none" placeholder="Contoh: kendala sudah selesai, lanjutkan pekerjaan hingga tuntas."></textarea>
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => setShowVetoResume(false)} disabled={vetoBusy} className="flex-1 py-2 bg-muted rounded font-medium disabled:opacity-50">Batal</button>
+                            <button onClick={handleVetoResume} disabled={vetoBusy} className="flex-1 py-2 bg-red-600 text-white rounded font-bold disabled:opacity-50">
+                                {vetoBusy ? 'Memproses...' : 'Veto & Lanjutkan Kerja'}
+                            </button>
                         </div>
                     </div>
                 </div>
