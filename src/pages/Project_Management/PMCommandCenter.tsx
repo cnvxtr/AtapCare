@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useTickets, type Ticket } from '../../context/TicketContext'
-import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock } from 'lucide-react'
+import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock, Download } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath, downloadFromUrl } from '../../components/TicketDrawer'
 import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
@@ -37,12 +37,20 @@ function PendingEvidence({ details }: { details?: string }) {
             <span className="whitespace-pre-wrap text-foreground">{reason}</span>
             {tokens.length > 0 && (
                 <div className="grid grid-cols-3 gap-2 mt-3">
-                    {tokens.map((p, i) => {
+{tokens.map((p, i) => {
                         const u = urls[p]
                         if (!u) return null
-                        return isImageFileByPath(p)
-                            ? <a key={i} href={u} target="_blank" rel="noopener" className="block border border-border rounded overflow-hidden"><img src={u} alt={`Bukti ${i + 1}`} className="w-full h-16 object-cover" loading="lazy" /></a>
-                            : <a key={i} href={u} target="_blank" rel="noopener" className="flex items-center justify-center px-2 py-3 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:text-foreground hover:border-foreground/40 transition break-all">{p.split('/').pop()}</a>
+                        const name = p.split('/').pop() || `bukti-${i + 1}`
+                        return (
+                            <div key={i} className="relative">
+                                {isImageFileByPath(p)
+                                    ? <a href={u} target="_blank" rel="noopener" className="block border border-border rounded overflow-hidden"><img src={u} alt={`Bukti ${i + 1}`} className="w-full h-16 object-cover" loading="lazy" /></a>
+                                    : <a href={u} target="_blank" rel="noopener" className="flex items-center justify-center px-2 py-3 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:border-foreground/40 transition text-center break-all">{name}</a>}
+                                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadFromUrl(u, name) }} title="Download" aria-label="Download" className="absolute bottom-1 right-1 p-1 rounded bg-background/90 border border-border text-muted-foreground hover:text-foreground transition">
+                                    <Download className="w-3 h-3" />
+                                </button>
+                            </div>
+                        )
                     })}
                 </div>
             )}
@@ -825,7 +833,9 @@ export default function PMCommandCenter() {
                         <p className="text-sm text-muted-foreground mb-4">Tiket <b className="text-foreground">{selectedTicket.code}</b></p>
                         <div className="mb-4 p-3 bg-muted rounded-md text-sm">
                                 <span className="block text-xs font-semibold text-muted-foreground mb-1">Alasan teknisi mengajukan pending</span>
-                                <PendingEvidence details={selectedTicket.activities?.find(x => x.details?.startsWith('Ditunda:'))?.details} />
+                                <PendingEvidence details={[...(selectedTicket.activities ?? [])]
+                                    .filter(x => x.details?.startsWith('Ditunda:'))
+                                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]?.details} />
                             </div>
                         <div className="space-y-4">
                             <div>
