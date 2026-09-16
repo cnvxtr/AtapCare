@@ -315,6 +315,10 @@ export default function HPInbox() {
         if (remoteResult === 'fail') {
             updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', `Remote Gagal via ${remoteMedia} (${remoteDuration} menit). Catatan: ${remoteNotes}`)
             setShowRemoteModal(false); setSelectedTicket(null)
+        } else if (selectedTicket!.status === 'WORKING') {
+            // Jalur reopen/rework: langsung tutup tanpa validasi ulang.
+            updateTicketStatus(selectedTicket!.id, 'CLOSED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
+            setShowRemoteModal(false); setSelectedTicket(null)
         } else {
             updateTicketStatus(selectedTicket!.id, 'RESOLVED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
             setShowConfirmPath(true)
@@ -335,7 +339,7 @@ export default function HPInbox() {
     const handleReopen = () => {
         if (!selectedTicket) return
         updateTicketStatus(selectedTicket.id, 'WORKING', 'Tiket dibuka kembali (reopen) oleh Helpdesk.')
-        setShowConfirmReopen(false); setSelectedTicket(null)
+        setShowConfirmReopen(false)
     }
 
     const handleConfirmPathA = () => {
@@ -540,7 +544,7 @@ export default function HPInbox() {
                                     </div>
                                 </>
                             )}
-                            {liveTicket.status === 'OPEN' && (
+                            {(liveTicket.status === 'OPEN' || liveTicket.status === 'WORKING') && (
                                 <>
                                     <button onClick={() => { setEscCategoryId(liveTicket.categoryId || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
                                     <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
@@ -555,7 +559,10 @@ export default function HPInbox() {
                             {liveTicket.status === 'CLOSED' && (
                                 <button onClick={() => setShowConfirmReopen(true)} className="w-full py-2.5 bg-blue-600 text-white rounded-[3px] font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
                             )}
-                            {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
+                            {liveTicket.status === 'WORKING' && (
+                                <p className="text-center text-xs text-muted-foreground italic">Tiket ditindaklanjuti: Eskalasi ke PM atau Selesaikan Remote.</p>
+                            )}
+                            {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'PENDING', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
                                 <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
                             )}
                         </>
