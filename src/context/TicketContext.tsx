@@ -48,6 +48,7 @@ export interface Ticket {
     pendingRequestedAt?: string | null
     rating?: number | null
     review?: string | null
+    reworkFlag?: boolean
     activities: TicketActivity[]
 }
 
@@ -63,6 +64,7 @@ interface SupabaseTicketRow {
     priority?: Priority
     created_at: string
     closed_at?: string
+    rework_flag?: boolean
     photo_url?: string
     resolved_by?: 'helpdesk' | 'technician'
     category?: string
@@ -119,6 +121,7 @@ function mapTicketRow(t: SupabaseTicketRow): Ticket {
         updatedAt: t.updated_at,
         pendingRequestedAt: t.pending_requested_at ?? null,
         rating: t.rating ?? null,
+        reworkFlag: t.rework_flag ?? false,
         review: t.review ?? null,
         activities: (t.activities || [])
             .slice()
@@ -203,15 +206,22 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
                     if (!prev) continue
                     const now = current[r.id]
                     if (prev.pendingRequestedAt) {
-                        if (now.pendingRequestedAt && now.status === 'PENDING' && prev.status !== 'PENDING') {
+                        // Approve & reject sama-sama menghapus flag (migrasi 68); pembeda
+                        // hanya status akhir: PENDING = disetujui, tetap WORKING/EN_ROUTE = ditolak.
+                        if (now.status === 'PENDING') {
                             toast.success('Pengajuan pending disetujui PM', {
                                 description: `${r.code}: tiket dialihkan ke status pending.`,
                             })
-                        } else if (!now.pendingRequestedAt) {
+                        } else if (!now.pendingRequestedAt && (now.status === 'WORKING' || now.status === 'EN_ROUTE')) {
                             toast.error('Pengajuan pending ditolak PM', {
                                 description: `${r.code}: kembali ke pekerjaan.`,
                             })
                         }
+                    } else if (!now.pendingRequestedAt && prev.status === 'PENDING' && now.status === 'WORKING') {
+                        // Veto PM (PENDING → WORKING) satu-satunya jalur keluar PENDING.
+                        toast.error('Pengajuan pending di-veto PM (lanjutkan kerja)', {
+                            description: `${r.code}: tiket kembali ke status dikerjakan.`,
+                        })
                     }
                 }
             }

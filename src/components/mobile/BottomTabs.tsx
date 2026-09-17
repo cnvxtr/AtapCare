@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Inbox, FileBarChart2, Users, Building2,
-  LayoutGrid, ClipboardList,
+  LayoutGrid, ClipboardList, Star,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { resolveAvatarUrl } from '../../services/photoService'
@@ -26,6 +26,7 @@ const TABS: Record<string, TabItem[]> = {
     { path: '/admin/users', icon: Users, label: 'Pengguna' },
     { path: '/admin/master-data', icon: Building2, label: 'Data' },
     { path: '/admin/reports', icon: FileBarChart2, label: 'Laporan' },
+    { path: '/admin/ratings', icon: Star, label: 'Nilai' },
   ],
   pm: [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Beranda' },
@@ -93,7 +94,7 @@ className="absolute -top-3 left-1/2 -ml-4 h-[2px] w-8 rounded-full bg-foreground
                   />
                 </span>
                 <span
-                  className={`text-[10px] leading-none transition-colors duration-200 ${
+                  className={`w-full truncate px-0.5 text-[10px] leading-none text-center transition-colors duration-200 ${
                     active ? 'text-foreground font-semibold' : 'text-muted-foreground'
                   }`}
                 >

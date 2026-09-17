@@ -49,7 +49,8 @@ BEGIN
   END IF;
 
   IF v_old_status = 'CLOSED' AND p_new_status = 'WORKING' THEN
-    IF (SELECT closed_at FROM tickets WHERE id = p_ticket_id) < now() - interval '7 days' THEN
+    IF (SELECT closed_at IS NULL OR closed_at < now() - interval '7 days'
+        FROM tickets WHERE id = p_ticket_id) THEN
       RAISE EXCEPTION 'forbidden: closed more than 7 days, cannot reopen';
     END IF;
   END IF;

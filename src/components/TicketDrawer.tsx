@@ -395,20 +395,26 @@ export function getAssignmentInfo(items: { action: string; details?: string }[])
         const m = detail.match(JADWAL_RE)
         return m ? `${m[1]} ${m[2]}` : undefined
     }
+    let teknisi: string | undefined
+    let jadwal: string | undefined
+    // Aktivitas terbaru dulu; teknisi diambil dari penyebut penugasan terakhir
+    // (termasuk 'Pengalihan disetujui' → lead baru), jadwal dari detail 'Jadwal:'
+    // terakhir. Iterasi lanjut sampai keduanya ketemu.
     for (const act of [...items].reverse()) {
         const detail = act.details || ''
-        if (act.action.startsWith('Tiket ditugaskan ke')) {
-            return { teknisi: act.action.replace('Tiket ditugaskan ke', '').trim(), jadwal: toJadwal(detail) }
+        if (teknisi === undefined) {
+            if (act.action.startsWith('Tiket ditugaskan ke')) {
+                teknisi = act.action.replace('Tiket ditugaskan ke', '').trim()
+            } else if (detail.startsWith('Ditugaskan ke')) {
+                teknisi = detail.match(/^Ditugaskan ke (.+?)\.(?:\s*Jadwal:)?/)?.[1]?.trim()
+            } else if (act.action === 'Pengalihan disetujui' && detail.startsWith('Penanggung jawab dialihkan ke ')) {
+                teknisi = detail.match(/^Penanggung jawab dialihkan ke (.+?)(?:\s*\(sebelumnya [^)]*\))?$/)?.[1]?.trim()
+            }
         }
-        if (detail.startsWith('Ditugaskan ke')) {
-            const teknisi = detail.match(/^Ditugaskan ke (.+?)\.(?:\s*Jadwal:)?/)?.[1]?.trim()
-            return { teknisi, jadwal: toJadwal(detail) }
-        }
-        if (detail.startsWith('Jadwal:')) {
-            return { jadwal: toJadwal(detail) }
-        }
+        if (jadwal === undefined) jadwal = toJadwal(detail)
+        if (teknisi !== undefined && jadwal !== undefined) break
     }
-    return {}
+    return { teknisi, jadwal }
 }
 
 export function formatJadwal(jadwal: string): string {

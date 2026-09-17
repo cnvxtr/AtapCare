@@ -544,7 +544,13 @@ export default function HPInbox() {
                                     </div>
                                 </>
                             )}
-                            {(liveTicket.status === 'OPEN' || liveTicket.status === 'WORKING') && (
+                            {liveTicket.status === 'OPEN' && (
+                                <>
+                                    <button onClick={() => { setEscCategoryId(liveTicket.categoryId || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
+                                    <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
+                                </>
+                            )}
+                            {(liveTicket.status === 'WORKING' && liveTicket.reworkFlag) && (
                                 <>
                                     <button onClick={() => { setEscCategoryId(liveTicket.categoryId || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
                                     <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
@@ -557,10 +563,14 @@ export default function HPInbox() {
                                 </>
                             )}
                             {liveTicket.status === 'CLOSED' && (
-                                <button onClick={() => setShowConfirmReopen(true)} className="w-full py-2.5 bg-blue-600 text-white rounded-[3px] font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
+                                liveTicket.closedAt && Date.now() - new Date(liveTicket.closedAt).getTime() <= 7 * 24 * 60 * 60 * 1000 ? (
+                                    <button onClick={() => setShowConfirmReopen(true)} className="w-full py-2.5 bg-blue-600 text-white rounded-[3px] font-medium hover:bg-blue-700 transition">Reopen Tiket</button>
+                                ) : (
+                                    <p className="text-center text-xs text-muted-foreground italic">Tiket ditutup lebih dari 7 hari — tidak dapat di-reopen.</p>
+                                )
                             )}
-                            {liveTicket.status === 'WORKING' && (
-                                <p className="text-center text-xs text-muted-foreground italic">Tiket ditindaklanjuti: Eskalasi ke PM atau Selesaikan Remote.</p>
+                            {(liveTicket.status === 'WORKING' && !liveTicket.reworkFlag) && (
+                                <p className="text-center text-xs text-muted-foreground italic">Tiket tengah dikerjakan teknisi — menunggu penyelesaian.</p>
                             )}
                             {(['UNASSIGNED', 'SCHEDULED', 'EN_ROUTE', 'PENDING', 'VOID', 'DUPLICATE'] as string[]).includes(liveTicket.status) && (
                                 <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
