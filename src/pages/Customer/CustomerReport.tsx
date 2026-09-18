@@ -81,7 +81,6 @@ export default function CustomerReport() {
 
     return (
         <div className="max-w-2xl mx-auto">
-            <h1 className="text-2xl font-display font-bold tracking-tight mb-6">Lapor Kendala</h1>
             <form onSubmit={handleSubmit} className="bg-card border border-border rounded-lg p-6 space-y-4">
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Perusahaan</label>

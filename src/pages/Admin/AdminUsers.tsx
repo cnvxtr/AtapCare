@@ -105,6 +105,20 @@ export function AdminUsers() {
     loadUsers();
   }, []);
 
+  // Segarkan saat halaman kembali fokus — data admin tidak basi antar-sesi.
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState === "visible") loadUsers();
+    };
+    window.addEventListener("focus", onShow);
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      window.removeEventListener("focus", onShow);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function loadUsers() {
     setLoading(true);
     const { data: userData } = await supabase

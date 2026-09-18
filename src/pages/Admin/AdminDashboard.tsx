@@ -4,17 +4,17 @@ import {
   Users,
   Wrench,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import {
   getAdminSystemData,
   getAdminMonthlyData,
-  getAdminFrt,
   type AdminSystemData,
   type AdminMonthlyData,
-  type AdminFrtData,
 } from "@/services";
 import AnimatedNumber from "@/components/AnimatedNumber";
+import { useTickets } from "@/context/TicketContext";
 
 const BULAN = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
@@ -65,20 +65,17 @@ function KpiCard({
 export function AdminDashboard() {
   const [data, setData] = useState<AdminSystemData | null>(null);
   const [monthly, setMonthly] = useState<AdminMonthlyData | null>(null);
-  const [frt, setFrt] = useState<AdminFrtData | null>(null);
 
   useEffect(() => {
     let active = true;
     async function load() {
-      const [d, m, f] = await Promise.all([
+      const [d, m] = await Promise.all([
         getAdminSystemData(),
         getAdminMonthlyData(),
-        getAdminFrt(),
       ]);
       if (active) {
         setData(d);
         setMonthly(m);
-        setFrt(f);
       }
     }
     load();
@@ -92,6 +89,9 @@ export function AdminDashboard() {
   const d = data || { totalUsers: 0, totalCustomers: 0, totalUnits: 0, unitDist: [] };
   const m = monthly || { ticketsDone: 0, leaderboard: [] };
   const bulanIni = BULAN[new Date().getMonth()];
+
+  const { tickets } = useTickets()
+  const avgFrt = tickets.filter(t => t.frtMinutes != null).reduce((s, t) => s + (t.frtMinutes ?? 0), 0) / (tickets.filter(t => t.frtMinutes != null).length || 1)
 
   return (
     <div className="space-y-6">
@@ -111,13 +111,19 @@ export function AdminDashboard() {
           label="Total Unit Aktif"
           value={d.totalUnits}
         />
-        <KpiCard
-          icon={<Clock className="h-4 w-4" />}
-          label={`FRT Helpdesk (${bulanIni})`}
-          value={frt && frt.responded > 0 ? frt.avgHours : "—"}
-          decimals={1}
-          suffix=" jam"
-        />
+        <div className="bg-blue-600 border border-blue-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-blue-400">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[10px] font-black text-white uppercase tracking-wider">
+                Rata-rata FRT
+              </p>
+              <h3 className="text-3xl sm:text-4xl font-display font-black text-white mt-2 tracking-tight">
+                {Math.round(avgFrt)}m
+              </h3>
+            </div>
+            <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">

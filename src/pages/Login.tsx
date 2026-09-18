@@ -8,17 +8,31 @@ import { Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
+import { isNativePlatform } from "../lib/platform";
 import { Button } from "@/components/ui/button";
 import { Input, PhoneInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import logo from "../assets/logo2.png";
+import Logo from "../components/Logo";
 
 // Pin token tema light di panel kanan agar kartu selalu putih walau dark mode aktif
 // (dipakai ulang oleh halaman ResetPassword agar tampilannya konsisten)
 export const LIGHT =
   "[--background:0_0%_98.5%] [--foreground:0_0%_14.5%] [--card:0_0%_100%] [--card-foreground:0_0%_14.5%] [--primary:0_0%_14.5%] [--primary-foreground:0_0%_98.5%] [--secondary:0_0%_95.5%] [--secondary-foreground:0_0%_14.5%] [--muted:0_0%_95.5%] [--muted-foreground:0_0%_48%] [--accent:0_0%_93%] [--accent-foreground:0_0%_14.5%] [--border:0_0%_72%] [--ring:0_0%_14.5%] [--destructive:27_24.5%_57.7%] [--destructive-foreground:0_0%_98.5%]";
+
+// Blok brand Atap Care di kartu auth utk layar < lg (mobile & tablet):
+// logo + wordmark, menggantikan judul "Selamat Datang Kembali" di layar kecil.
+function AuthBrand() {
+  return (
+    <div className="flex flex-col items-center gap-1 lg:hidden">
+      <Logo className="h-10 w-10 rounded-xl object-contain" />
+      <span className="font-display text-sm font-bold uppercase tracking-[0.2em] text-foreground">Atap Care</span>
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground">PT Atap Teknologi Indonesia</span>
+    </div>
+  );
+}
 
 /* ---------------- Schemas ---------------- */
 
@@ -125,8 +139,9 @@ function SignInView({
   return (
     <motion.div {...viewMotion} className="p-8">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Selamat Datang Kembali</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Masuk ke akun Atap Care Anda</p>
+        <AuthBrand />
+        <h1 className="hidden lg:block text-3xl font-semibold tracking-tight text-foreground">Selamat Datang Kembali</h1>
+        <p className="mt-2 text-sm text-muted-foreground hidden lg:block">Masuk ke akun Atap Care Anda</p>
       </div>
 
       {justRegistered && (
@@ -254,8 +269,9 @@ function SignUpView({
   return (
     <motion.div {...viewMotion} className="p-8">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Buat Akun</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Mulai kelola laporan kendala Anda</p>
+        <AuthBrand />
+        <h1 className="hidden lg:block text-3xl font-semibold tracking-tight text-foreground">Buat Akun</h1>
+        <p className="mt-2 text-sm text-muted-foreground hidden lg:block">Mulai kelola laporan kendala Anda</p>
       </div>
 
       <AuthError message={error} />
@@ -403,9 +419,15 @@ function ForgotView({ onBack }: { onBack: () => void }) {
       return;
     }
     setBusy(true);
+    // Di app (Capacitor) `window.location.origin` adalah https://localhost yang
+    // tak bisa dibuka dari email → pakai VITE_WEB_URL bila diisi saat deploy.
+    const base =
+      isNativePlatform() && import.meta.env.VITE_WEB_URL
+        ? import.meta.env.VITE_WEB_URL
+        : window.location.origin;
     // Diam saja untuk email tak terdaftar (anti-enumeration)
     await supabase.auth.resetPasswordForEmail(value, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${base}/reset-password`,
     });
     setBusy(false);
     // Pesan generik apa pun hasilnya — jangan bocorkan akun mana yang terdaftar
@@ -415,8 +437,9 @@ function ForgotView({ onBack }: { onBack: () => void }) {
   return (
     <motion.div {...viewMotion} className="p-8">
       <div className="mb-8 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Lupa Kata Sandi</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <AuthBrand />
+        <h1 className="hidden lg:block text-3xl font-semibold tracking-tight text-foreground">Lupa Kata Sandi</h1>
+        <p className="mt-2 text-sm text-muted-foreground hidden lg:block">
           Masukkan email terdaftar Anda, tautan atur ulang akan dikirim ke email tersebut.
         </p>
       </div>
@@ -478,7 +501,7 @@ export default function Login() {
   const [justRegistered, setJustRegistered] = useState(false);
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
+    <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2">
       <div className="bg-neutral-900 relative hidden flex-col p-10 md:p-12 lg:flex min-h-full">
         <div className="absolute inset-0 noise-overlay pointer-events-none" />
         <div className="absolute inset-0 z-[1]">

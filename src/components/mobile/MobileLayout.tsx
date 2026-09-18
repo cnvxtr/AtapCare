@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import { LogOut, Sun, Moon, Bell, ChevronDown, Check } from 'lucide-react'
 import {
   getMyNotifications, getUnreadCount, markAllRead, markNotificationRead,
@@ -24,7 +25,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/command-center': 'Command Center',
   '/admin': 'Dashboard',
   '/admin/users': 'Pengguna',
-  '/admin/master-data': 'Master Data',
+  '/admin/master-data': 'Data Induk',
   '/admin/reports': 'Laporan',
   '/admin/ratings': 'Penilaian Helpdesk',
   '/customer': 'Dashboard',
@@ -65,7 +66,13 @@ export default function MobileLayout() {
     }
     refresh()
     const t = setInterval(refresh, 30_000)
-    return () => { alive = false; clearInterval(t) }
+    // Realtime: notifikasi baru langsung memicu refresh (chime/badge instan),
+    // tanpa menunggu 30 dtk. Polling tetap ada sebagai jaring pengaman.
+    const ch = supabase
+      .channel('realtime-notifications')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => refresh())
+      .subscribe()
+    return () => { alive = false; clearInterval(t); supabase.removeChannel(ch) }
   }, [user])
 
   useEffect(() => {
@@ -152,7 +159,7 @@ export default function MobileLayout() {
           >
             <Bell className="h-5 w-5" />
             {notifCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 h-4.5 min-w-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold grid place-items-center">
+              <span className="absolute top-1.5 right-1.5 h-5 min-w-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold grid place-items-center">
                 {notifCount > 9 ? '9+' : notifCount}
               </span>
             )}

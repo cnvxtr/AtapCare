@@ -155,6 +155,7 @@ interface AddTicketData {
 interface TicketContextType {
     tickets: Ticket[]
     loading: boolean
+    supportTickets: Set<string>
     updateTicketStatus: (id: string, newStatus: TicketStatus, actionDetails?: string, newPriority?: Priority, resolvedBy?: 'helpdesk' | 'technician', rejectionReason?: string, duplicateOf?: string | null) => Promise<boolean>
     assignTicket: (id: string, technicianId: string | null, technicianName?: string, note?: string, supportIds?: string[]) => Promise<void>
     addTicket: (data: AddTicketData) => Promise<Ticket | null>
@@ -172,6 +173,7 @@ type PendingSnapshot = Record<string, { status: string; pendingRequestedAt: stri
 export const TicketProvider = ({ children }: { children: ReactNode }) => {
     const [tickets, setTickets] = useState<Ticket[]>([])
     const [loading, setLoading] = useState(true)
+    const [supportTickets, setSupportTickets] = useState<Set<string>>(new Set())
     const { user } = useAuth()
 
     const prevPendingRef = useRef<PendingSnapshot>({})
@@ -229,6 +231,18 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             prevPendingRef.current = current
             setTickets(rows.map((r) => mapTicketRow(r)))
         }
+
+        // Membership support (telig sebagai support, bukan lead) — ikut refresh
+        // di tiap fetch agar selaras dengan Realtime ticket_assignments.
+        if (user) {
+            const { data: assignments } = await supabase
+                .from('ticket_assignments')
+                .select('ticket_id')
+                .eq('user_id', user.id)
+            setSupportTickets(new Set((assignments ?? []).map((a) => a.ticket_id)))
+        } else {
+            setSupportTickets(new Set())
+        }
         setLoading(false)
     }, [user])
 
@@ -247,6 +261,9 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
                 fetchTickets()
             })
             .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, () => {
+                fetchTickets()
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_assignments' }, () => {
                 fetchTickets()
             })
             .subscribe()
@@ -397,7 +414,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <TicketContext.Provider value={{ tickets, loading, updateTicketStatus, assignTicket, addTicket, getTicketCount, refreshTickets: fetchTickets }}>
+        <TicketContext.Provider value={{ tickets, loading, supportTickets, updateTicketStatus, assignTicket, addTicket, getTicketCount, refreshTickets: fetchTickets }}>
             {children}
         </TicketContext.Provider>
     )

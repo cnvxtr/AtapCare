@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Download, FileText, Image, MapPin, X } from 'lucide-react'
 import { Badge } from './Badge'
 import { resolvePhotos } from '../services/photoService'
@@ -33,9 +34,32 @@ interface TicketDrawerProps {
 export default function TicketDrawer({ onClose, code, status, priority, createdAt, activeTab, onTabChange, activities, footer, children, duplicateCode }: TicketDrawerProps) {
     const isMobile = useIsMobile()
     const [gps, setGps] = useState<GpsPoint[]>([])
+    const navigate = useNavigate()
+    const location = useLocation()
+    const onCloseRef = useRef(onClose)
+    onCloseRef.current = onClose
+    const closingByMe = useRef(false)
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
         ? [...(activities ?? [])].reverse().find(a => a.action === 'Tugas diselesaikan')?.timestamp
         : undefined
+
+    const close = () => {
+        closingByMe.current = true
+        if (location.state?.__atapDrawer) navigate(-1)
+        onCloseRef.current()
+    }
+
+    useEffect(() => {
+        if (!location.state?.__atapDrawer) {
+            navigate(location.pathname + location.search, { state: { __atapDrawer: true } })
+        }
+        const onPop = () => {
+            if (!closingByMe.current) onCloseRef.current()
+        }
+        window.addEventListener('popstate', onPop)
+        return () => window.removeEventListener('popstate', onPop)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     useEffect(() => {
         if (activeTab !== 'timeline') return
@@ -47,7 +71,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
     }, [activeTab, code])
 
     return createPortal(
-        <div className="fixed inset-0 bg-black/80 z-[100] flex justify-end animate-[fade-in_0.2s_ease]" onClick={onClose}>
+        <div className="fixed inset-0 bg-black/80 z-[100] flex justify-end animate-[fade-in_0.2s_ease]" onClick={close}>
             <div className={`${isMobile ? 'w-full h-full' : 'w-full max-w-2xl h-full'} bg-card/95 backdrop-blur-xl border-l border-border shadow-2xl flex flex-col drawer-enter`} onClick={(e) => e.stopPropagation()}>
                 <div className="sticky top-0 z-10 bg-card/80 backdrop-blur-xl px-4 py-2.5">
                     <div className="flex items-start justify-between gap-4">
@@ -65,7 +89,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
                                 {resolvedAt ? `${formatWIB(createdAt)} - ${formatWIB(resolvedAt)}` : formatWIB(createdAt)}
                             </p>
                         </div>
-                        <button onClick={onClose} className="p-1.5 bg-foreground text-background rounded-[5px] hover:opacity-80 transition-opacity" aria-label="Tutup">
+                        <button onClick={close} className="p-1.5 bg-foreground text-background rounded-[5px] hover:opacity-80 transition-opacity" aria-label="Tutup">
                             <X className="w-4 h-4" />
                         </button>
                     </div>

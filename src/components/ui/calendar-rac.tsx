@@ -10,7 +10,6 @@ import {
   CalendarGridHeader as CalendarGridHeaderRac,
   CalendarGrid as CalendarGridRac,
   CalendarHeaderCell as CalendarHeaderCellRac,
-  Calendar as CalendarRac,
   Heading as HeadingRac,
   RangeCalendar as RangeCalendarRac,
   composeRenderProps,
@@ -23,7 +22,6 @@ interface BaseCalendarProps {
   holidayDates?: Set<string>
 }
 
-type CalendarProps = ComponentProps<typeof CalendarRac> & BaseCalendarProps
 type RangeCalendarProps = ComponentProps<typeof RangeCalendarRac> &
   BaseCalendarProps
 
@@ -88,20 +86,6 @@ const CalendarGridComponent = ({ isRange = false, holidayDates }: { isRange?: bo
   )
 }
 
-const Calendar = ({ className, holidayDates, ...props }: CalendarProps) => {
-  return (
-    <CalendarRac
-      {...props}
-      className={composeRenderProps(className, (className) =>
-        cn("w-fit", className),
-      )}
-    >
-      <CalendarHeader />
-      <CalendarGridComponent holidayDates={holidayDates} />
-    </CalendarRac>
-  )
-}
-
 const RangeCalendar = ({ className, ...props }: RangeCalendarProps) => {
   return (
     <RangeCalendarRac
@@ -116,4 +100,4 @@ const RangeCalendar = ({ className, ...props }: RangeCalendarProps) => {
   )
 }
 
-export { Calendar, RangeCalendar }
+export { RangeCalendar }

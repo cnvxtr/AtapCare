@@ -11,13 +11,6 @@ export interface Customer {
   is_deleted: boolean;
 }
 
-export interface Region {
-  id: string;
-  customer_id?: string | null;
-  name: string;
-  is_deleted: boolean;
-}
-
 export interface SiteRow {
   id: string;
   name: string;

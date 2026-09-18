@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
 import { useTickets, type Ticket, type TicketStatus } from '../../context/TicketContext'
-import { supabase } from '../../lib/supabase'
 import {
     X, MapPin, Camera, ChevronRight,
     Clock, CheckCircle2, Pause, PauseCircle,
@@ -16,6 +15,7 @@ import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAss
 import { uploadAttachment } from '../../services/photoService'
 import { recordGps, requestBackup, requestPending, setTicketCatalog } from '../../services/ticketService'
 import { problemCategoriesApi, rootCausesApi } from '../../services/master-data'
+import { getCurrentPosition, type GeolocError } from '../../lib/geolocation'
 
 type TabType = 'detail' | 'timeline'
 
@@ -26,9 +26,18 @@ const TABS = [
     { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-muted-foreground', statuses: ['CLOSED'] },
 ]
 
+function gpsErrorMessage(err: GeolocError): string {
+    switch (err?.code) {
+        case 1: return 'Izin lokasi ditolak oleh browser. Buka pengaturan situs (ikon kunci di address bar) → Location → Allow, cek juga Lokasi Windows, lalu muat ulang.'
+        case 2: return 'Posisi tidak tersedia. Aktifkan GPS / akses jaringan, lalu coba lagi.'
+        case 3: return 'Pengambilan lokasi terlalu lama. Pastikan GPS aktif lalu coba lagi.'
+        default: return err?.message || 'Lokasi gagal ditangkap. Aktifkan GPS dan coba lagi.'
+    }
+}
+
 export default function TugasTeknisi() {
     const { user } = useAuth()
-    const { tickets, updateTicketStatus, refreshTickets } = useTickets()
+    const { tickets, updateTicketStatus, refreshTickets, supportTickets } = useTickets()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<TabType>('detail')
     const [activeSection, setActiveSection] = useState('masuk')
@@ -52,16 +61,8 @@ export default function TugasTeknisi() {
     const [isLoading, setIsLoading] = useState<string | null>(null)
     const [showLemburModal, setShowLemburModal] = useState(false)
     const [lemburTarget, setLemburTarget] = useState<Ticket | null>(null)
-    const [supportTickets, setSupportTickets] = useState<Set<string>>(new Set())
     const [backupRequested, setBackupRequested] = useState<Set<string>>(new Set())
     const [backupSubmitting, setBackupSubmitting] = useState(false)
-
-    // Tiket yang user jadi support (bukan lead) — visibilitas per RLS tambahan.
-    useEffect(() => {
-        if (!user) return
-        supabase.from('ticket_assignments').select('ticket_id').eq('user_id', user.id)
-            .then(({ data }) => setSupportTickets(new Set((data ?? []).map(d => d.ticket_id))))
-    }, [user])
 
     // Katalog untuk dropdown & label temuan awal/akhir di drawer.
     useEffect(() => {
@@ -113,28 +114,20 @@ export default function TugasTeknisi() {
         setSelectedTicket(null)
     }
 
-    const handleMulaiKerja = (ticket: Ticket) => {
-        if (!navigator.geolocation) {
-            setGpsError('GPS tidak didukung browser ini.')
-            return
-        }
+    const handleMulaiKerja = async (ticket: Ticket) => {
         setGpsError('')
         setIsLoading('gps')
-        navigator.geolocation.getCurrentPosition(
-            async (position) => {
-                const { latitude, longitude } = position.coords
-                setGpsError('')
-                setIsLoading(null)
-                const res = await recordGps(ticket.id, latitude, longitude, 'start')
-                if (!res.ok) toast.error(res.error ? `Lokasi gagal disimpan: ${res.error}` : 'Lokasi awal gagal disimpan.')
-                handleStatusUpdate(ticket.id, 'WORKING', `Pekerjaan dimulai — lokasi terverifikasi (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
-            },
-            () => {
-                setGpsError('Lokasi gagal ditangkap. Aktifkan GPS dan coba lagi.')
-                setIsLoading(null)
-            },
-            { enableHighAccuracy: true, timeout: 10000 }
-        )
+        try {
+            const { latitude, longitude } = await getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 })
+            setGpsError('')
+            setIsLoading(null)
+            const res = await recordGps(ticket.id, latitude, longitude, 'start')
+            if (!res.ok) toast.error(res.error ? `Lokasi gagal disimpan: ${res.error}` : 'Lokasi awal gagal disimpan.')
+            handleStatusUpdate(ticket.id, 'WORKING', `Pekerjaan dimulai — lokasi terverifikasi (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
+        } catch (err) {
+            setGpsError(gpsErrorMessage(err as GeolocError))
+            setIsLoading(null)
+        }
     }
 
     const handlePending = async () => {
@@ -177,13 +170,9 @@ export default function TugasTeknisi() {
             const parts = [`Selesai${completeNote ? ': ' + completeNote : ''}`]
             if (serialNumber.trim()) parts.push(`Serial Number: ${serialNumber.trim()}`)
             if (paths.length) parts.push(`Foto (${paths.length}):\n${paths.join('\n')}`)
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(
-                    (pos) => { void recordGps(selectedTicket.id, pos.coords.latitude, pos.coords.longitude, 'end') },
-                    () => {},
-                    { enableHighAccuracy: true, timeout: 8000 }
-                )
-            }
+            getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 })
+                .then((pos) => { void recordGps(selectedTicket.id, pos.latitude, pos.longitude, 'end') })
+                .catch(() => {})
             await handleStatusUpdate(selectedTicket.id, 'RESOLVED', parts.join(' | '))
             if (completeRootCause) {
                 const ok = await setTicketCatalog(selectedTicket.id, null, completeRootCause, completeRootNote.trim() || null)

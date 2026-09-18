@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
+import { supabase } from '../../lib/supabase'
 import Logo from '../Logo'
 import {
   LayoutDashboard, Inbox, ClipboardList, LayoutGrid,
@@ -41,7 +42,7 @@ const menuItems = (role?: string) =>
       ? [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/admin' },
         { icon: Users, label: 'Manajemen Pengguna', path: '/admin/users' },
-        { icon: Building2, label: 'Master Data', path: '/admin/master-data' },
+        { icon: Building2, label: 'Data Induk', path: '/admin/master-data' },
         { icon: FileBarChart2, label: 'Laporan', path: '/admin/reports' },
         { icon: Star, label: 'Penilaian Helpdesk', path: '/admin/ratings' },
       ]
@@ -98,7 +99,13 @@ export default function MainLayout() {
     refresh()
     // Polling 30 detik (blueprint 2.8.1)
     const t = setInterval(refresh, 30_000)
-    return () => { alive = false; clearInterval(t) }
+    // Realtime: notifikasi baru langsung memicu refresh (chime/badge instan),
+    // tanpa menunggu 30 dtk. Polling tetap ada sebagai jaring pengaman.
+    const ch = supabase
+      .channel('realtime-notifications')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => refresh())
+      .subscribe()
+    return () => { alive = false; clearInterval(t); supabase.removeChannel(ch) }
   }, [user])
 
   useEffect(() => {

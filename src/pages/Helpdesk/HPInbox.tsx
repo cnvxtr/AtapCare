@@ -6,7 +6,7 @@ import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, Layo
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, parseDescription } from '../../components/TicketDrawer'
 import { waMeLink } from '../../services/wa'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, selectTriggerFilter } from '../../components/ui/select'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select'
 import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
@@ -379,36 +379,38 @@ export default function HPInbox() {
 
             {/* BOX 1: Pencarian, Prioritas, Buat Tiket */}
             <div className="bg-card p-4 rounded-xl border border-border">
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
                         <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
                     </div>
-                    <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
-                        <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                            <LayoutGrid className="h-3.5 w-3.5" /> Kanban
-                        </button>
-                        <button onClick={() => setView('list')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'list' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                            <Table className="h-3.5 w-3.5" /> Tabel
+                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                        <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
+                            <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                                <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+                            </button>
+                            <button onClick={() => setView('list')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'list' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                                <Table className="h-3.5 w-3.5" /> Tabel
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <MultiSelectFilter
+                                label="Semua"
+                                selected={prioritySel}
+                                onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['Critical', 'Medium', 'Low']))}
+                                options={[
+                                    { value: 'Critical', label: 'Critical' },
+                                    { value: 'Medium', label: 'Medium' },
+                                    { value: 'Low', label: 'Low' },
+                                ]}
+                                className="px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full flex-1 gap-1"
+                            />
+                        </div>
+                        <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-foreground text-primary-foreground hover:bg-foreground/90 rounded text-sm font-medium">
+                            <Plus className="w-4 h-4" /> Buat Tiket Internal
                         </button>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <Filter className="w-4 h-4 text-muted-foreground" />
-                        <MultiSelectFilter
-                            label="Semua Prioritas"
-                            selected={prioritySel}
-                            onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['Critical', 'Medium', 'Low']))}
-                            options={[
-                                { value: 'Critical', label: 'Critical' },
-                                { value: 'Medium', label: 'Medium' },
-                                { value: 'Low', label: 'Low' },
-                            ]}
-                            className={selectTriggerFilter}
-                        />
-                    </div>
-                    <button onClick={() => setIsModalOpen(true)} className="flex items-center justify-center gap-2 px-4 py-2 bg-foreground text-primary-foreground hover:bg-foreground/90 rounded text-sm font-medium">
-                        <Plus className="w-4 h-4" /> Buat Tiket Internal
-                    </button>
                 </div>
             </div>
 
@@ -443,7 +445,7 @@ export default function HPInbox() {
                             const items = kanbanTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px]'}`}>
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px] max-w-[200px]'}`}>
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
@@ -469,9 +471,8 @@ export default function HPInbox() {
                                                 <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
                                                     <div className="flex items-center gap-1 min-w-0">
                                                         <User className="h-2 w-2 shrink-0 text-muted-foreground" />
-                                                        <span className={`text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.customer}</span>
-                                                     </div>
-                                            {formErrors.photos && <p className="text-[11px] text-red-500 mt-1.5">{formErrors.photos}</p>}
+<span className={`text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.customer}</span>
+                                                      </div>
                                         </div>
                                             </div>
                                             )
@@ -805,7 +806,7 @@ export default function HPInbox() {
                                         {!mdLoading && mdSites.length === 0 && (
                                             <div className="flex items-start gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-3">
                                                 <AlertTriangle className="h-4 w-4 shrink-0" />
-                                                <span>Belum ada Site terdaftar. Lengkapi Master Data (Admin) terlebih dahulu.</span>
+                                                <span>Belum ada Site terdaftar. Lengkapi Data Induk (Admin) terlebih dahulu.</span>
                                             </div>
                                         )}
                                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -856,7 +857,7 @@ export default function HPInbox() {
                                             </div>
                                         </div>
                                         <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Auto-fill dari Master Data Site yang dipilih
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Auto-fill dari Data Induk Site yang dipilih
                                         </p>
                                     </section>
                                     <section className="rounded-xl border border-border bg-muted/40 p-4 space-y-4">
@@ -895,6 +896,7 @@ export default function HPInbox() {
                                                 <span>Tarik & lepas foto atau file di sini, atau klik untuk memilih</span>
                                                 <input id="upload-photo-input" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple className="hidden" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
                                             </label>
+                                            <FieldError msg={formErrors.photos} />
                                             {photos.length > 0 && (
                                                 <div className="mt-2.5 flex flex-wrap gap-2">
                                                     {photos.map((p, i) => (

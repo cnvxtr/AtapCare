@@ -475,6 +475,20 @@ export function AdminMasterData() {
     loadAll();
   }, []);
 
+  // Segarkan saat halaman kembali fokus — data master tidak basi antar-sesi.
+  useEffect(() => {
+    const onShow = () => {
+      if (document.visibilityState === "visible") loadAll();
+    };
+    window.addEventListener("focus", onShow);
+    document.addEventListener("visibilitychange", onShow);
+    return () => {
+      window.removeEventListener("focus", onShow);
+      document.removeEventListener("visibilitychange", onShow);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Lazy-load katalog saat tab pertama kali dibuka.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -596,13 +610,6 @@ export function AdminMasterData() {
     }
   }
 
-  function wizSiteStepValid(): boolean {
-    // PIC/WA PIC wajib selama ada nama site — berlaku juga saat edit site lama
-    // (sebelumnya selalu true untuk site existing → bisa simpan PIC kosong).
-    if (wizSiteName.trim() === "") return true;
-    return wizPicName.trim() !== "" && wizPicPhone.trim() !== "";
-  }
-
   function goStep3() {
     if (editingId && wizSiteTarget !== NEW_ID) {
       const siteUnits = units.filter((u) => u.site_id === wizSiteTarget && !u.is_deleted);
@@ -662,11 +669,6 @@ export function AdminMasterData() {
     setSaving(true);
 
     if (formMode === "site") {
-      if (!formPicName.trim() || !formPicPhone.trim()) {
-        setSaving(false);
-        toast.error("Site wajib memiliki PIC dan No WA PIC");
-        return;
-      }
       const customerId = formCustomerId || formParentCustomerId;
       if (!customerId) {
         setSaving(false);
@@ -714,14 +716,6 @@ export function AdminMasterData() {
 
   async function handleWizardSave() {
     if (!wizCustomerName.trim()) return;
-    if (!wizCustomerPicName.trim() || !wizCustomerPicPhone.trim()) {
-      toast.error("Customer wajib memiliki PIC dan No WA PIC");
-      return;
-    }
-    if (!wizSiteStepValid()) {
-      toast.error("Site wajib memiliki PIC dan No WA PIC");
-      return;
-    }
     setSaving(true);
 
     const isEdit = !!editingId;
@@ -914,13 +908,22 @@ export function AdminMasterData() {
         : wizSiteName.trim() !== "" && !wizSiteSkipped
       : false;
 
+  const q = searchQ.trim().toLowerCase();
+  const m = (s: string) => !q || s.toLowerCase().includes(q);
+
   const filteredCustomers = customers.filter((c) => {
-    if (!searchQ) return true;
-    const q = searchQ.toLowerCase();
-    const siteHit = sites.some((s) => s.customer_id === c.id && s.name.toLowerCase().includes(q));
-    return (
-      c.name.toLowerCase().includes(q) || (c.address || "").toLowerCase().includes(q) || siteHit
-    );
+    if (!q) return true;
+    const cSites = sites.filter((s) => s.customer_id === c.id && s.is_deleted === showDeleted);
+    const siteOrUnitHit = cSites.some((s) => {
+      const siteUnits = units.filter(
+        (u) => u.site_id === s.id && u.is_deleted === showDeleted,
+      );
+      return (
+        m(s.name) ||
+        siteUnits.some((u) => m(u.name) || m(u.serial_number || "") || m(u.type || ""))
+      );
+    });
+    return m(c.name) || m(c.address || "") || siteOrUnitHit;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE));
@@ -977,7 +980,7 @@ export function AdminMasterData() {
           setSearchQ(e.target.value);
           setPage(1);
         }}
-        placeholder="Cari customer, site, unit…"
+        placeholder="Cari perusahaan, site, unit…"
         className="pl-9 pr-4 h-9 rounded-lg border border-border bg-card text-sm outline-none focus:ring-2 focus:ring-foreground/20 transition w-full text-foreground"
       />
           </div>
@@ -985,7 +988,7 @@ export function AdminMasterData() {
             onClick={openAddCustomer}
             className="h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
           >
-            <Plus className="h-3.5 w-3.5" /> Tambah Customer
+            <Plus className="h-3.5 w-3.5" /> Tambah Perusahaan
           </button>
         </div>
       </div>
@@ -1008,7 +1011,7 @@ export function AdminMasterData() {
           <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
             <Database className="h-10 w-10 mb-2" />
             <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>
-            <p className="text-xs mt-1">Gunakan tombol Tambah Customer untuk memulai</p>
+            <p className="text-xs mt-1">Gunakan tombol Tambah Perusahaan untuk memulai</p>
           </div>
         ) : (
           <>
@@ -1036,9 +1039,20 @@ export function AdminMasterData() {
               </thead>
               <tbody>
                 {paginatedTop.map((c) => {
-                  const cSites = sites.filter(
-                    (s) => s.customer_id === c.id && s.is_deleted === showDeleted,
-                  );
+                  const cSites = sites
+                    .filter((s) => s.customer_id === c.id && s.is_deleted === showDeleted)
+                    .filter((s) => {
+                      if (!q) return true;
+                      const siteUnits = units.filter(
+                        (u) => u.site_id === s.id && u.is_deleted === showDeleted,
+                      );
+                      return (
+                        m(s.name) ||
+                        siteUnits.some(
+                          (u) => m(u.name) || m(u.serial_number || "") || m(u.type || ""),
+                        )
+                      );
+                    });
                   return (
                     <Fragment key={c.id}>
                       {/* Level 1 — Customer */}
@@ -1091,11 +1105,11 @@ export function AdminMasterData() {
                         </td>
                       </tr>
 
-                      {expandedTop.has(c.id) &&
+                      {(expandedTop.has(c.id) || q) &&
                         cSites.map((site) => {
-                          const siteUnits = units.filter(
-                            (u) => u.site_id === site.id && u.is_deleted === showDeleted,
-                          );
+                          const siteUnits = units
+                            .filter((u) => u.site_id === site.id && u.is_deleted === showDeleted)
+                            .filter((u) => !q || m(u.name) || m(u.serial_number || "") || m(u.type || ""));
                           return (
                             <Fragment key={site.id}>
                               {/* Level 2 — Site */}
@@ -1154,7 +1168,7 @@ export function AdminMasterData() {
                                 </td>
                               </tr>
 
-                              {expandedSites.has(site.id) &&
+                              {(expandedSites.has(site.id) || q) &&
                                 siteUnits.map((unit) => (
                                   <tr
                                     key={unit.id}
@@ -1347,7 +1361,7 @@ export function AdminMasterData() {
             <DialogTitle className="text-foreground">
               {formMode === "customer"
                 ? `${editingId ? "Edit" : "Tambah"} ${
-                    wizEditLabel === "site" ? "Site" : wizEditLabel === "unit" ? "Unit" : "Customer"
+                    wizEditLabel === "site" ? "Site" : wizEditLabel === "unit" ? "Unit" : "Perusahaan"
                   }`
                 : `${editingId ? "Edit" : "Tambah"} ${formMode === "site" ? "Site" : "Unit"}`}
             </DialogTitle>
@@ -1395,7 +1409,7 @@ export function AdminMasterData() {
                     />
                   </div>
                   <div>
-                    <label className={LABEL_CLASS}>Kode / Singkatan</label>
+                    <label className={LABEL_CLASS}>Kode Unik</label>
                     <input
                       value={wizCustomerCode}
                       onChange={(e) => setWizCustomerCode(e.target.value)}
@@ -1646,8 +1660,6 @@ export function AdminMasterData() {
                       onClick={() => setWizStep(2)}
                       disabled={
                         !wizCustomerName.trim() ||
-                        !wizCustomerPicName.trim() ||
-                        !wizCustomerPicPhone.trim() ||
                         saving
                       }
                       className="px-5 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-1.5"
@@ -1678,10 +1690,6 @@ export function AdminMasterData() {
                     )}
                     <button
                       onClick={() => {
-                        if (!wizSiteStepValid()) {
-                          toast.error("Site wajib memiliki PIC dan No WA PIC");
-                          return;
-                        }
                         setWizSiteSkipped(false);
                         goStep3();
                       }}
@@ -1719,8 +1727,7 @@ export function AdminMasterData() {
                   onClick={handleSave}
                   disabled={
                     saving ||
-                    !formName.trim() ||
-                    (formMode === "site" && (!formPicName.trim() || !formPicPhone.trim()))
+                    !formName.trim()
                   }
                   className="px-5 py-2 rounded-[3px] bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 inline-flex items-center gap-2"
                 >

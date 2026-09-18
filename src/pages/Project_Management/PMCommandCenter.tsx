@@ -5,7 +5,6 @@ import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock, Download } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { PhotoLightbox, TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath, downloadFromUrl } from '../../components/TicketDrawer'
-import { selectTriggerFilter } from '../../components/ui/select'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
 import FieldError from '../../components/FieldError'
@@ -325,32 +324,34 @@ export default function PMCommandCenter() {
 
             {/* BOX FILTER: Pencarian, View, Prioritas */}
             <div className="bg-card p-4 rounded-xl border border-border">
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
                         <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
                     </div>
-                    <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
-                        <button onClick={() => setViewMode('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                            <LayoutGrid className="h-3.5 w-3.5" /> Kanban
-                        </button>
-                        <button onClick={() => setViewMode('list')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'list' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                            <Table className="h-3.5 w-3.5" /> Tabel
-                        </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Filter className="w-4 h-4 text-muted-foreground" />
-                        <MultiSelectFilter
-                            label="Semua Prioritas"
-                            selected={prioritySel}
-                            onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['Critical', 'Medium', 'Low']))}
-                            options={[
-                                { value: 'Critical', label: 'Critical' },
-                                { value: 'Medium', label: 'Medium' },
-                                { value: 'Low', label: 'Low' },
-                            ]}
-                            className={selectTriggerFilter}
-                        />
+                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                        <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
+                            <button onClick={() => setViewMode('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                                <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+                            </button>
+                            <button onClick={() => setViewMode('list')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'list' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                                <Table className="h-3.5 w-3.5" /> Tabel
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <MultiSelectFilter
+                                label="Semua"
+                                selected={prioritySel}
+                                onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['Critical', 'Medium', 'Low']))}
+                                options={[
+                                    { value: 'Critical', label: 'Critical' },
+                                    { value: 'Medium', label: 'Medium' },
+                                    { value: 'Low', label: 'Low' },
+                                ]}
+                                className="px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full flex-1 gap-1"
+                            />
+                        </div>
                     </div>
                 </div>
             </div>
@@ -386,7 +387,7 @@ export default function PMCommandCenter() {
                             const items = baseTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px]'}`}>
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px] max-w-[200px]'}`}>
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
