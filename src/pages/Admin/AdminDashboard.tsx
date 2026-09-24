@@ -1,0 +1,205 @@
+import { useState, useEffect } from "react";
+import {
+  Building2,
+  Users,
+  Wrench,
+  Clock,
+  AlertTriangle,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import {
+  getAdminSystemData,
+  getAdminMonthlyData,
+  type AdminSystemData,
+  type AdminMonthlyData,
+} from "@/services";
+import AnimatedNumber from "@/components/AnimatedNumber";
+import { useTickets } from "@/context/TicketContext";
+
+const BULAN = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+function KpiCard({
+  icon,
+  label,
+  value,
+  tone = "muted",
+  decimals = 0,
+  suffix,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  tone?: "red" | "green" | "amber" | "muted";
+  decimals?: number;
+  suffix?: string;
+}) {
+  const toneClass =
+    tone === "red"
+      ? "bg-red-50 text-red-600"
+      : tone === "green"
+        ? "bg-emerald-50 text-emerald-600"
+        : tone === "amber"
+          ? "bg-amber-50 text-amber-600"
+          : "bg-muted text-muted-foreground";
+  return (
+    <div className="rounded-xl border border-border bg-card p-5">
+      <div className="flex items-center gap-2 mb-1 min-w-0">
+        <span className={`h-8 w-8 shrink-0 grid place-items-center rounded-lg ${toneClass}`}>{icon}</span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
+          {label}
+        </span>
+      </div>
+      <p className="text-3xl sm:text-4xl font-display font-bold text-foreground mt-3">
+        {typeof value === "number" ? <AnimatedNumber value={value} decimals={decimals} /> : value}
+        {typeof value === "number" && suffix && (
+          <span className="text-base font-medium text-muted-foreground">{suffix}</span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+export function AdminDashboard() {
+  const [data, setData] = useState<AdminSystemData | null>(null);
+  const [monthly, setMonthly] = useState<AdminMonthlyData | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      const [d, m] = await Promise.all([
+        getAdminSystemData(),
+        getAdminMonthlyData(),
+      ]);
+      if (active) {
+        setData(d);
+        setMonthly(m);
+      }
+    }
+    load();
+    const id = setInterval(load, 60_000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, []);
+
+  const d = data || { totalCustomerAccounts: 0, totalCompanies: 0, totalUnits: 0, unitDist: [] };
+  const m = monthly || { ticketsDone: 0, leaderboard: [] };
+  const bulanIni = BULAN[new Date().getMonth()];
+
+  const { tickets } = useTickets()
+  const avgFrt = tickets.filter(t => t.frtMinutes != null).reduce((s, t) => s + (t.frtMinutes ?? 0), 0) / (tickets.filter(t => t.frtMinutes != null).length || 1)
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        <KpiCard
+          icon={<Users className="h-4 w-4" />}
+          label="Pelanggan"
+          value={d.totalCustomerAccounts}
+        />
+        <KpiCard
+          icon={<Building2 className="h-4 w-4" />}
+          label="Perusahaan"
+          value={d.totalCompanies}
+        />
+        <KpiCard
+          icon={<Wrench className="h-4 w-4" />}
+          label="Total Unit Aktif"
+          value={d.totalUnits}
+        />
+        <div className="bg-blue-600 border border-blue-700 rounded-2xl p-5 shadow-sm transition-all relative overflow-hidden group hover:border-blue-400">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[10px] font-black text-white uppercase tracking-wider">
+                Rata-rata FRT
+              </p>
+              <h3 className="text-3xl sm:text-4xl font-display font-black text-white mt-2 tracking-tight">
+                {Math.round(avgFrt)}m
+              </h3>
+            </div>
+            <div className="p-2 bg-white/20 border border-white/30 rounded-lg"><AlertTriangle className="w-5 h-5 text-white" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="rounded-xl border border-border bg-card">
+        <div className="px-5 py-4">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Building2 className="h-4 w-4" /> Unit per Site
+          </h3>
+        </div>
+        {d.unitDist.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Building2 className="h-10 w-10 mb-2" />
+            <p className="text-sm font-medium">Belum ada data</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto ">
+            {d.unitDist.map((s, i) => (
+              <div key={s.name} className="flex items-center gap-3 px-5 py-3">
+                <span className={`w-6 text-xs font-bold ${i === 0 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
+                    <span className="text-xs font-bold text-muted-foreground ml-2">{s.count}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, (s.count / (d.unitDist[0]?.count || 1)) * 100)}%` }}
+                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 * i }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border bg-card">
+        <div className="px-5 py-4">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Wrench className="h-4 w-4" /> Leaderboard Teknisi ({bulanIni})
+          </h3>
+        </div>
+        {m.leaderboard.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Clock className="h-10 w-10 mb-2" />
+            <p className="text-sm font-medium">Belum ada data</p>
+            <p className="text-xs mt-1">Tidak ada tiket selesai pada periode ini</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto ">
+            {m.leaderboard.map((t, i) => (
+              <div key={t.name} className="flex items-center gap-4 px-5 py-3.5">
+                <div
+                  className={`h-8 w-8 grid place-items-center rounded-full text-xs font-bold ${
+                    i === 0
+                      ? "bg-amber-100 text-amber-700"
+                      : i === 1
+                        ? "bg-muted text-foreground"
+                        : i === 2
+                          ? "bg-orange-100 text-orange-700"
+                          : "bg-muted text-muted-foreground"
+                  }`}
+                >
+                  {i + 1}
+                </div>
+                <p className="text-sm font-semibold text-foreground truncate flex-1">{t.name}</p>
+                <span className="text-xs font-bold text-muted-foreground">{t.completed} tiket</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      </div>
+    </div>
+  );
+}

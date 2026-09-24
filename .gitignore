@@ -1,0 +1,78 @@
+# ==========================================
+# LOGS & DEBUG
+# ==========================================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ==========================================
+# DEPENDENCIES (JANGAN DIUPLOAD - SANGAT BERAT)
+# ==========================================
+node_modules
+/.pnp
+.pnp.js
+
+# ==========================================
+# BUILD OUTPUT & VITE CACHE
+# ==========================================
+dist
+dist-ssr
+.vite/
+*.tsbuildinfo
+
+# ==========================================
+# TESTING (Untuk jaga-jaga jika nanti ada unit test)
+# ==========================================
+coverage/
+
+# ==========================================
+# SUPABASE LOCAL ARTIFACTS
+# ==========================================
+supabase/.temp/
+
+# ==========================================
+# ENVIRONMENT & SECRETS (PALING PENTING!)
+# ==========================================
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+*.local
+
+# SSL certs (lokal dev)
+*.pem
+*.crt
+*.key
+
+# ==========================================
+# EDITOR & OS FILES
+# ==========================================
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Windows OS files
+Thumbs.db
+Desktop.ini
+
+# Mac OS files
+.DS_Store
+
+# ==========================================
+# LOCAL AI TOOL CONFIG (bukan kode produk)
+# ==========================================
+opencode.json
+opencode.jsonc

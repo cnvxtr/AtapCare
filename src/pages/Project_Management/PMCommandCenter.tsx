@@ -1,0 +1,908 @@
+import { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { toast } from 'sonner'
+import { useTickets, type Ticket } from '../../context/TicketContext'
+import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock, Download } from 'lucide-react'
+import { Badge, STATUS_COLORS } from '../../components/Badge'
+import TicketDrawer, { PhotoLightbox, TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath, downloadFromUrl } from '../../components/TicketDrawer'
+import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
+import FieldError from '../../components/FieldError'
+
+import SchedulePicker from '../../components/SchedulePicker'
+import { getTechnicians } from '../../services/users'
+import { getPendingAlarm, getPendingHours } from '../../lib/pendingAlarm'
+import { getBackupRequest, approveBackup, rejectBackup, approvePending, rejectPending, getSupportMemberIds, type BackupRequest } from '../../services/ticketService'
+import { resolvePhotos } from '../../services/photoService'
+import { SEGMENTS } from '../../lib/constants'
+import { useIsMobile } from '../../lib/platform'
+
+// SEGMEN STATUS FLOW TIKET (persis helpdesk)
+const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
+const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
+
+// Tampilan jam parsial dari SchedulePicker ("05:" → "05:--", ":30" → "--:30", "" → placeholder)
+const displayTime = (t: string) => {
+    if (!t) return ''
+    const [h, m] = t.split(':')
+    return `${h || '--'}:${m || '--'} WIB`
+}
+
+// Bukti pengajuan pending yang dilihat PM: alasan (parse benar) + thumbnail foto/file dari teknisi.
+function PendingEvidence({ details }: { details?: string }) {
+    const [urls, setUrls] = useState<Record<string, string>>({})
+    const [preview, setPreview] = useState<{ images: string[]; index: number } | null>(null)
+    const tokens = useMemo(() => (details || '').split(/\r?\n/).filter(isFileToken), [details])
+    useEffect(() => {
+        let active = true
+        resolvePhotos(tokens).then((m) => { if (active) setUrls(m) })
+        return () => { active = false }
+    }, [tokens])
+    const photoUrls = useMemo(() => tokens.map(t => isImageFileByPath(t) ? urls[t] : undefined).filter((u): u is string => !!u), [tokens, urls])
+    const photoTitles = useMemo(() => tokens.filter(t => isImageFileByPath(t)).map(t => t.split('/').pop() || 'foto'), [tokens])
+    const reason = useMemo(() => (details || '').split(/\nFoto:| \| Foto/)[0].replace(/^Ditunda:\s*/, '').trim() || '-', [details])
+    return (
+        <>
+            <span className="whitespace-pre-wrap text-foreground">{reason}</span>
+            {tokens.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-3">
+{tokens.map((p, i) => {
+                        const u = urls[p]
+                        if (!u) return null
+                        const name = p.split('/').pop() || `bukti-${i + 1}`
+                        return (
+                            <div key={i} className="relative">
+                                {isImageFileByPath(p)
+                                    ? <button type="button" onClick={() => setPreview({ images: photoUrls, index: photoUrls.indexOf(u) }) } className="block w-full cursor-zoom-in bg-foreground/5 border border-border rounded overflow-hidden text-left"><img src={u} alt={`Bukti ${i + 1}`} className="w-full h-16 object-cover" loading="lazy" /></button>
+                                    : <a href={u} target="_blank" rel="noopener" className="flex items-center justify-center px-2 py-3 rounded bg-muted border border-border text-[11px] font-mono text-muted-foreground hover:border-foreground/40 transition text-center break-all">{name}</a>}
+                                <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); downloadFromUrl(u, name) }} title="Download" aria-label="Download" className="absolute bottom-1 right-1 p-1 rounded bg-background/90 border border-border text-muted-foreground hover:text-foreground transition">
+                                    <Download className="w-3 h-3" />
+                                </button>
+                            </div>
+                        )
+                    })}
+                </div>
+            )}
+            {preview && <PhotoLightbox images={preview.images} index={preview.index} onClose={() => setPreview(null)} titles={photoTitles} />}
+        </>
+    )
+}
+
+export default function PMCommandCenter() {
+    const { tickets, assignTicket, refreshTickets, updateTicketStatus } = useTickets()
+    const isMobile = useIsMobile()
+    const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban')
+    const [activeSegment, setActiveSegment] = useState('semua')
+    const [prioritySel, setPrioritySel] = useState<Record<string, boolean>>({ all: true })
+    const [searchTerm, setSearchTerm] = useState('')
+
+    // State untuk Drawer & Modals
+    const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+    const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
+    const [showAssignModal, setShowAssignModal] = useState(false)
+    const [showReassignModal, setShowReassignModal] = useState(false)
+    const [showPendingDecision, setShowPendingDecision] = useState(false)
+    const [pendingDecision, setPendingDecision] = useState<'approve' | 'reject' | null>(null)
+    const [pendingBusy, setPendingBusy] = useState(false)
+    const [pendingNote, setPendingNote] = useState('')
+    const [pendingErrors, setPendingErrors] = useState<{ decision?: string }>({})
+    const [showVetoResume, setShowVetoResume] = useState(false)
+    const [vetoNote, setVetoNote] = useState('')
+    const [vetoBusy, setVetoBusy] = useState(false)
+    const [confirmAssign, setConfirmAssign] = useState<null | { teknisi: string; teknisiId: string; scheduleDate: string; scheduleTime: string; isOvertime: boolean; supportIds: string[] }>(null)
+    const [assignErrors, setAssignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string }>({})
+    const [reassignErrors, setReassignErrors] = useState<{ tech?: string; date?: string; time?: string; support?: string; reason?: string }>({})
+    const [backupReq, setBackupReq] = useState<BackupRequest | null>(null)
+    const [backupBusy, setBackupBusy] = useState(false)
+
+    // State Form
+    const [selectedTech, setSelectedTech] = useState('')
+    const [supportSel, setSupportSel] = useState<string[]>([])
+    const [scheduleDate, setScheduleDate] = useState('')
+    const [scheduleTime, setScheduleTime] = useState('')
+    const [calendarOpen, setCalendarOpen] = useState(false)
+    const [reassignCalendarOpen, setReassignCalendarOpen] = useState(false)
+    const [reassignScheduleDate, setReassignScheduleDate] = useState('')
+    const [reassignScheduleTime, setReassignScheduleTime] = useState('')
+    const [actionReason, setActionReason] = useState('')
+    const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
+
+    useEffect(() => {
+        getTechnicians().then(setTechnicians).catch(() => {})
+    }, [])
+
+    useEffect(() => {
+        const t = selectedTicket
+        if (!t) return
+        let active = true
+        getBackupRequest(t.id)
+            .then((r) => { if (active) setBackupReq(r) })
+            .catch(() => { if (active) setBackupReq(null) })
+        return () => { active = false }
+    }, [selectedTicket])
+
+    const handleApproveBackup = async () => {
+        if (!selectedTicket || backupBusy) return
+        setBackupBusy(true)
+        const ok = await approveBackup(selectedTicket.id)
+        setBackupBusy(false)
+        if (ok) {
+            toast.success('Pengalihan disetujui.')
+            setBackupReq(null)
+            await refreshTickets()
+        } else {
+            toast.error('Gagal menyetujui pengalihan.')
+        }
+    }
+
+    const handleRejectBackup = async () => {
+        if (!selectedTicket || backupBusy) return
+        setBackupBusy(true)
+        const ok = await rejectBackup(selectedTicket.id)
+        setBackupBusy(false)
+        if (ok) {
+            toast.success('Pengalihan ditolak.')
+            setBackupReq(null)
+        } else {
+            toast.error('Gagal menolak pengalihan.')
+        }
+    }
+
+    const needAssign = tickets.filter(t => t.status === 'UNASSIGNED').length
+    const needPending = tickets.filter(t => t.status === 'PENDING').length
+    const pendingAlarmCount = tickets.filter(t => t.status === 'PENDING' && getPendingAlarm(t.updatedAt)).length
+
+    // Beban kerja per teknisi (lead): tiket aktif yang masih berjalan.
+    const workload = useMemo(() => {
+        const map = new Map<string, number>()
+        for (const t of tickets) {
+            if (!['SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING'].includes(t.status)) continue
+            if (!t.assignedTo || t.assignedTo === '-') continue
+            map.set(t.assignedTo, (map.get(t.assignedTo) ?? 0) + 1)
+        }
+        return map
+    }, [tickets])
+
+    // Trafik ringan: 0-2 hijau, 3-4 kuning, 5+ merah (BR beban kerja).
+    const WorkloadBadge = ({ count, selected }: { count: number; selected?: boolean }) => {
+        const dot = count >= 5 ? 'bg-red-500' : count >= 3 ? 'bg-yellow-500' : 'bg-green-500'
+        const text = selected ? 'text-white' : count >= 5 ? 'text-red-600' : count >= 3 ? 'text-yellow-600' : 'text-green-600'
+        return (
+            <span className={`inline-flex items-center gap-1 text-[11px] font-mono ${text}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${dot}`} /> {count} Tiket
+            </span>
+        )
+    }
+
+    const baseTickets = useMemo(() => {
+        const matchesFilter = (t: Ticket) =>
+            (prioritySel['all'] || (t.priority !== undefined && !!prioritySel[t.priority])) &&
+            (searchTerm === '' ||
+                t.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                t.customer.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (t.site && t.site.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase())))
+        return tickets
+            .filter(t => ALL_STATUSES.includes(t.status) && matchesFilter(t))
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    }, [tickets, prioritySel, searchTerm])
+
+    const activeSegmentStatuses = SEGMENTS.find(s => s.key === activeSegment)?.statuses || null
+    const listTickets = activeSegmentStatuses ? baseTickets.filter(t => activeSegmentStatuses.includes(t.status)) : baseTickets
+
+    // --- ACTION HANDLERS ---
+    const doAssign = () => {
+        if (!confirmAssign || !selectedTicket) return
+        assignTicket(selectedTicket.id, confirmAssign.teknisiId, confirmAssign.teknisi, `Jadwal: ${confirmAssign.scheduleDate} ${confirmAssign.scheduleTime}`, confirmAssign.supportIds)
+        closeModals()
+    }
+
+    const handleAssign = () => {
+        const errs: { tech?: string; date?: string; time?: string } = {}
+        if (!selectedTech) errs.tech = 'Mohon pilih teknisi'
+        if (!scheduleDate) errs.date = 'Mohon pilih tanggal'
+        if (!scheduleTime || !/^\d{2}:\d{2}$/.test(scheduleTime)) errs.time = 'Mohon pilih jam & menit'
+        if (!errs.time && new Date(`${scheduleDate}T${scheduleTime}`).getTime() <= Date.now()) {
+            errs.time = 'Jam tidak boleh di masa lalu'
+            toast.error('Jadwal tidak boleh di masa lalu')
+        }
+        if (Object.keys(errs).length) { setAssignErrors(errs); return }
+        setAssignErrors({})
+        // Cek Lembur (BR 3.2.2): akhir pekan ATAU jam di luar jam operasional 08.00-17.00 WIB.
+        const isOvertime = isScheduleOvertime(`${scheduleDate}T${scheduleTime}`)
+        setConfirmAssign({
+            teknisi: technicians.find(t => t.id === selectedTech)?.name || 'Teknisi',
+            teknisiId: selectedTech,
+            scheduleDate,
+            scheduleTime,
+            isOvertime,
+            supportIds: supportSel,
+        })
+    }
+
+    // Prefill form ganti teknisi dari data penugasan saat ini (lead + support + jadwal),
+    // biar PM tinggal mengubah yang perlu diubah.
+    const openReassignModal = () => {
+        const t = selectedTicket
+        if (!t) return
+        const leadId = technicians.some(x => x.id === t.assignedTo) ? (t.assignedTo ?? '') : ''
+        const { jadwal } = getAssignmentInfo(t.activities)
+        const [date, time] = (jadwal || '').split(' ')
+        setSelectedTech(leadId)
+        setScheduleDate(date || '')
+        setScheduleTime(time || '')
+        setActionReason('')
+        setReassignErrors({})
+        getSupportMemberIds(t.id)
+            .then(ids => setSupportSel(ids.filter(id => id !== t.assignedTo)))
+            .catch(() => setSupportSel([]))
+        setShowReassignModal(true)
+    }
+
+    const handleReassign = () => {
+        const errs: { tech?: string; date?: string; time?: string; reason?: string } = {}
+        if (!selectedTech) errs.tech = 'Mohon pilih teknisi baru'
+        if (!reassignScheduleDate) errs.date = 'Mohon pilih tanggal'
+        if (!reassignScheduleTime || !/^\d{2}:\d{2}$/.test(reassignScheduleTime)) errs.time = 'Mohon pilih jam & menit'
+        if (!actionReason.trim()) errs.reason = 'Mohon isi alasan pergantian teknisi'
+        if (Object.keys(errs).length) { setReassignErrors(errs); return }
+        setReassignErrors({})
+        const namaBaru = technicians.find(t => t.id === selectedTech)?.name || 'Teknisi'
+        assignTicket(selectedTicket!.id, selectedTech, namaBaru, `Jadwal: ${reassignScheduleDate} ${reassignScheduleTime}. Alasan: ${actionReason}`, supportSel)
+        closeModals()
+    }
+
+    const handlePendingApprove = async () => {
+        if (!selectedTicket || pendingBusy) return
+        setPendingBusy(true)
+        const ok = await approvePending(selectedTicket.id, pendingNote.trim() || undefined)
+        setPendingBusy(false)
+        if (ok) {
+            toast.success('Pengajuan pending disetujui.')
+            closeModals()
+            await refreshTickets()
+        } else {
+            toast.error('Gagal menyetujui pengajuan pending.')
+        }
+    }
+
+    const handlePendingReject = async () => {
+        if (!selectedTicket || pendingBusy) return
+        setPendingBusy(true)
+        const ok = await rejectPending(selectedTicket.id, pendingNote.trim() || undefined)
+        setPendingBusy(false)
+        if (ok) {
+            toast.success('Pengajuan pending ditolak — tiket lanjut kerja.')
+            closeModals()
+            await refreshTickets()
+        } else {
+            toast.error('Gagal menolak pengajuan pending.')
+        }
+    }
+
+    const handleSendPendingDecision = () => {
+        if (!pendingDecision) { setPendingErrors({ decision: 'Pilih keputusan dulu.' }); return }
+        setPendingErrors({})
+        if (pendingDecision === 'approve') handlePendingApprove()
+        else handlePendingReject()
+    }
+
+    const handleVetoResume = async () => {
+        if (!selectedTicket || vetoBusy) return
+        setVetoBusy(true)
+        try {
+            const done = await updateTicketStatus(
+                selectedTicket.id,
+                'WORKING',
+                `Veto pending oleh PM${vetoNote.trim() ? ' — Catatan: ' + vetoNote.trim() : ''}. SLA dilanjutkan.`
+            )
+            if (done) {
+                toast.success('Veto diterapkan — tiket dilanjutkan ke Dikerjakan.')
+                setShowVetoResume(false)
+                setVetoNote('')
+                setSelectedTicket(null)
+                setBackupReq(null)
+            }
+        } finally {
+            setVetoBusy(false)
+        }
+    }
+
+    const closeModals = () => {
+        setShowAssignModal(false); setShowReassignModal(false); setShowPendingDecision(false)
+        setPendingDecision(null); setPendingNote(''); setPendingErrors({})
+        setConfirmAssign(null); setAssignErrors({}); setReassignErrors({})
+        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleTime(''); setCalendarOpen(false); setActionReason('')
+    }
+
+    return (
+        <div className={`space-y-6 flex flex-col ${viewMode === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
+            {/* HEADER */}
+            <div className="flex justify-end gap-4 flex-wrap">
+                <div className="flex gap-2 flex-wrap">
+                    <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                        {needAssign + needPending} Perlu Tindakan
+                    </span>
+                    {pendingAlarmCount > 0 && (
+                        <span className="px-3 py-1.5 rounded-sm text-sm font-medium border border-amber-300 bg-amber-100 text-amber-800 flex items-center gap-2">
+                            <AlertTriangle className="h-4 w-4" /> {pendingAlarmCount} Pending Menggantung
+                        </span>
+                    )}
+                </div>
+            </div>
+
+            {/* BOX FILTER: Pencarian, View, Prioritas */}
+            <div className="bg-card p-4 rounded-xl border border-border">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                        <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                        <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
+                            <button onClick={() => setViewMode('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                                <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+                            </button>
+                            <button onClick={() => setViewMode('list')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'list' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                                <Table className="h-3.5 w-3.5" /> Tabel
+                            </button>
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
+                            <MultiSelectFilter
+                                label="Semua"
+                                selected={prioritySel}
+                                onToggle={v => setPrioritySel(prev => toggleFilter(prev, v, ['Critical', 'Medium', 'Low']))}
+                                options={[
+                                    { value: 'Critical', label: 'Critical' },
+                                    { value: 'Medium', label: 'Medium' },
+                                    { value: 'Low', label: 'Low' },
+                                ]}
+                                className="px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full flex-1 gap-1"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* BOX 2: Status Flow (hanya di mode Tabel) */}
+            {viewMode === 'list' && (
+                <div className="bg-card p-4 rounded-xl border border-border">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+                        {SEGMENTS.map(seg => {
+                            const c = seg.statuses ? STATUS_COLORS[seg.statuses[0]] : null
+                            return (
+                                <button
+                                    key={seg.key}
+                                    onClick={() => setActiveSegment(seg.key)}
+                                    className={`px-3 py-1.5 rounded-[5px] text-sm font-medium inline-flex items-center justify-center gap-1.5 transition whitespace-nowrap ${activeSegment === seg.key ? (c ? '' : 'bg-foreground text-primary-foreground') : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                                    style={activeSegment === seg.key && c ? { backgroundColor: c.bg, color: c.text } : undefined}
+                                >
+                                    {seg.label}
+                                    {seg.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">{seg.role}</span>}
+                                    {seg.key === 'dijeda' && pendingAlarmCount > 0 && <span className="text-[9px] font-mono bg-amber-100 text-amber-700 px-1 rounded-full">{pendingAlarmCount}</span>}
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* KANBAN / LIST */}
+            {viewMode === 'kanban' ? (
+                <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
+                    <div className={`flex gap-2 flex-1 min-h-0 ${isMobile ? 'overflow-x-auto snap-x snap-mandatory pb-2' : 'overflow-x-auto'}`}>
+                        {KANBAN_COLUMNS.map(col => {
+                            const items = baseTickets.filter(t => col.statuses?.includes(t.status))
+                            const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
+                            return (
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px] max-w-[200px]'}`}>
+                                    <div className="relative p-2 border-b border-border">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
+                                            {col.label}
+                                            {!isMobile && col.role && <span className="text-[9px] font-mono uppercase tracking-wider opacity-70">({col.role})</span>}
+                                        </span>
+                                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-mono text-muted-foreground">{items.length}</span>
+                                    </div>
+                                    <div className={`space-y-1.5 min-h-[100px] flex-1 overflow-y-auto max-h-[390px] ${isMobile ? 'p-1' : 'p-1.5'}`}>
+                                        {items.map(t => {
+                                            const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
+                                            const isPendingCritical = t.status === 'PENDING' && (getPendingHours(t.updatedAt) ?? 0) >= 72
+                                            return (
+                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${isPendingCritical ? 'bg-red-50 border-red-300' : 'bg-card'}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
+                                                    <div className="flex items-center justify-between gap-1 mb-1">
+                                                        <span className={`font-mono text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.code}</span>
+                                                        <Badge type="priority" value={t.priority || '-'} small />
+                                                    </div>
+                                                    <p className={`font-medium truncate ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>{t.site} - {t.unit}</p>
+                                                    {t.status === 'PENDING' && getPendingAlarm(t.updatedAt) && (
+                                                        <div className={`mt-1 flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] font-bold ${isPendingCritical ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'} ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
+                                                            <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
+                                                        </div>
+                                                    )}
+                                                    {t.pendingRequestedAt && (
+                                                        <div className={`mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] bg-sky-100 text-sky-700 ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
+                                                            <Clock className="h-2 w-2" /> Menunggu persetujuan PM
+                                                        </div>
+                                                    )}
+                                                    <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
+                                                        <div className="flex items-center gap-1 min-w-0">
+                                                            <User className="h-2 w-2 shrink-0 text-muted-foreground" />
+                                                            <span className={`text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.customer}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                        {items.length === 0 && <div className="text-center text-[10px] text-muted-foreground py-8">Kosong</div>}
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            ) : (
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <div className="min-w-[720px]">
+                            <table className="w-full table-fixed text-left">
+                                <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
+                                    <tr>
+                                        <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
+                                        <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {listTickets.length === 0 ? (
+                                        <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                    ) : (
+                                        listTickets.map(ticket => (
+                                            <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
+                                                <td className="p-4 font-mono text-xs font-medium whitespace-nowrap">{ticket.code}</td>
+                                                <td className="p-4 text-xs">{ticket.customer}</td>
+                                                <td className="p-4 text-xs truncate" title={ticket.site}>{ticket.site || '-'}</td>
+                                                <td className="p-4 text-xs truncate" title={ticket.unit}>{ticket.unit || '-'}</td>
+                                                <td className="p-4">
+                                                    <Badge type="priority" value={ticket.priority || '-'} />
+                                                </td>
+                                                <td className="p-4">
+                                                    <Badge type="status" value={ticket.status} />
+                                                    {ticket.pendingRequestedAt && (
+                                                        <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-medium text-sky-700"><Clock className="h-3 w-3" /> menunggu persetujuan PM</div>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ========================================== */}
+            {/* TIER 3: OFFCANVAS DETAIL DRAWER */}
+            {/* ========================================== */}
+            {selectedTicket && (
+                <TicketDrawer
+                    onClose={() => { setSelectedTicket(null); setBackupReq(null) }}
+                    code={selectedTicket.code}
+                    ticketId={selectedTicket.id}
+                    status={selectedTicket.status}
+                    priority={selectedTicket.priority}
+                    createdAt={selectedTicket.createdAt}
+                    activeTab={activeDrawerTab}
+                    onTabChange={setActiveDrawerTab}
+                    activities={selectedTicket.activities}
+                    footer={
+                        <>
+                            {backupReq && (
+                                <div className="w-full border border-amber-200 bg-amber-50/70 rounded-[3px] p-3 space-y-2 mb-1">
+                                    <p className="text-xs text-amber-800 font-medium flex items-center gap-1.5">
+                                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                                        Pengalihan diminta oleh <b>{backupReq.requester_name}</b>
+                                        <span className="text-amber-700/70 font-normal">
+                                            ({new Date(backupReq.requested_at).toLocaleString('id-ID', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })})
+                                        </span>
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleApproveBackup}
+                                            disabled={backupBusy}
+                                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-600 text-white rounded-[3px] font-bold hover:bg-emerald-700 disabled:opacity-50 transition"
+                                        >
+                                            <Check className="w-4 h-4" /> Setujui
+                                        </button>
+                                        <button
+                                            onClick={handleRejectBackup}
+                                            disabled={backupBusy}
+                                            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-red-600 text-white rounded-[3px] font-bold hover:bg-red-700 disabled:opacity-50 transition"
+                                        >
+                                            <X className="w-4 h-4" /> Tolak
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            {selectedTicket.status === 'UNASSIGNED' && (
+                                <button onClick={() => setShowAssignModal(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-bold">
+                                    <User className="w-4 h-4" /> Tugaskan Teknisi
+                                </button>
+                            )}
+                            {(selectedTicket.status === 'SCHEDULED' || selectedTicket.status === 'EN_ROUTE') && (
+                                <button onClick={openReassignModal} className="w-full flex items-center justify-center gap-2 py-2.5 bg-neutral-700 text-white rounded-[3px] font-bold hover:bg-neutral-800 transition">
+                                    <User className="w-4 h-4" /> Ganti Teknisi
+                                </button>
+                            )}
+                            {['WORKING', 'EN_ROUTE'].includes(selectedTicket.status) && selectedTicket.pendingRequestedAt && (
+                                <button onClick={() => setShowPendingDecision(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-amber-600 text-white rounded-[3px] font-bold hover:bg-amber-700 transition">
+                                    <AlertTriangle className="w-4 h-4" /> Proses Pengajuan Pending
+                                </button>
+                            )}
+                            {selectedTicket.status === 'PENDING' && (
+                                <button onClick={() => setShowVetoResume(true)} className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-600 text-white rounded-[3px] font-bold hover:bg-red-700 transition">
+                                    <Pause className="w-4 h-4" /> Veto Pending (Lanjutkan Kerja)
+                                </button>
+                            )}
+                            {['WORKING', 'RESOLVED'].includes(selectedTicket.status) && (
+                                <p className="text-center text-xs text-muted-foreground italic">Monitoring Mode: Menunggu update dari lapangan atau validasi Helpdesk.</p>
+                            )}
+                        </>
+                    }
+                >
+                    {activeDrawerTab === 'detail' && (
+                        <div className="space-y-4">
+                            {selectedTicket.status === 'PENDING' && getPendingAlarm(selectedTicket.updatedAt) && (
+                                <div className="bg-amber-50/60 p-3 rounded-[3px] border border-amber-200 text-amber-800 text-xs flex items-center gap-2">
+                                    <AlertTriangle className="w-4 h-4 shrink-0" /> Dijeda {getPendingAlarm(selectedTicket.updatedAt)} tanpa aktivitas
+                                </div>
+                            )}
+                            <AssignmentCard items={selectedTicket.activities} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Pelapor</p>
+                                    <p className="font-medium text-sm">{selectedTicket.customer}</p>
+                                </div>
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Site / Unit</p>
+                                    <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
+                                </div>
+                            </div>
+                            <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} />
+                            <TicketDescription description={selectedTicket.description} />
+                        </div>
+                    )}
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
+                </TicketDrawer>
+            )}
+
+            {/* ========================================== */}
+            {/* MODALS */}
+            {/* ========================================== */}
+
+            {/* 1. MODAL TUGASKAN */}
+            {showAssignModal && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><User className="w-5 h-5" /> Tugaskan Teknisi</h3>
+                            <button onClick={() => setShowAssignModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Pilih Teknisi</label>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button type="button" className={`w-full mt-1 px-3 py-2 border ${assignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                            <span className={`truncate ${selectedTech ? 'text-foreground' : 'text-muted-foreground'}`}>{selectedTech ? technicians.find(t => t.id === selectedTech)?.name : '-- Pilih Teknisi --'}</span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="z-[130] border-border bg-card text-foreground p-1.5 min-w-[220px] max-h-72 overflow-y-auto">
+                                        {technicians.length === 0 ? (
+                                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
+                                        ) : technicians.map(t => (
+                                            <DropdownMenuItem key={t.id} onSelect={() => { setSelectedTech(prev => prev === t.id ? '' : t.id); setSupportSel(prev => prev.filter(id => id !== t.id)); setAssignErrors(prev => ({ ...prev, tech: undefined })) }} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-14 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground focus:bg-foreground focus:text-primary-foreground'}`}>
+                                                <span className="truncate">{t.name}</span>
+                                                <span className="absolute right-2 flex items-center gap-1.5">
+                                                    <WorkloadBadge count={workload.get(t.id) ?? 0} selected={selectedTech === t.id} />
+                                                    {selectedTech === t.id && <span className="flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                                </span>
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <FieldError msg={assignErrors.tech} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Teknisi Pendukung</label>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button type="button" className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm flex items-center justify-between gap-1 outline-none">
+                                            <span className={`truncate ${supportSel.length ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {supportSel.length
+                                                    ? supportSel.map(id => technicians.find(t => t.id === id)?.name || id).join(', ')
+                                                    : '-- Pilih Teknisi Pendukung --'}
+                                            </span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="z-[130] border-border bg-card text-foreground p-1.5 min-w-[240px] max-h-72 overflow-y-auto">
+                                        {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
+                                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Tidak ada teknisi lain</p>
+                                        ) : technicians.filter(t => t.id !== selectedTech).map(t => (
+                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors mb-px ${supportSel.includes(t.id) ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                                <input type="checkbox" checked={supportSel.includes(t.id)}
+                                                    onChange={() => {
+                                                        if (supportSel.includes(t.id)) {
+                                                            setSupportSel(prev => prev.filter(x => x !== t.id))
+                                                            setAssignErrors(prev => ({ ...prev, support: undefined }))
+                                                        } else {
+                                                            setSupportSel(prev => [...prev, t.id])
+                                                            setAssignErrors(prev => ({ ...prev, support: undefined }))
+                                                        }
+                                                    }}
+                                                    className="sr-only" />
+                                                <span className="truncate">{t.name}</span>
+                                                {supportSel.includes(t.id) && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                            </label>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <FieldError msg={assignErrors.support} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
+                                <button type="button" onClick={() => setCalendarOpen(!calendarOpen)} className={`w-full mt-1 px-3 py-2 border ${assignErrors.date || assignErrors.time ? 'border-red-500 focus:border-red-500' : calendarOpen ? 'border-foreground' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                    <span className={`truncate ${scheduleDate && scheduleTime ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                        {scheduleDate && scheduleTime
+                                            ? `${new Date(`${scheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${displayTime(scheduleTime)}`
+                                            : 'Pilih Tanggal & Jam'}
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 opacity-50 shrink-0 transition-transform ${calendarOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {calendarOpen && (
+                                    <div className="mt-2 rounded-lg border border-border bg-card">
+                                        <SchedulePicker
+                                            date={scheduleDate}
+                                            time={scheduleTime}
+                                            onDate={d => { setScheduleDate(d); setAssignErrors(prev => ({ ...prev, date: undefined })) }}
+                                            onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
+                                            onConfirm={() => setCalendarOpen(false)}
+                                        />
+                                    </div>
+                                )}
+                                <FieldError msg={assignErrors.date || assignErrors.time} />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setShowAssignModal(false)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
+                                <button onClick={handleAssign} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Tugaskan</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* 1b. MODAL KONFIRMASI PENUGASAN */}
+            {confirmAssign && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold flex items-center gap-2"><Check className="w-5 h-5" /> Konfirmasi Penugasan</h3>
+                            <button onClick={() => setConfirmAssign(null)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="bg-muted p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Teknisi</p>
+                                    <p className="font-medium text-sm">{confirmAssign.teknisi}</p>
+                                </div>
+                                <div className="bg-muted p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Tanggal</p>
+                                    <p className="font-medium text-sm">{new Date(`${confirmAssign.scheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                                </div>
+                                <div className="bg-muted p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Jam</p>
+                                    <p className="font-medium text-sm">{confirmAssign.scheduleTime}</p>
+                                </div>
+                                {confirmAssign.supportIds.length > 0 && (
+                                    <div className="bg-muted p-4 rounded-lg border border-border">
+                                        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Teknisi Pendukung</p>
+                                        <p className="font-medium text-sm">{confirmAssign.supportIds.map(id => technicians.find(t => t.id === id)?.name || id).join(', ')}</p>
+                                    </div>
+                                )}
+                            </div>
+                            {confirmAssign.isOvertime && (
+                                <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-200">
+                                    <p className="text-sm text-amber-800 flex items-center gap-2"> <AlertTriangle className="w-4 h-4 shrink-0" /> Berpotensi Lembur: jadwal di luar jam operasional (08.00–17.00) atau akhir pekan.</p>
+                                </div>
+                            )}
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setConfirmAssign(null)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
+                                <button onClick={doAssign} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Ya, Tugaskan</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* 2. MODAL GANTI TEKNISI */}
+            {showReassignModal && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold flex items-center gap-2 text-neutral-700"><AlertTriangle className="w-5 h-5" /> Ganti Teknisi</h3>
+                            <button onClick={() => setShowReassignModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Pilih Teknisi Baru</label>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button type="button" className={`w-full mt-1 px-3 py-2 border ${reassignErrors.tech ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                            <span className={`truncate ${selectedTech ? 'text-foreground' : 'text-muted-foreground'}`}>{selectedTech ? technicians.find(t => t.id === selectedTech)?.name : '-- Pilih Teknisi --'}</span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="z-[130] border-border bg-card text-foreground p-1.5 min-w-[220px] max-h-72 overflow-y-auto">
+                                        {technicians.length === 0 ? (
+                                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Belum ada teknisi terdaftar</p>
+                                        ) : technicians.map(t => (
+                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-14 text-sm cursor-pointer transition-colors ${selectedTech === t.id ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                                <input type="radio" name="reassign-tech" checked={selectedTech === t.id} onChange={() => { setSelectedTech(t.id); setSupportSel(prev => prev.filter(id => id !== t.id)); setReassignErrors(prev => ({ ...prev, tech: undefined })) }} className="sr-only" />
+                                                <span className="truncate">{t.name}</span>
+                                                <span className="absolute right-2 flex items-center gap-1.5">
+                                                    <WorkloadBadge count={workload.get(t.id) ?? 0} selected={selectedTech === t.id} />
+                                                    {selectedTech === t.id && <span className="flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                                </span>
+                                            </label>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <FieldError msg={reassignErrors.tech} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Teknisi Pendukung</label>
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                        <button type="button" className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm flex items-center justify-between gap-1 outline-none">
+                                            <span className={`truncate ${supportSel.length ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                                {supportSel.length
+                                                    ? supportSel.map(id => technicians.find(t => t.id === id)?.name || id).join(', ')
+                                                    : '-- Pilih Teknisi Pendukung --'}
+                                            </span>
+                                            <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
+                                        </button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent align="start" className="z-[130] border-border bg-card text-foreground p-1.5 min-w-[240px] max-h-72 overflow-y-auto">
+                                        {technicians.filter(t => t.id !== selectedTech).length === 0 ? (
+                                            <p className="px-2 py-1.5 text-xs text-muted-foreground">Tidak ada teknisi lain</p>
+                                        ) : technicians.filter(t => t.id !== selectedTech).map(t => (
+                                            <label key={t.id} className={`relative flex w-full items-center rounded-sm py-1.5 pl-2 pr-8 text-sm cursor-pointer transition-colors mb-px ${supportSel.includes(t.id) ? 'bg-foreground text-primary-foreground' : 'hover:bg-foreground hover:text-primary-foreground'}`}>
+                                                <input type="checkbox" checked={supportSel.includes(t.id)}
+                                                    onChange={() => {
+                                                        if (supportSel.includes(t.id)) {
+                                                            setSupportSel(prev => prev.filter(x => x !== t.id))
+                                                            setReassignErrors(prev => ({ ...prev, support: undefined }))
+                                                        } else {
+                                                            setSupportSel(prev => [...prev, t.id])
+                                                            setReassignErrors(prev => ({ ...prev, support: undefined }))
+                                                        }
+                                                    }}
+                                                    className="sr-only" />
+                                                <span className="truncate">{t.name}</span>
+                                                {supportSel.includes(t.id) && <span className="absolute right-2 flex h-3.5 w-3.5 items-center justify-center"><Check className="h-4 w-4" /></span>}
+                                            </label>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                                <FieldError msg={reassignErrors.support} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
+                                <button type="button" onClick={() => setReassignCalendarOpen(!reassignCalendarOpen)} className={`w-full mt-1 px-3 py-2 border ${reassignErrors.date || reassignErrors.time ? 'border-red-500 focus:border-red-500' : reassignCalendarOpen ? 'border-foreground' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                    <span className={`truncate ${reassignScheduleDate && reassignScheduleTime ? 'text-foreground' : 'text-muted-foreground'}`}>
+                                        {reassignScheduleDate && reassignScheduleTime
+                                            ? `${new Date(`${reassignScheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${displayTime(reassignScheduleTime)}`
+                                            : 'Pilih Tanggal & Jam'}
+                                    </span>
+                                    <ChevronDown className={`w-4 h-4 opacity-50 shrink-0 transition-transform ${reassignCalendarOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {reassignCalendarOpen && (
+                                    <div className="mt-2 rounded-lg border border-border bg-card">
+                                        <SchedulePicker
+                                            date={reassignScheduleDate}
+                                            time={reassignScheduleTime}
+                                            onDate={d => { setReassignScheduleDate(d); setReassignErrors(prev => ({ ...prev, date: undefined })) }}
+                                            onTime={t => { setReassignScheduleTime(t); setReassignErrors(prev => ({ ...prev, time: undefined })) }}
+                                            onConfirm={() => setReassignCalendarOpen(false)}
+                                        />
+                                    </div>
+                                )}
+                                <FieldError msg={reassignErrors.date || reassignErrors.time} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-foreground">Alasan Ganti Teknisi (Wajib)</label>
+                                <textarea value={actionReason} onChange={e => { setActionReason(e.target.value); setReassignErrors(prev => ({ ...prev, reason: undefined })) }} rows={3} className={`w-full mt-1 px-3 py-2 border ${reassignErrors.reason ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm outline-none resize-none`} placeholder="Contoh: Teknisi sakit, alat tidak lengkap, dll"></textarea>
+                                <FieldError msg={reassignErrors.reason} />
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setShowReassignModal(false)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
+                                <button onClick={handleReassign} className="flex-1 py-2 bg-neutral-700 text-white rounded font-bold">Ganti Teknisi</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+            
+            {/* 3. MODAL PROSES PENGAJUAN PENDING */}
+            {showPendingDecision && selectedTicket && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                        <h3 className="text-lg font-bold mb-1 flex items-center gap-2 text-foreground"><AlertTriangle className="w-5 h-5 text-amber-600" /> Proses Pengajuan Pending</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Tiket <b className="text-foreground">{selectedTicket.code}</b></p>
+                        <div className="mb-4 p-3 bg-muted rounded-md text-sm">
+                                <span className="block text-xs font-semibold text-muted-foreground mb-1">Alasan teknisi mengajukan pending</span>
+                                <PendingEvidence details={[...(selectedTicket.activities ?? [])]
+                                    .filter(x => x.details?.startsWith('Ditunda:'))
+                                    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]?.details} />
+                            </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-muted-foreground">Keputusan PM</label>
+                                <div className="grid grid-cols-2 gap-3 mt-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setPendingDecision('approve'); setPendingErrors(prev => ({ ...prev, decision: undefined })) }}
+                                        className={`flex flex-col items-center gap-1 py-3 rounded border font-bold text-sm transition ${pendingDecision === 'approve' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-border bg-card hover:bg-muted'}`}
+                                    >
+                                        <Check className="w-4 h-4" /> Boleh Pending
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => { setPendingDecision('reject'); setPendingErrors(prev => ({ ...prev, decision: undefined })) }}
+                                        className={`flex flex-col items-center gap-1 py-3 rounded border font-bold text-sm transition ${pendingDecision === 'reject' ? 'border-red-600 bg-red-50 text-red-700' : 'border-border bg-card hover:bg-muted'}`}
+                                    >
+                                        <X className="w-4 h-4" /> Tidak Boleh
+                                    </button>
+                                </div>
+                                <FieldError msg={pendingErrors.decision} />
+                            </div>
+                            <div>
+                                <label className="text-xs font-semibold text-muted-foreground">Catatan untuk teknisi (opsional)</label>
+                                <textarea value={pendingNote} onChange={e => setPendingNote(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm outline-none resize-none" placeholder={`Contoh: ${pendingDecision === 'approve' ? 'Alasan diterima, lanjut setelah kendala selesai.' : 'Alasan pending kurang valid, segera lanjutkan pekerjaan.'}`}></textarea>
+                            </div>
+                            <div className="flex gap-3 pt-2">
+                                <button onClick={() => setShowPendingDecision(false)} disabled={pendingBusy} className="flex-1 py-2 bg-muted rounded font-medium disabled:opacity-50">Batal</button>
+                                <button onClick={handleSendPendingDecision} disabled={pendingBusy} className="flex-1 py-2 bg-neutral-700 text-white rounded font-bold disabled:opacity-50">
+                                    {pendingBusy ? 'Memproses...' : 'Kirim Keputusan'}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* 4. MODAL VETO PENDING (Lanjutkan Kerja) */}
+            {showVetoResume && selectedTicket && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
+                        <h3 className="text-lg font-bold mb-1 flex items-center gap-2 text-foreground"><Pause className="w-5 h-5 text-red-600" /> Veto Pending (Lanjutkan Kerja)</h3>
+                        <p className="text-sm text-muted-foreground mb-4">Tiket <b className="text-foreground">{selectedTicket.code}</b> kembali aktif (Dikerjakan) dan SLA dilanjutkan.</p>
+                        <div>
+                            <label className="text-xs font-semibold text-muted-foreground">Catatan untuk teknisi (opsional)</label>
+                            <textarea value={vetoNote} onChange={e => setVetoNote(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded text-sm outline-none resize-none" placeholder="Contoh: kendala sudah selesai, lanjutkan pekerjaan hingga tuntas."></textarea>
+                        </div>
+                        <div className="flex gap-3 pt-2">
+                            <button onClick={() => setShowVetoResume(false)} disabled={vetoBusy} className="flex-1 py-2 bg-muted rounded font-medium disabled:opacity-50">Batal</button>
+                            <button onClick={handleVetoResume} disabled={vetoBusy} className="flex-1 py-2 bg-red-600 text-white rounded font-bold disabled:opacity-50">
+                                {vetoBusy ? 'Memproses...' : 'Veto & Lanjutkan Kerja'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+        </div>
+    )
+}

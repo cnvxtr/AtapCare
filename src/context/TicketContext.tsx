@@ -1,0 +1,428 @@
+import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { toast } from 'sonner'
+import { supabase } from '../lib/supabase'
+import { useAuth } from './AuthContext'
+import { STATUS_LABELS } from '../components/Badge'
+import { generateTicketCode } from '../services/ticketService'
+import { uploadAttachment } from '../services/photoService'
+
+export type TicketStatus = 'NEW' | 'OPEN' | 'UNASSIGNED' | 'SCHEDULED' | 'EN_ROUTE' | 'WORKING' | 'PENDING' | 'RESOLVED' | 'CLOSED' | 'VOID' | 'DUPLICATE' | 'REJECTED'
+export type Priority = 'Critical' | 'Medium' | 'Low'
+
+// Toast realtime ke teknisi: keputusan PM atas pengajuan pending-nya. Deteksi
+// lewat transisi `pending_requested_at` per tiket milik teknisi (snapshot ref
+// sekali pakai), BUKAN lewat string action — jadi tidak re-toast tiap fetch.
+
+export interface TicketActivity {
+    id: string
+    timestamp: string
+    user: string
+    action: string
+    details?: string
+}
+
+export interface Ticket {
+    id: string
+    code: string
+    customer: string
+    company: string
+    site?: string
+    unit?: string
+    assignedTo?: string
+    status: TicketStatus
+    priority?: Priority
+    frtMinutes: number | null
+    createdAt: string
+    closedAt?: string
+    photoUrl?: string
+    resolvedBy?: 'helpdesk' | 'technician'
+    category?: string
+    location?: string
+    description?: string
+    rejectionReason?: string
+    categoryId?: string | null
+    rootCauseId?: string | null
+    rootCauseNote?: string | null
+    duplicateOf?: string | null
+    updatedAt?: string
+    pendingRequestedAt?: string | null
+    rating?: number | null
+    review?: string | null
+    reworkFlag?: boolean
+    activities: TicketActivity[]
+}
+
+interface SupabaseTicketRow {
+    id: string
+    code: string
+    customer: string
+    company: string
+    site?: string
+    unit?: string
+    assigned_to?: string
+    status: TicketStatus
+    priority?: Priority
+    created_at: string
+    closed_at?: string
+    rework_flag?: boolean
+    photo_url?: string
+    resolved_by?: 'helpdesk' | 'technician'
+    category?: string
+    location?: string
+    description?: string
+    rejection_reason?: string
+    category_id?: string | null
+    root_cause_id?: string | null
+    root_cause_note?: string | null
+    duplicate_of?: string | null
+    created_by?: string
+    created_by_user_id?: string | null
+    updated_at?: string
+    pending_requested_at?: string | null
+    frt_minutes?: number | null
+    bapp_document_url?: string | null
+    rating?: number | null
+    review?: string | null
+    activities?: SupabaseActivityRow[]
+}
+
+interface SupabaseActivityRow {
+    id: string
+    created_at: string
+    user_name?: string
+    action: string
+    details?: string
+}
+
+function mapTicketRow(t: SupabaseTicketRow): Ticket {
+    return {
+        id: t.id,
+        code: t.code,
+        customer: t.customer,
+        company: t.company,
+        site: t.site,
+        unit: t.unit,
+        assignedTo: t.assigned_to || '-',
+        status: t.status,
+        priority: t.priority,
+        frtMinutes: t.frt_minutes ?? null,
+        createdAt: t.created_at,
+        closedAt: t.closed_at,
+        photoUrl: t.photo_url,
+        resolvedBy: t.resolved_by,
+        category: t.category,
+        location: t.location,
+        description: t.description,
+        rejectionReason: t.rejection_reason,
+        categoryId: t.category_id,
+        rootCauseId: t.root_cause_id,
+        rootCauseNote: t.root_cause_note,
+        duplicateOf: t.duplicate_of ?? null,
+        updatedAt: t.updated_at,
+        pendingRequestedAt: t.pending_requested_at ?? null,
+        rating: t.rating ?? null,
+        reworkFlag: t.rework_flag ?? false,
+        review: t.review ?? null,
+        activities: (t.activities || [])
+            .slice()
+            .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+            .map((a: SupabaseActivityRow) => ({
+                id: a.id,
+                timestamp: a.created_at,
+                user: a.user_name || 'Sistem',
+                action: a.action,
+                details: a.details
+            }))
+    }
+}
+
+interface AddTicketData {
+    reporterName: string
+    company?: string
+    site?: string
+    unit?: string
+    category?: string
+    location?: string
+    description?: string
+    photoUrl?: string
+    initialStatus?: TicketStatus
+    priority?: Priority
+    catatanInternal?: string
+    photos?: File[]
+    onUploadProgress?: (fraction: number) => void
+}
+
+interface TicketContextType {
+    tickets: Ticket[]
+    loading: boolean
+    supportTickets: Set<string>
+    updateTicketStatus: (id: string, newStatus: TicketStatus, actionDetails?: string, newPriority?: Priority, resolvedBy?: 'helpdesk' | 'technician', rejectionReason?: string, duplicateOf?: string | null) => Promise<boolean>
+    assignTicket: (id: string, technicianId: string | null, technicianName?: string, note?: string, supportIds?: string[]) => Promise<void>
+    addTicket: (data: AddTicketData) => Promise<Ticket | null>
+    getTicketCount: (status: TicketStatus) => number
+    refreshTickets: () => Promise<void>
+}
+
+const TicketContext = createContext<TicketContextType | undefined>(undefined)
+
+// Snapshot nilai pending per tiket milik teknisi — buat deteksi transisi
+// (sedang menunggu keputusan PM → disetujui/ditolak) sekali pakai via ref,
+// biar toast realtime tidak re-trigger tiap fetch / noise realtime.
+type PendingSnapshot = Record<string, { status: string; pendingRequestedAt: string | null }>
+
+export const TicketProvider = ({ children }: { children: ReactNode }) => {
+    const [tickets, setTickets] = useState<Ticket[]>([])
+    const [loading, setLoading] = useState(true)
+    const [supportTickets, setSupportTickets] = useState<Set<string>>(new Set())
+    const { user } = useAuth()
+
+    const prevPendingRef = useRef<PendingSnapshot>({})
+
+    const fetchTickets = useCallback(async () => {
+        const { data, error } = await supabase
+            .from('tickets')
+            .select('*, activities(*)')
+            .order('created_at', { ascending: false })
+
+        if (error) {
+            console.error('Error fetching tickets:', error)
+        } else {
+            const rows = (data || []) as SupabaseTicketRow[]
+            const current: PendingSnapshot = {}
+
+            for (const r of rows) {
+                current[r.id] = {
+                    status: r.status,
+                    pendingRequestedAt: r.pending_requested_at ?? null,
+                }
+            }
+
+            // Keputusan PM (approve/reject kepengajuan pending) → toast realtime ke
+            // teknisi pemilik tiket. Snapshot transisi sekali pakai via ref, jadi tidak
+            // re-toast tiap fetch/realtime noise. Submisi pending oleh teknisi sendiri
+            // tetap senyap (tidak ada transition dari prev yang ditolak).
+            if (user?.id) {
+                for (const r of rows) {
+                    if (r.assigned_to !== user.id) continue
+                    const prev = prevPendingRef.current[r.id]
+                    if (!prev) continue
+                    const now = current[r.id]
+                    if (prev.pendingRequestedAt) {
+                        // Approve & reject sama-sama menghapus flag (migrasi 68); pembeda
+                        // hanya status akhir: PENDING = disetujui, tetap WORKING/EN_ROUTE = ditolak.
+                        if (now.status === 'PENDING') {
+                            toast.success('Pengajuan pending disetujui PM', {
+                                description: `${r.code}: tiket dialihkan ke status pending.`,
+                            })
+                        } else if (!now.pendingRequestedAt && (now.status === 'WORKING' || now.status === 'EN_ROUTE')) {
+                            toast.error('Pengajuan pending ditolak PM', {
+                                description: `${r.code}: kembali ke pekerjaan.`,
+                            })
+                        }
+                    } else if (!now.pendingRequestedAt && prev.status === 'PENDING' && now.status === 'WORKING') {
+                        // Veto PM (PENDING → WORKING) satu-satunya jalur keluar PENDING.
+                        toast.error('Pengajuan pending di-veto PM (lanjutkan kerja)', {
+                            description: `${r.code}: tiket kembali ke status dikerjakan.`,
+                        })
+                    }
+                }
+            }
+
+            prevPendingRef.current = current
+            setTickets(rows.map((r) => mapTicketRow(r)))
+        }
+
+        // Membership support (telig sebagai support, bukan lead) — ikut refresh
+        // di tiap fetch agar selaras dengan Realtime ticket_assignments.
+        if (user) {
+            const { data: assignments } = await supabase
+                .from('ticket_assignments')
+                .select('ticket_id')
+                .eq('user_id', user.id)
+            setSupportTickets(new Set((assignments ?? []).map((a) => a.ticket_id)))
+        } else {
+            setSupportTickets(new Set())
+        }
+        setLoading(false)
+    }, [user])
+
+    useEffect(() => {
+        if (!user) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setLoading(false)
+            return
+        }
+
+        fetchTickets()
+
+        const channel = supabase
+            .channel('realtime-atapcare')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'tickets' }, () => {
+                fetchTickets()
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'activities' }, () => {
+                fetchTickets()
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'ticket_assignments' }, () => {
+                fetchTickets()
+            })
+            .subscribe()
+
+        const onFocus = () => {
+            if (document.visibilityState === 'visible') fetchTickets()
+        }
+        document.addEventListener('visibilitychange', onFocus)
+
+        return () => {
+            supabase.removeChannel(channel)
+            document.removeEventListener('visibilitychange', onFocus)
+        }
+    }, [user, fetchTickets])
+
+    const addTicket = async (data: AddTicketData): Promise<Ticket | null> => {
+        if (!user) return null
+        const code = generateTicketCode()
+
+        const initialStatus = data.initialStatus || 'NEW'
+        // Prioritas NULL saat dibuat; diisi helpdesk saat validasi (status DIPROSES).
+        const initialPriority = data.priority
+
+        let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
+        if (data.photos?.length) {
+            try {
+                const fracs = new Array(data.photos.length).fill(0)
+                const paths = await Promise.all(data.photos.map((f, i) => uploadAttachment(f, code, (p) => {
+                    fracs[i] = p
+                    data.onUploadProgress?.(fracs.reduce((a, b) => a + b, 0) / data.photos!.length)
+                })))
+                const photoBlock = `Foto keluhan (${paths.length}):\n${paths.join('\n')}`
+                details = details ? `${details}\n${photoBlock}` : photoBlock
+            } catch {
+                toast.error('Gagal mengunggah foto. Foto tidak tersimpan.')
+            }
+        }
+
+        const { data: newTicket, error } = await supabase.rpc('create_internal_ticket', {
+            p_code: code,
+            p_customer: data.reporterName,
+            p_company: data.company || 'Internal',
+            p_site: data.site,
+            p_unit: data.unit,
+            p_status: initialStatus,
+            p_priority: initialPriority,
+            p_category: data.category ?? null,
+            p_location: data.location ?? null,
+            p_description: data.description,
+            p_photo_url: data.photoUrl ?? null,
+            p_activity_action: `Tiket dibuat dengan status ${STATUS_LABELS[initialStatus] || initialStatus}`,
+            p_activity_details: details,
+        })
+
+        if (error) {
+            console.error('Error adding ticket:', error)
+            toast.error('Gagal menyimpan tiket: ' + error.message)
+            return null
+        } else {
+            await fetchTickets()
+            return mapTicketRow(newTicket as SupabaseTicketRow)
+        }
+    }
+
+    const updateTicketStatus = async (
+        id: string,
+        newStatus: TicketStatus,
+        actionDetails?: string,
+        newPriority?: Priority,
+        resolvedBy?: 'helpdesk' | 'technician',
+        rejectionReason?: string,
+        duplicateOf?: string | null
+    ) => {
+        if (!user) return false
+
+        const currentTicket = tickets.find(t => t.id === id)
+        const closedAt = currentTicket?.closedAt ? new Date(currentTicket.closedAt).getTime() : null
+        if (currentTicket?.status === 'CLOSED' && newStatus !== 'CLOSED') {
+            if (!closedAt || Date.now() - closedAt > 7 * 24 * 60 * 60 * 1000) {
+                toast.error('Tiket sudah ditutup dan tidak dapat di-reopen (sudah lebih dari 7 hari).')
+                return false
+            }
+        }
+
+        const actionMap: Record<TicketStatus, string> = {
+            'NEW': 'Status diubah ke Baru', 'OPEN': 'Tiket divalidasi',
+            'UNASSIGNED': 'Tiket dieskalasi ke PM Lead', 'SCHEDULED': 'Tiket dijadwalkan',
+            'EN_ROUTE': 'Teknisi dalam perjalanan', 'WORKING': 'Pekerjaan dimulai',
+            'PENDING': 'Tiket dijeda', 'RESOLVED': 'Tugas diselesaikan',
+            'CLOSED': 'Tiket ditutup', 'REJECTED': 'Tiket ditolak',
+            'VOID': 'Tiket dibatalkan', 'DUPLICATE': 'Tiket diduplikasi'
+        }
+
+        const { error: ticketError } = await supabase.rpc('update_ticket_status', {
+            p_ticket_id: id,
+            p_new_status: newStatus,
+            p_new_priority: newPriority,
+            p_resolved_by: resolvedBy,
+            p_rejection_reason: rejectionReason,
+            p_activity_action: actionMap[newStatus],
+            p_activity_details: actionDetails || rejectionReason,
+            p_duplicate_of: duplicateOf ?? null,
+        })
+
+        if (ticketError) {
+            console.error('Error updating status:', ticketError)
+            toast.error('Gagal memperbarui status tiket: ' + ticketError.message)
+            return false
+        } else {
+            await fetchTickets()
+            return true
+        }
+    }
+
+    const getTicketCount = (status: TicketStatus) => tickets.filter(t => t.status === status).length
+
+    // Penugasan langsung (Opsi B): assign/reassign ke teknisi → SCHEDULED; unassign → UNASSIGNED.
+    // Satu fungsi berbagi untuk semua pemanggil (Helpdesk, PM, bulk assign) agar tidak terpecah.
+    const assignTicket = async (
+        id: string,
+        technicianId: string | null,
+        technicianName?: string,
+        note?: string,
+        supportIds?: string[]
+    ) => {
+        if (!user) return
+        const action = technicianId
+            ? `Tiket ditugaskan ke ${technicianName || 'Teknisi'}`
+            : 'Penugasan dibatalkan'
+
+        const { error: ticketError } = await supabase.rpc('assign_ticket', {
+            p_ticket_id: id,
+            p_technician_id: technicianId,
+            p_activity_action: action,
+            p_activity_details: note,
+            p_support_ids: supportIds || null,
+        })
+        if (ticketError) {
+            console.error('Error updating assignment:', ticketError)
+            toast.error('Gagal menyimpan penugasan.')
+        } else {
+            await fetchTickets()
+        }
+    }
+
+    if (loading) {
+        return <div className="flex h-screen items-center justify-center bg-muted">Memuat sistem...</div>
+    }
+
+    return (
+        <TicketContext.Provider value={{ tickets, loading, supportTickets, updateTicketStatus, assignTicket, addTicket, getTicketCount, refreshTickets: fetchTickets }}>
+            {children}
+        </TicketContext.Provider>
+    )
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const useTickets = () => {
+    const context = useContext(TicketContext)
+    if (!context) throw new Error('useTickets harus dipakai di dalam TicketProvider')
+    return context
+}

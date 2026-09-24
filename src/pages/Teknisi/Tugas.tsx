@@ -1,0 +1,631 @@
+import { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
+import { toast } from 'sonner'
+import { AnimatePresence, motion } from 'framer-motion'
+import { useAuth } from '../../context/AuthContext'
+import { useTickets, type Ticket, type TicketStatus } from '../../context/TicketContext'
+import {
+    X, MapPin, Camera, ChevronRight,
+    Clock, CheckCircle2, Pause, PauseCircle,
+    ClipboardList, Wrench, Archive, AlertTriangle, UserPlus, FileText
+} from 'lucide-react'
+import { Badge } from '../../components/Badge'
+import { Combobox } from '../../components/ui/combobox'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime, formatJadwal } from '../../components/TicketDrawer'
+import { uploadAttachment } from '../../services/photoService'
+import { recordGps, requestBackup, requestPending, setTicketCatalog } from '../../services/ticketService'
+import { problemCategoriesApi, rootCausesApi } from '../../services/master-data'
+import { getCurrentPosition, type GeolocError } from '../../lib/geolocation'
+
+type TabType = 'detail' | 'timeline'
+
+const TABS = [
+    { key: 'masuk', icon: ClipboardList, label: 'Masuk', color: 'text-muted-foreground', statuses: ['SCHEDULED', 'EN_ROUTE'] },
+    { key: 'dikerjakan', icon: Wrench, label: 'Dikerjakan', color: 'text-muted-foreground', statuses: ['WORKING', 'RESOLVED'] },
+    { key: 'pending', icon: Pause, label: 'Dijeda', color: 'text-muted-foreground', statuses: ['PENDING'] },
+    { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-muted-foreground', statuses: ['CLOSED'] },
+]
+
+function gpsErrorMessage(err: GeolocError): string {
+    switch (err?.code) {
+        case 1: return 'Izin lokasi ditolak oleh browser. Buka pengaturan situs (ikon kunci di address bar) → Location → Allow, cek juga Lokasi Windows, lalu muat ulang.'
+        case 2: return 'Posisi tidak tersedia. Aktifkan GPS / akses jaringan, lalu coba lagi.'
+        case 3: return 'Pengambilan lokasi terlalu lama. Pastikan GPS aktif lalu coba lagi.'
+        default: return err?.message || 'Lokasi gagal ditangkap. Aktifkan GPS dan coba lagi.'
+    }
+}
+
+export default function TugasTeknisi() {
+    const { user } = useAuth()
+    const { tickets, updateTicketStatus, refreshTickets, supportTickets } = useTickets()
+    const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+    const [activeDrawerTab, setActiveDrawerTab] = useState<TabType>('detail')
+    const [activeSection, setActiveSection] = useState('masuk')
+
+    const [showPendingModal, setShowPendingModal] = useState(false)
+    const [pendingReason, setPendingReason] = useState('')
+    const [pendingPhotos, setPendingPhotos] = useState<File[]>([])
+    const [pendingError, setPendingError] = useState('')
+    const [pendingSubmitting, setPendingSubmitting] = useState(false)
+    const [showCompleteModal, setShowCompleteModal] = useState(false)
+    const [completeNote, setCompleteNote] = useState('')
+    const [serialNumber, setSerialNumber] = useState('')
+    const [completeRootCause, setCompleteRootCause] = useState('')
+    const [completeRootNote, setCompleteRootNote] = useState('')
+    const [photos, setPhotos] = useState<File[]>([])
+    const [submitting, setSubmitting] = useState(false)
+    const [catalogItems, setCatalogItems] = useState<{ categories: Map<string, string>; roots: Map<string, string> }>({
+        categories: new Map(), roots: new Map(),
+    })
+    const [gpsError, setGpsError] = useState('')
+    const [isLoading, setIsLoading] = useState<string | null>(null)
+    const [showLemburModal, setShowLemburModal] = useState(false)
+    const [lemburTarget, setLemburTarget] = useState<Ticket | null>(null)
+    const [backupRequested, setBackupRequested] = useState<Set<string>>(new Set())
+    const [backupSubmitting, setBackupSubmitting] = useState(false)
+
+    // Katalog untuk dropdown & label temuan awal/akhir di drawer.
+    useEffect(() => {
+        Promise.all([problemCategoriesApi.getAll(), rootCausesApi.getAll()]).then(([c, r]) => {
+            setCatalogItems({
+                categories: new Map(c.map(i => [i.id, i.name])),
+                roots: new Map(r.map(i => [i.id, i.name])),
+            })
+        })
+    }, [])
+
+    const rootOptions = useMemo(() => [...catalogItems.roots.entries()].map(([value, label]) => ({ value, label })), [catalogItems.roots])
+
+    const myTickets = useMemo(() =>
+        tickets.filter(t => (t.assignedTo === user?.id || supportTickets.has(t.id)) && !['VOID', 'DUPLICATE', 'REJECTED'].includes(t.status)),
+        [tickets, user?.id, supportTickets]
+    )
+
+    const grouped = useMemo(() => {
+        const byStatus: Record<string, Ticket[]> = {}
+        for (const s of ['SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'RESOLVED', 'CLOSED']) byStatus[s] = []
+        for (const t of myTickets) {
+            if (byStatus[t.status]) byStatus[t.status].push(t)
+        }
+        for (const s of Object.keys(byStatus)) {
+            byStatus[s].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        }
+        return byStatus
+    }, [myTickets])
+
+    // Tahap 1 dari 2: mulai perjalanan → EN_ROUTE ("Teknisi dalam perjalanan").
+    // Peringatan lembur (BR 3.2.2) dikaitkan ke sini, bukan ke tombol terima — alur
+    // accept dihapus karena mubazir: status SCHEDULED sudah menunjukkan "ditugaskan",
+    // dan kunci jadwal menahan perjalanan/kerja sampai jamnya tiba.
+    const handleMulaiPerjalanan = (ticket: Ticket) => {
+        const { jadwal } = getAssignmentInfo(ticket.activities)
+        if (isScheduleOvertime(jadwal)) {
+            setLemburTarget(ticket)
+            setShowLemburModal(true)
+        } else {
+            handleStatusUpdate(ticket.id, 'EN_ROUTE', '')
+        }
+    }
+
+    const handleStatusUpdate = async (id: string, status: string, note: string) => {
+        setIsLoading(id)
+        await updateTicketStatus(id, status as TicketStatus, note)
+        setIsLoading(null)
+        setSelectedTicket(null)
+    }
+
+    const handleMulaiKerja = async (ticket: Ticket) => {
+        setGpsError('')
+        setIsLoading('gps')
+        try {
+            const { latitude, longitude } = await getCurrentPosition({ enableHighAccuracy: true, timeout: 10000 })
+            setGpsError('')
+            setIsLoading(null)
+            const res = await recordGps(ticket.id, latitude, longitude, 'start')
+            if (!res.ok) toast.error(res.error ? `Lokasi gagal disimpan: ${res.error}` : 'Lokasi awal gagal disimpan.')
+            handleStatusUpdate(ticket.id, 'WORKING', `Pekerjaan dimulai — lokasi terverifikasi (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`)
+        } catch (err) {
+            setGpsError(gpsErrorMessage(err as GeolocError))
+            setIsLoading(null)
+        }
+    }
+
+    const handlePending = async () => {
+        if (!selectedTicket) return
+        if (!pendingReason.trim() || pendingPhotos.length === 0) {
+            setPendingError('Mohon isi alasan dan upload foto/file bukti dulu.')
+            return
+        }
+        setPendingError('')
+        setPendingSubmitting(true)
+        try {
+            const paths = pendingPhotos.length
+                ? await Promise.all(pendingPhotos.map((f) => uploadAttachment(f, selectedTicket.code)))
+                : []
+            const ok = await requestPending(selectedTicket.id, pendingReason.trim(), paths)
+            if (!ok) {
+                toast.error('Gagal mengajukan pending. Pastikan belum ada pengajuan yang menunggu persetujuan PM.')
+            } else {
+                toast.success('Pengajuan pending terkirim — menunggu persetujuan PM.')
+            }
+            await refreshTickets()
+        } catch {
+            toast.error('Gagal mengunggah foto bukti. Coba lagi.')
+        } finally {
+            setPendingReason('')
+            setPendingPhotos([])
+            setPendingSubmitting(false)
+            setShowPendingModal(false)
+        }
+    }
+
+    const handleComplete = async () => {
+        if (!selectedTicket) return
+        if (!completeNote.trim()) { toast.error('Catatan Hasil wajib diisi.'); return }
+        if (!completeRootCause) { toast.error('Temuan Akhir wajib diisi.'); return }
+        if (photos.length === 0) { toast.error('Foto & File Dokumentasi wajib diunggah.'); return }
+        setSubmitting(true)
+        try {
+            const paths = await Promise.all(photos.map((f) => uploadAttachment(f, selectedTicket.code)))
+            const parts = [`Selesai${completeNote ? ': ' + completeNote : ''}`]
+            if (serialNumber.trim()) parts.push(`Serial Number: ${serialNumber.trim()}`)
+            if (paths.length) parts.push(`Foto (${paths.length}):\n${paths.join('\n')}`)
+            getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 })
+                .then((pos) => { void recordGps(selectedTicket.id, pos.latitude, pos.longitude, 'end') })
+                .catch(() => {})
+            await handleStatusUpdate(selectedTicket.id, 'RESOLVED', parts.join(' | '))
+            if (completeRootCause) {
+                const ok = await setTicketCatalog(selectedTicket.id, null, completeRootCause, completeRootNote.trim() || null)
+                if (!ok) toast.error('Temuan akhir gagal disimpan.')
+            }
+        } catch {
+            toast.error('Gagal mengunggah foto. Coba lagi.')
+        } finally {
+            setSubmitting(false)
+            setCompleteNote('')
+            setSerialNumber('')
+            setCompleteRootCause('')
+            setCompleteRootNote('')
+            setPhotos([])
+            setShowCompleteModal(false)
+        }
+    }
+
+    // Support (non-lead): minta pengalihan penanggung jawab ke PM. Bukan takeover
+    // langsung — PM yang reassign via Command Center (assign_ticket, PM-only).
+    const handleRequestBackup = async () => {
+        if (!selectedTicket) return
+        setBackupSubmitting(true)
+        const ok = await requestBackup(selectedTicket.id)
+        if (ok) {
+            toast.success('Permintaan pengalihan terkirim ke PM.')
+            setBackupRequested(prev => new Set(prev).add(selectedTicket.id))
+        } else {
+            toast.error('Gagal mengirim permintaan. Coba lagi.')
+        }
+        setBackupSubmitting(false)
+    }
+
+    const renderCard = (ticket: Ticket) => {
+        const isCritical = ticket.priority === 'Critical' && ticket.status !== 'CLOSED'
+        const { jadwal } = getAssignmentInfo(ticket.activities)
+        const isOvertime = ticket.status === 'SCHEDULED' && isScheduleOvertime(jadwal)
+
+        return (
+            <div key={ticket.id}
+                className={`bg-card border-2 rounded-lg p-4 sm:p-5 shadow-sm hover:shadow-md transition-all cursor-pointer min-h-[96px] ${isCritical ? 'border-red-200 hover:border-red-300 pulse-ring' : 'border-border hover:border-border'}`}
+                onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}
+            >
+                <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                        <span className="font-mono text-sm font-bold text-foreground">{ticket.code}</span>
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5 truncate">{ticket.site}{ticket.unit ? ` — ${ticket.unit}` : ''}</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{ticket.customer}</p>
+                        {isOvertime && (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                <Clock className="w-3 h-3" /> Berpotensi Lembur
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                        {ticket.priority && <Badge type="priority" value={ticket.priority} small />}
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    const incomingCount = (grouped['SCHEDULED']?.length || 0) + (grouped['EN_ROUTE']?.length || 0)
+
+    // Status waktu jadwal tiket yang sedang dibuka di drawer: sebelum jadwal tidak ada
+    // aksi (hanya hint), perjalanan & mulai kerja dikunci sampai jamnya tiba.
+    // ponytail: `now` di-tick 30 detik saat drawer terbuka; stalenya ≤30 detik, cukup
+    // untuk kunci jadwal (dan tombol otomatis terbuka saat jamnya lewat). Naikkan
+    // frekuensi hanya kalau presisi menit mulai terasa.
+    const [now, setNow] = useState(() => Date.now())
+    useEffect(() => {
+        if (!selectedTicket) return
+        const id = setInterval(() => setNow(Date.now()), 30_000)
+        return () => clearInterval(id)
+    }, [selectedTicket])
+    const jadwal = selectedTicket ? getAssignmentInfo(selectedTicket.activities).jadwal : undefined
+    const schedDate = jadwal ? new Date(jadwal.replace(' ', 'T')) : null
+    const canTravel = !schedDate || Number.isNaN(schedDate.getTime()) || now >= schedDate.getTime()
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-end gap-4">
+                <span className="px-3 py-2 rounded bg-red-600 text-white text-sm font-medium flex items-center gap-2 shadow-sm">
+                    <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                    {incomingCount} Tugas Masuk
+                </span>
+            </div>
+
+            {gpsError && (
+                <div className="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded">
+                    <MapPin className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
+                    <p className="text-sm text-red-700">{gpsError}</p>
+                    <button onClick={() => setGpsError('')} className="ml-auto"><X className="w-4 h-4 text-red-400" /></button>
+                </div>
+            )}
+
+            <div className="bg-card p-4 rounded-xl border border-border">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            {TABS.map(tab => {
+                                const count = tab.statuses.flatMap(s => grouped[s] || []).length
+                                const isActive = activeSection === tab.key
+                                return (
+                                    <button key={tab.key}
+                                        onClick={() => setActiveSection(tab.key)}
+                                        className={`flex items-center justify-center gap-2 px-3 min-h-[44px] rounded-sm text-sm font-medium transition whitespace-nowrap ${isActive ? 'bg-foreground text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+                                    >
+                                        <tab.icon className={`w-4 h-4 ${isActive ? 'text-primary-foreground' : tab.color}`} />
+                                        {tab.label}
+                                        <span className={`text-[11px] font-bold ${isActive ? 'text-primary-foreground' : 'text-muted-foreground'}`}>{count}</span>
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    <AnimatePresence mode="popLayout">
+                        <motion.div
+                            key={activeSection}
+                            initial={{ opacity: 0, y: 50, filter: 'blur(10px)' }}
+                            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                            exit={{ opacity: 0, y: -50, filter: 'blur(10px)' }}
+                            transition={{ duration: 0.2, ease: 'easeOut' }}
+                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+                        >
+                            {(() => {
+                                const activeTab = TABS.find(t => t.key === activeSection)!
+                                const cards = activeTab.statuses.flatMap(s => grouped[s] || [])
+                                if (cards.length === 0) {
+                                    const Icon = activeTab.icon
+                                    return (
+                                        <div className="col-span-full text-center py-16 text-muted-foreground">
+                                            <Icon className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                                            <p className="font-medium">Tidak ada tiket {activeTab.label.toLowerCase()}</p>
+                                            <p className="text-sm">Tiket yang sesuai filter akan muncul di sini.</p>
+                                        </div>
+                                    )
+                                }
+                                return cards.map(renderCard)
+                            })()}
+                        </motion.div>
+                    </AnimatePresence>
+
+            {/* Offcanvas Drawer */}
+            {selectedTicket && (
+                <TicketDrawer
+                    onClose={() => setSelectedTicket(null)}
+                    code={selectedTicket.code}
+                    ticketId={selectedTicket.id}
+                    status={selectedTicket.status}
+                    priority={selectedTicket.priority}
+                    createdAt={selectedTicket.createdAt}
+                    activeTab={activeDrawerTab}
+                    onTabChange={setActiveDrawerTab}
+                    activities={selectedTicket.activities}
+                    footer={
+                        <>
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'SCHEDULED' && (
+                                canTravel ? (
+                                    <button onClick={() => handleMulaiPerjalanan(selectedTicket)}
+                                        disabled={isLoading === selectedTicket.id}
+                                        className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                        {isLoading === selectedTicket.id ? 'Memproses...' : <><ChevronRight className="w-4 h-4" /> Mulai Perjalanan</>}
+                                    </button>
+                                ) : (
+                                    <p className="text-center text-sm text-muted-foreground italic">
+                                        Belum waktunya mulai perjalanan. Jadwal {jadwal ? formatJadwal(jadwal) : '-'}.
+                                    </p>
+                                )
+                            )}
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'EN_ROUTE' && (
+                                canTravel ? (
+                                    selectedTicket.pendingRequestedAt ? (
+                                        <div className="space-y-3">
+                                            <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa mulai bekerja.</p>
+                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
+                                                disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
+                                                className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                                {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button onClick={() => setShowPendingModal(true)}
+                                                className="min-h-[44px] bg-transparent text-amber-600 border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
+                                                <PauseCircle className="w-4 h-4" /> Ajukan Pending
+                                            </button>
+                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
+                                                disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
+                                                className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                                {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
+                                            </button>
+                                        </div>
+                                    )
+                                ) : (
+                                    <p className="text-center text-sm text-muted-foreground italic">
+                                        Belum waktunya mulai kerja. Jadwal {jadwal ? formatJadwal(jadwal) : '-'}.
+                                    </p>
+                                )
+                            )}
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'WORKING' && (
+                                selectedTicket.pendingRequestedAt ? (
+                                    <div className="space-y-3">
+                                        <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa menyelesaikan pekerjaan.</p>
+                                        <button onClick={() => setShowCompleteModal(true)}
+                                            className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4" /> Selesaikan
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button onClick={() => setShowPendingModal(true)}
+                                            className="min-h-[44px] bg-card text-foreground border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-accent/50 transition">
+                                            <PauseCircle className="w-4 h-4" /> Ajukan Pending
+                                        </button>
+                                        <button onClick={() => setShowCompleteModal(true)}
+                                            className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
+                                            <CheckCircle2 className="w-4 h-4" /> Selesaikan
+                                        </button>
+                                    </div>
+                                )
+                            )}
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'PENDING' && (
+                                <p className="text-center text-sm text-muted-foreground italic">Tiket dijeda — pengajuan disetujui PM. Lanjutkan setelah siap.</p>
+                            )}
+                            {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'RESOLVED' && (
+                                <p className="text-center text-sm text-muted-foreground italic">Menunggu validasi Helpdesk</p>
+                            )}
+                            {selectedTicket.assignedTo !== user?.id && ['SCHEDULED', 'EN_ROUTE', 'WORKING'].includes(selectedTicket.status) && (
+                                <div className="space-y-3">
+                                    <p className="text-center text-sm text-muted-foreground italic">
+                                        Anda teknisi pendukung. Penanganan & pelaporan dipegang teknisi utama.
+                                    </p>
+                                    {backupRequested.has(selectedTicket.id) ? (
+                                        <p className="text-center text-xs font-semibold text-emerald-600">
+                                            Permintaan pengalihan terkirim ke PM. Bila disetujui, PM akan menetapkan Anda sebagai penanggung jawab.
+                                        </p>
+                                    ) : (
+                                        <button onClick={handleRequestBackup} disabled={backupSubmitting}
+                                            className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
+                                            {backupSubmitting ? 'Mengirim...' : <><UserPlus className="w-4 h-4" /> Ajukan Pengalihan</>}
+                                        </button>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    }
+                >
+                    {activeDrawerTab === 'detail' && (
+                        <div className="space-y-3">
+                            {jadwal && (
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Jadwal</p>
+                                    <p className="font-medium text-sm">{formatJadwal(jadwal)}</p>
+                                </div>
+                            )}
+                            <AssignmentCard items={selectedTicket.activities} />
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Pelanggan</p>
+                                    <p className="font-medium text-sm">{selectedTicket.customer}</p>
+                                </div>
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Site / Unit</p>
+                                    <p className="font-medium text-sm">{selectedTicket.site || '-'} — {selectedTicket.unit || '-'}</p>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Awal</p>
+                                    <p className="font-medium text-sm">{selectedTicket.categoryId ? catalogItems.categories.get(selectedTicket.categoryId) || '—' : '—'}</p>
+                                </div>
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Akhir</p>
+                                    <p className="font-medium text-sm">{selectedTicket.rootCauseId ? catalogItems.roots.get(selectedTicket.rootCauseId) || '—' : '—'}</p>
+                                </div>
+                            </div>
+                            {selectedTicket.rootCauseNote && (
+                                <div className="bg-muted/60 p-4 rounded-lg border border-border mt-4">
+                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Temuan Akhir</p>
+                                    <p className="text-sm text-foreground">{selectedTicket.rootCauseNote}</p>
+                                </div>
+                            )}
+                            <TicketDescription description={selectedTicket.description} />
+                        </div>
+                    )}
+
+                    {activeDrawerTab === 'timeline' && <TicketTimeline items={selectedTicket.activities} isFinal={['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status)} />}
+                </TicketDrawer>
+            )}
+
+            {/* Pending Modal */}
+            {showPendingModal && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowPendingModal(false)}>
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                <PauseCircle className="w-5 h-5" /> Ajukan Pending
+                            </h3>
+                            <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]); setPendingError('') }} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <textarea value={pendingReason} onChange={e => { setPendingReason(e.target.value); setPendingError('') }}
+                            placeholder="Alasan pending (wajib)..."
+                            rows={3} className="input resize-none mb-4" />
+                        <div className="mb-4">
+                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto & File Bukti</label>
+                            <div className="border border-border rounded-lg p-4 text-center hover:border-foreground transition-colors cursor-pointer"
+                                onClick={() => document.getElementById('pending-foto-upload')?.click()}>
+                                <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+                                <p className="text-xs text-muted-foreground">Ketuk untuk upload foto atau file</p>
+                                <input id="pending-foto-upload" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple
+                                    className="hidden" onChange={e => {
+                                        const files = Array.from(e.target.files || [])
+                                        setPendingPhotos(prev => [...prev, ...files])
+                                        setPendingError('')
+                                    }} />
+                            </div>
+                            {pendingPhotos.length > 0 && (
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {pendingPhotos.map((f, i) => (
+                                        <div key={i} className="relative">
+                                            {f.type.startsWith('image/') ? (
+                                                <img src={URL.createObjectURL(f)} alt={f.name} className="w-16 h-16 object-cover rounded border border-border" />
+                                            ) : (
+                                                <div className="w-16 h-16 flex flex-col items-center justify-center rounded border border-border bg-muted">
+                                                    <FileText className="w-5 h-5 text-muted-foreground mb-0.5" />
+                                                    <span className="text-[8px] font-mono text-muted-foreground truncate max-w-[50px]">{f.name.split('.').pop()?.toUpperCase()}</span>
+                                                </div>
+                                            )}
+                                            <button onClick={() => setPendingPhotos(pendingPhotos.filter((_, j) => j !== i))}
+                                                className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center">✕</button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        {pendingError && <p className="text-xs text-red-500 mb-3">{pendingError}</p>}
+                        <div className="flex gap-3">
+                            <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]); setPendingError('') }}
+                                disabled={pendingSubmitting}
+                                className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
+                            <button onClick={handlePending} disabled={pendingSubmitting}
+                                className="flex-1 min-h-[44px] bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{pendingSubmitting ? 'Memproses...' : 'Simpan'}</button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* Complete Modal */}
+            {showCompleteModal && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowCompleteModal(false)}>
+                    <div className="bg-card w-full max-w-lg rounded-lg border-2 border-border p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                <CheckCircle2 className="w-5 h-5 text-foreground" /> Selesaikan Tugas
+                            </h3>
+                            <button onClick={() => { setShowCompleteModal(false); setCompleteNote(''); setSerialNumber(''); setCompleteRootCause(''); setCompleteRootNote(''); setPhotos([]) }} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-medium mb-1.5">Catatan Hasil</label>
+                                <textarea value={completeNote} onChange={e => setCompleteNote(e.target.value)}
+                                    rows={2} className="input resize-none" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium mb-1.5">Serial Number (jika ada pergantian unit)</label>
+                                <input value={serialNumber} onChange={e => setSerialNumber(e.target.value)}
+                                    className="input" placeholder="Serial number unit baru..." />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium mb-1.5">Temuan Akhir</label>
+                                <Combobox
+                                    options={rootOptions}
+                                    value={completeRootCause}
+                                    onChange={setCompleteRootCause}
+                                    placeholder="Pilih temuan akhir..."
+                                    emptyText="Tidak ada temuan akhir"
+                                />
+                                <input value={completeRootNote} onChange={e => setCompleteRootNote(e.target.value)}
+                                    className="input mt-2"
+                                    placeholder="Catatan temuan akhir (opsional)" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium mb-1.5">Foto & File Dokumentasi</label>
+                                <div className="border border-border rounded-lg p-4 text-center hover:border-foreground transition-colors cursor-pointer"
+                                    onClick={() => document.getElementById('foto-upload')?.click()}>
+                                    <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
+                                    <p className="text-xs text-muted-foreground">Ketuk untuk upload foto atau file</p>
+                                    <input id="foto-upload" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple
+                                        className="hidden" onChange={e => {
+                                            const files = Array.from(e.target.files || [])
+                                            setPhotos(prev => [...prev, ...files])
+                                        }} />
+                                </div>
+                                {photos.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {photos.map((f, i) => (
+                                            <div key={i} className="relative">
+                                                {f.type.startsWith('image/') ? (
+                                                    <img src={URL.createObjectURL(f)} alt={f.name} className="w-16 h-16 object-cover rounded border border-border" />
+                                                ) : (
+                                                    <div className="w-16 h-16 flex flex-col items-center justify-center rounded border border-border bg-muted">
+                                                        <FileText className="w-5 h-5 text-muted-foreground mb-0.5" />
+                                                        <span className="text-[8px] font-mono text-muted-foreground truncate max-w-[50px]">{f.name.split('.').pop()?.toUpperCase()}</span>
+                                                    </div>
+                                                )}
+                                                <button onClick={() => setPhotos(photos.filter((_, j) => j !== i))}
+                                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-[8px] flex items-center justify-center">✕</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex gap-3 mt-6">
+                            <button onClick={() => { setShowCompleteModal(false); setCompleteNote(''); setSerialNumber(''); setCompleteRootCause(''); setCompleteRootNote(''); setPhotos([]) }}
+                                disabled={submitting}
+                                className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
+                            <button onClick={handleComplete} disabled={submitting || !completeNote.trim() || !completeRootCause || photos.length === 0}
+                                className="flex-1 min-h-[44px] bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{submitting ? 'Memproses...' : 'Ya, Selesaikan'}</button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* Lembur Modal */}
+            {showLemburModal && lemburTarget && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowLemburModal(false)}>
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold text-amber-600 flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5" /> Berpotensi Lembur
+                            </h3>
+                            <button onClick={() => setShowLemburModal(false)} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="bg-amber-50/60 p-4 rounded-lg border border-amber-200 mb-4">
+                            <p className="text-sm text-amber-800">
+                                Tiket <span className="font-mono font-bold">{lemburTarget.code}</span> dijadwalkan di luar jam operasional (08.00–17.00 WIB) atau akhir pekan.
+                                Memulai perjalanan tugas ini berpotensi lembur.
+                            </p>
+                        </div>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowLemburModal(false)}
+                                className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium">Batal</button>
+                            <button onClick={() => {
+                                handleStatusUpdate(lemburTarget.id, 'EN_ROUTE', 'Disetujui lembur')
+                                setShowLemburModal(false); setLemburTarget(null)
+                            }}
+                                className="flex-1 min-h-[44px] bg-amber-500 text-white rounded text-sm font-bold">Ya, Mulai Perjalanan</button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+        </div>
+    )
+}

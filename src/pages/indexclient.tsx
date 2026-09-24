@@ -1,0 +1,309 @@
+import { Link } from "react-router-dom";
+import { ArrowRight, ChevronDown, Clock, LifeBuoy, Mail, FileText, Filter, CalendarClock, Wrench, CheckCircle2, BadgeCheck, Phone } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { getLandingStats, type LandingStats } from "@/services/ticketService";
+import SiteFooter from "@/components/SiteFooter";
+import Reveal from "@/components/Reveal";
+import { SiteHeader, SocialIcon } from "@/components/SiteHeader";
+import { TroubleshootCards } from "@/components/TroubleshootCards";
+
+const ADMIN_EMAIL = "info@atapteknologi.id";
+const ADMIN_PHONE_DISPLAY = "+62 822-8000-0694";
+const ADMIN_PHONE_LINK = "6282280000694";
+
+const SOCIALS: { href: string; label: string; children: React.ReactNode }[] = [
+  {
+    href: "https://www.linkedin.com/company/atapteknologi/",
+    label: "LinkedIn",
+    children: (
+      <>
+        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+        <rect width="4" height="12" x="2" y="9" />
+        <circle cx="4" cy="4" r="2" />
+      </>
+    ),
+  },
+  {
+    href: "https://www.instagram.com/aptek.id?igsi=MXh4ZXQ1YXprcDY3Nw==",
+    label: "Instagram",
+    children: (
+      <>
+        <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+        <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+      </>
+    ),
+  },
+];
+
+const FLOW_STEPS: { n: string; title: string; desc: string; Icon: typeof FileText }[] = [
+  { n: "01", title: "Laporkan Kendala", desc: "Masuk ke akun Anda melalui halaman Login, kirim laporan kendala beserta foto, dan dapatkan ID tiket untuk pelacakan.", Icon: FileText },
+  { n: "02", title: "Validasi & Prioritas", desc: "Tim kami memvalidasi laporan, mengonfirmasi penerimaan via WhatsApp, serta menetapkan prioritas sesuai urgensi. Bantuan jarak jauh dicoba bila memungkinkan.", Icon: Filter },
+  { n: "03", title: "Penjadwalan & Penugasan", desc: "Perbaikan dijadwalkan dan ditugaskan ke teknisi lapangan yang berwenang di lokasi Anda.", Icon: CalendarClock },
+  { n: "04", title: "Perbaikan di Lapangan", desc: "Teknisi check-in via GPS, perbaikan dilaksanakan, foto bukti hasil & serial number unit diunggah ke sistem.", Icon: Wrench },
+  { n: "05", title: "Verifikasi Hasil", desc: "Hasil pekerjaan diverifikasi tim kami; dikembalikan untuk perbaikan ulang bila belum tuntas.", Icon: CheckCircle2 },
+  { n: "06", title: "Penutupan & Penilaian", desc: "Tiket ditutup oleh tim kami, dan Anda diminta memberikan penilaian layanan.", Icon: BadgeCheck },
+];
+
+const FAQ_ITEMS: Array<{ q: string; a: string }> = [
+  {
+    q: "Bagaimana cara melaporkan kendala?",
+    a: "Buat akun pelanggan melalui halaman Login, lalu masuk dan gunakan form \"Lapor Kendala\" di Dashboard. Isi data site, unit, dan deskripsi kendala.",
+  },
+  {
+    q: "Bagaimana cara melacak status laporan?",
+    a: "Login ke akun pelanggan Anda. Semua tiket dan statusnya terlihat di Dashboard. Klik tiket untuk melihat detail dan timeline.",
+  },
+  {
+    q: "Siapa yang akan menangani laporan saya?",
+    a: "Laporan Anda divalidasi oleh tim kami, kemudian dikoordinasikan hingga diteruskan ke teknisi lapangan yang bertugas di lokasi Anda.",
+  },
+  {
+    q: "Bagaimana jika gangguan terjadi di luar jam kerja (malam atau hari libur)?",
+    a: "Laporan tetap dapat dikirim dan akan diproses pada jam operasional berikutnya (Senin–Jumat, 08.00–17.00 WIB). Untuk keadaan mendesak di luar jam kerja, hubungi tim kami melalui Grup WhatsApp Resmi.",
+  },
+];
+
+const ZONE_TITLE = "text-2xl md:text-3xl font-display font-bold tracking-tight self-start mb-10";
+const STATS_CACHE_KEY = "atapcare-landing-stats";
+
+export default function Landing() {
+  const [stats, setStats] = useState<LandingStats | null>(() => {
+    try {
+      const raw = localStorage.getItem(STATS_CACHE_KEY);
+      return raw ? (JSON.parse(raw) as LandingStats) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [openFaq, setOpenFaq] = useState<number | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    getLandingStats().then((s) => {
+      if (!mounted) return;
+      setStats(s);
+      localStorage.setItem(STATS_CACHE_KEY, JSON.stringify(s));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const badgeText = `${stats?.active_units ?? 0} Titik Aktif`;
+  const faqItems = useMemo(() => FAQ_ITEMS, []);
+
+  return (
+    <div className="min-h-screen bg-background text-foreground relative overflow-x-clip flex flex-col">
+
+      {/* ========================================== */}
+      {/* LAYER BACKGROUND PREMIUM (MONOCHROME)      */}
+      {/* ========================================== */}
+      {/* 1. Base Grid Pattern */}
+      <div className="fixed inset-0 grid-bg opacity-30 pointer-events-none z-0" />
+
+      {/* 2. Noise Texture (Film Grain) */}
+      <div className="fixed inset-0 noise-overlay pointer-events-none z-0" />
+
+      {/* 3. Ambient Glow 1 (Top Left) - Memberikan kedalaman tanpa warna */}
+      <div className="fixed -top-32 -left-32 w-[600px] h-[600px] bg-muted rounded-full blur-[120px] opacity-70 pointer-events-none z-0" />
+
+      {/* 4. Ambient Glow 2 (Bottom Right) - Menyeimbangkan komposisi */}
+      <div className="fixed -bottom-32 -right-32 w-[700px] h-[700px] bg-border rounded-full blur-[150px] opacity-60 pointer-events-none z-0" />
+
+      {/* KONTEN UTAMA (z-10 agar di atas background)*/}
+
+      <SiteHeader />
+
+      {/* HERO SECTION */}
+      <main id="beranda" className="relative flex-1 min-h-[calc(100vh-4rem)] scroll-mt-16 flex flex-col items-center justify-center px-6 py-20 text-center overflow-hidden">
+
+        {/* LAYARAN BACKGROUND HERO */}
+
+        <div className="absolute inset-0 hero-blob z-0" />
+        <div className="absolute inset-0 hero-mesh z-0" />
+        <div className="absolute inset-0 grid-bg opacity-40 z-0" />
+        <div className="absolute inset-0 noise-overlay z-0" />
+        <div className="relative z-10 max-w-4xl mx-auto w-full">
+          <Reveal>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full glass border border-border text-xs font-mono uppercase tracking-widest mb-6">
+              <span className="h-2 w-2 bg-red-600 rounded-full pulse-dot" />
+              {badgeText}
+            </div>
+          </Reveal>
+
+          <Reveal delay={100}>
+            <h1 className="text-4xl md:text-6xl font-display font-bold tracking-tight leading-[1.05]">
+              Gerbang Atap Care
+            </h1>
+          </Reveal>
+
+          <Reveal delay={200}>
+            <p className="mt-4 text-base text-muted-foreground max-w-2xl mx-auto leading-relaxed">
+              Kirim laporan kerusakan untuk perangkat Anda, lalu pantau perkembangannya secara real-time
+              hingga selesai ditangani tim kami.
+            </p>
+          </Reveal>
+
+          <Reveal delay={300}>
+            <div className="mt-8 flex justify-center w-full">
+              <Link
+                to="/login"
+                className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-foreground text-background font-medium hover:opacity-90 transition-all duration-300 text-sm shadow-sm"
+              >
+                <span className="transition-all duration-300 group-hover:pr-1">Lapor Kendala</span>
+                <ArrowRight className="h-4 w-4 text-background transition-all duration-300 opacity-0 -ml-2 group-hover:opacity-100 group-hover:ml-0" />
+              </Link>
+            </div>
+          </Reveal>
+        </div>
+      </main>
+
+      <TroubleshootCards />
+
+      {/* ALUR LAYANAN SECTION */}
+      <section id="alur" className="relative z-10 px-6 py-16 max-w-5xl mx-auto w-full scroll-mt-16">
+        <h2 className={ZONE_TITLE}>
+          Alur Layanan
+        </h2>
+        <div className="grid auto-rows-fr sm:grid-cols-2 lg:grid-cols-3 gap-4 w-full">
+          {FLOW_STEPS.map(({ n, title, desc, Icon }, i) => (
+            <Reveal key={n} delay={i * 70}>
+              <div className="sweep group relative h-full rounded-xl border border-border bg-card/60 backdrop-blur-sm p-5 transition-all duration-300 hover:-translate-y-1 hover:border-foreground/40 hover:bg-card">
+                <span className="font-mono text-3xl font-bold text-foreground opacity-90 transition-opacity duration-300 group-hover:opacity-100">
+                  {n}
+                </span>
+                <div className="mt-3 flex items-start gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <div>
+                    <p className="font-semibold text-sm leading-tight">{title}</p>
+                    <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* INFO & FAQ SECTION */}
+      <section id="info" className="relative z-10 px-6 pb-20 max-w-5xl mx-auto w-full scroll-mt-16">
+        <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4">
+          <div className="space-y-4">
+            <Reveal>
+              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6 sweep group relative transition-all duration-300 hover:-translate-y-1 hover:border-foreground/40 hover:bg-card">
+                <h2 className="text-lg font-display font-bold tracking-tight">
+                  Informasi Penting
+                </h2>
+                <div className="mt-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <Clock className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Jam Operasional</p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        Senin–Jumat · 08.00–17.00 WIB. Pelaporan di luar jam kerja akan diproses pada jam operasional berikutnya.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <LifeBuoy className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Butuh Bantuan?</p>
+                      <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
+                        Hubungi kami melalui chat atau hubungi admin.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+
+            <Reveal delay={90}>
+              <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6 sweep group relative transition-all duration-300 hover:-translate-y-1 hover:border-foreground/40 hover:bg-card">
+                <h2 className="text-lg font-display font-bold tracking-tight">
+                  Kontak Kami
+                </h2>
+                <div className="mt-4 space-y-4">
+                  <a href={`mailto:${ADMIN_EMAIL}`} className="flex items-center gap-3 group">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <Mail className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Email</p>
+                      <p className="text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_EMAIL}</p>
+                    </div>
+                  </a>
+                  <a
+                    href={`https://wa.me/${ADMIN_PHONE_LINK}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 group"
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-foreground text-background">
+                      <Phone className="h-4 w-4" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold">Nomor Admin</p>
+                      <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_PHONE_DISPLAY}</p>
+                    </div>
+                  </a>
+                  <div className="flex items-center gap-3 pt-1">
+                    {SOCIALS.map((s) => (
+                      <SocialIcon key={s.label} href={s.href} label={s.label}>
+                        {s.children}
+                      </SocialIcon>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Reveal>
+          </div>
+
+          <div className="rounded-xl border border-border bg-card/80 backdrop-blur-md p-6 flex flex-col min-h-0">
+            <h2 className="text-lg font-display font-bold tracking-tight">
+              FAQ - Pertanyaan Umum
+            </h2>
+            <div className="mt-4 space-y-2 flex-1 min-h-0 overflow-y-auto">
+              {faqItems.map((item, i) => (
+                <div key={i} className="border border-border rounded-lg overflow-hidden bg-background/50">
+                  <button
+                    onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 text-sm font-medium text-left cursor-pointer hover:bg-accent/50 transition-colors"
+                  >
+                    {item.q}
+                    <ChevronDown
+                      className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200 ${openFaq === i ? "rotate-180" : ""}`}
+                    />
+                  </button>
+                  <AnimatePresence initial={false}>
+                    {openFaq === i && (
+                      <motion.div
+                        key="answer"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2, ease: "easeInOut" }}
+                        className="overflow-hidden"
+                      >
+                        <p className="px-4 pb-3 text-sm text-muted-foreground border-t border-border pt-3">{item.a}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <SiteFooter />
+    </div>
+  );
+}
