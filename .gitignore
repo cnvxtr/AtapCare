@@ -37,6 +37,8 @@ supabase/.temp/
 # ==========================================
 # ENVIRONMENT & SECRETS (PALING PENTING!)
 # ==========================================
+# Firebase config — berisi kunci proyek; hanya ada di mesin dev/build.
+google-services.json
 .env
 .env.local
 .env.development

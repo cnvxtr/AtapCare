@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { createTicket, type CreateTicketPayload } from '../../services/ticketService'
-import { Camera, FileText } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { toast } from 'sonner'
+import CameraFileUpload from '../../components/CameraFileUpload'
 import { Combobox, type ComboboxOption } from '../../components/ui/combobox'
 
 interface CustomerRow { id: string; name: string }
@@ -111,18 +112,7 @@ export default function CustomerReport() {
                         placeholder="Jelaskan kendala yang Anda alami..." />
                 </div>
                 <div>
-                    <label className="block text-xs font-medium mb-1.5">Foto & File Pendukung (wajib)</label>
-                    <div className="border border-border rounded-lg p-4 text-center hover:border-foreground transition-colors cursor-pointer"
-                        onClick={() => document.getElementById('customer-foto-upload')?.click()}>
-                        <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                        <p className="text-xs text-muted-foreground">Ketuk untuk upload foto atau file</p>
-                        <input id="customer-foto-upload" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple className="hidden"
-                            onChange={e => {
-                                const files = Array.from(e.target.files || [])
-                                setPhotos(prev => [...prev, ...files])
-                                e.target.value = ''
-                            }} />
-                    </div>
+                    <CameraFileUpload label="Foto & File Pendukung (wajib)" onFiles={(files) => setPhotos(prev => [...prev, ...files])} />
                     {photos.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-2">
                             {photos.map((f, i) => (

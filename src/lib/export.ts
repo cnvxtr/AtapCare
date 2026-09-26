@@ -1,8 +1,33 @@
 import { STATUS_LABELS } from "@/components/Badge";
+import { Capacitor } from '@capacitor/core'
+import { Directory, Filesystem } from '@capacitor/filesystem'
+import { Share } from '@capacitor/share'
 
 export type ExportCell = string | number | null | undefined;
 
-function downloadBlob(blob: Blob, filename: string) {
+// Unduh file: web → blob download; native → share sheet (webview tak mendukung
+// anchor download). Tulis ke cache, share, lalu bersihkan.
+export async function downloadBlob(blob: Blob, filename: string) {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const b64 = await new Promise<string>((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(String(r.result))
+        r.onerror = () => reject(r.error)
+        r.readAsDataURL(blob)
+      })
+      const data = b64.slice(b64.indexOf(',') + 1)
+      const file = await Filesystem.writeFile({ path: filename, data, directory: Directory.Cache })
+      try {
+        await Share.share({ url: file.uri, title: filename, dialogTitle: 'Bagikan Berkas' })
+      } finally {
+        await Filesystem.deleteFile({ path: filename, directory: Directory.Cache })
+      }
+    } catch {
+      throw new Error('Gagal mengunduh di perangkat.')
+    }
+    return
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

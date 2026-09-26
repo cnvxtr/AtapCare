@@ -1,15 +1,17 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useAuth } from '../../context/AuthContext'
 import { useTickets, type Ticket, type TicketStatus } from '../../context/TicketContext'
 import {
-    X, MapPin, Camera, ChevronRight,
+    X, MapPin, ChevronRight,
     Clock, CheckCircle2, Pause, PauseCircle,
     ClipboardList, Wrench, Archive, AlertTriangle, UserPlus, FileText
 } from 'lucide-react'
 import { Badge } from '../../components/Badge'
+import CameraFileUpload from '../../components/CameraFileUpload'
 import { Combobox } from '../../components/ui/combobox'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime, formatJadwal } from '../../components/TicketDrawer'
 import { uploadAttachment } from '../../services/photoService'
@@ -38,7 +40,21 @@ function gpsErrorMessage(err: GeolocError): string {
 export default function TugasTeknisi() {
     const { user } = useAuth()
     const { tickets, updateTicketStatus, refreshTickets, supportTickets } = useTickets()
+    const navigate = useNavigate()
+    const location = useLocation()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+
+    // Klik notifikasi di APK → drawer tiket auto-terbuka.
+    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    useEffect(() => {
+        if (!notifyOpenTicket) return
+        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!t) return
+        setSelectedTicket(t)
+        setActiveDrawerTab('detail')
+        navigate(location.pathname, { replace: true, state: null })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notifyOpenTicket])
     const [activeDrawerTab, setActiveDrawerTab] = useState<TabType>('detail')
     const [activeSection, setActiveSection] = useState('masuk')
 
@@ -63,6 +79,7 @@ export default function TugasTeknisi() {
     const [lemburTarget, setLemburTarget] = useState<Ticket | null>(null)
     const [backupRequested, setBackupRequested] = useState<Set<string>>(new Set())
     const [backupSubmitting, setBackupSubmitting] = useState(false)
+    const [showMulaiKerjaConfirm, setShowMulaiKerjaConfirm] = useState(false)
 
     // Katalog untuk dropdown & label temuan awal/akhir di drawer.
     useEffect(() => {
@@ -103,15 +120,17 @@ export default function TugasTeknisi() {
             setLemburTarget(ticket)
             setShowLemburModal(true)
         } else {
-            handleStatusUpdate(ticket.id, 'EN_ROUTE', '')
+            handleStatusUpdate(ticket.id, 'EN_ROUTE', '', true)
         }
     }
 
-    const handleStatusUpdate = async (id: string, status: string, note: string) => {
+    // keepOpen=true untuk transisi SCHEDULED→EN_ROUTE agar drawer tidak menutup saat
+    // alur perjalanan → Mulai Kerja dikerjakan dalam satu layar (poin revisi 5).
+    const handleStatusUpdate = async (id: string, status: string, note: string, keepOpen = false) => {
         setIsLoading(id)
         await updateTicketStatus(id, status as TicketStatus, note)
         setIsLoading(null)
-        setSelectedTicket(null)
+        if (!keepOpen) setSelectedTicket(null)
     }
 
     const handleMulaiKerja = async (ticket: Ticket) => {
@@ -348,7 +367,7 @@ export default function TugasTeknisi() {
                                     selectedTicket.pendingRequestedAt ? (
                                         <div className="space-y-3">
                                             <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa mulai bekerja.</p>
-                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
+                                            <button onClick={() => setShowMulaiKerjaConfirm(true)}
                                                 disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
                                                 className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                                 {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
@@ -360,7 +379,7 @@ export default function TugasTeknisi() {
                                                 className="min-h-[44px] bg-transparent text-amber-600 border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
                                                 <PauseCircle className="w-4 h-4" /> Ajukan Pending
                                             </button>
-                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
+                                            <button onClick={() => setShowMulaiKerjaConfirm(true)}
                                                 disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
                                                 className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                                 {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
@@ -417,6 +436,11 @@ export default function TugasTeknisi() {
                                         </button>
                                     )}
                                 </div>
+                            )}
+                            {['CLOSED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(selectedTicket.status) && (
+                                <p className="text-center text-sm text-muted-foreground italic">
+                                    {selectedTicket.status === 'CLOSED' ? 'Tiket selesai' : selectedTicket.status === 'VOID' ? 'Tiket dibatalkan' : selectedTicket.status === 'DUPLICATE' ? 'Tiket duplikat' : 'Tiket ditolak'} — Read Only
+                                </p>
                             )}
                         </>
                     }
@@ -478,18 +502,8 @@ export default function TugasTeknisi() {
                             placeholder="Alasan pending (wajib)..."
                             rows={3} className="input resize-none mb-4" />
                         <div className="mb-4">
-                            <label className="block text-xs font-semibold text-muted-foreground mb-1">Foto & File Bukti</label>
-                            <div className="border border-border rounded-lg p-4 text-center hover:border-foreground transition-colors cursor-pointer"
-                                onClick={() => document.getElementById('pending-foto-upload')?.click()}>
-                                <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                                <p className="text-xs text-muted-foreground">Ketuk untuk upload foto atau file</p>
-                                <input id="pending-foto-upload" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple
-                                    className="hidden" onChange={e => {
-                                        const files = Array.from(e.target.files || [])
-                                        setPendingPhotos(prev => [...prev, ...files])
-                                        setPendingError('')
-                                    }} />
-                            </div>
+                            <CameraFileUpload label="Foto & File Bukti" onFiles={(files) => { setPendingPhotos(prev => [...prev, ...files]); setPendingError('') }} />
+                            {pendingError && <p className="text-xs text-red-500 mt-1">{pendingError}</p>}
                             {pendingPhotos.length > 0 && (
                                 <div className="flex flex-wrap gap-2 mt-2">
                                     {pendingPhotos.map((f, i) => (
@@ -556,17 +570,7 @@ export default function TugasTeknisi() {
                                     placeholder="Catatan temuan akhir (opsional)" />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium mb-1.5">Foto & File Dokumentasi</label>
-                                <div className="border border-border rounded-lg p-4 text-center hover:border-foreground transition-colors cursor-pointer"
-                                    onClick={() => document.getElementById('foto-upload')?.click()}>
-                                    <Camera className="w-6 h-6 text-muted-foreground mx-auto mb-1" />
-                                    <p className="text-xs text-muted-foreground">Ketuk untuk upload foto atau file</p>
-                                    <input id="foto-upload" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple
-                                        className="hidden" onChange={e => {
-                                            const files = Array.from(e.target.files || [])
-                                            setPhotos(prev => [...prev, ...files])
-                                        }} />
-                                </div>
+                                <CameraFileUpload label="Foto & File Dokumentasi" onFiles={(files) => setPhotos(prev => [...prev, ...files])} />
                                 {photos.length > 0 && (
                                     <div className="flex flex-wrap gap-2 mt-2">
                                         {photos.map((f, i) => (
@@ -618,10 +622,34 @@ export default function TugasTeknisi() {
                             <button onClick={() => setShowLemburModal(false)}
                                 className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium">Batal</button>
                             <button onClick={() => {
-                                handleStatusUpdate(lemburTarget.id, 'EN_ROUTE', 'Disetujui lembur')
+                                handleStatusUpdate(lemburTarget.id, 'EN_ROUTE', 'Disetujui lembur', true)
                                 setShowLemburModal(false); setLemburTarget(null)
                             }}
                                 className="flex-1 min-h-[44px] bg-amber-500 text-white rounded text-sm font-bold">Ya, Mulai Perjalanan</button>
+                        </div>
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* Konfirmasi Mulai Kerja */}
+            {showMulaiKerjaConfirm && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowMulaiKerjaConfirm(false)}>
+                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                <MapPin className="w-5 h-5" /> Mulai Kerja (GPS)
+                            </h3>
+                            <button onClick={() => setShowMulaiKerjaConfirm(false)} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-4">
+                            Lokasi perangkat akan dicatat ke aktivitas tiket saat menekan Mulai Kerja. Pastikan GPS aktif & kamu berada di lokasi penugasan.
+                        </p>
+                        <div className="flex gap-3">
+                            <button onClick={() => setShowMulaiKerjaConfirm(false)}
+                                className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium">Batal</button>
+                            <button onClick={() => { setShowMulaiKerjaConfirm(false); if (selectedTicket) handleMulaiKerja(selectedTicket) }}
+                                disabled={isLoading === 'gps'}
+                                className="flex-1 min-h-[44px] bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{isLoading === 'gps' ? 'Mengambil lokasi...' : 'Ya, Mulai Kerja'}</button>
                         </div>
                     </div>
                 </div>

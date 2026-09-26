@@ -45,19 +45,22 @@ function KpiCard({
           ? "bg-amber-50 text-amber-600"
           : "bg-muted text-muted-foreground";
   return (
-    <div className="rounded-xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 mb-1 min-w-0">
-        <span className={`h-8 w-8 shrink-0 grid place-items-center rounded-lg ${toneClass}`}>{icon}</span>
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate">
-          {label}
-        </span>
+    <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
+      <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
+      <div className="flex justify-between items-start">
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+            {label}
+          </p>
+          <h3 className="text-3xl sm:text-4xl font-display font-bold mt-2 tracking-tight">
+            {typeof value === "number" ? <AnimatedNumber value={value} decimals={decimals} /> : value}
+            {typeof value === "number" && suffix && (
+              <span className="text-base font-medium text-muted-foreground">{suffix}</span>
+            )}
+          </h3>
+        </div>
+        <div className={`p-2 border border-border rounded-lg ${toneClass}`}>{icon}</div>
       </div>
-      <p className="text-3xl sm:text-4xl font-display font-bold text-foreground mt-3">
-        {typeof value === "number" ? <AnimatedNumber value={value} decimals={decimals} /> : value}
-        {typeof value === "number" && suffix && (
-          <span className="text-base font-medium text-muted-foreground">{suffix}</span>
-        )}
-      </p>
     </div>
   );
 }
@@ -86,7 +89,7 @@ export function AdminDashboard() {
     };
   }, []);
 
-  const d = data || { totalCustomerAccounts: 0, totalCompanies: 0, totalUnits: 0, unitDist: [] };
+  const d = data || { totalCustomerAccounts: 0, totalUsers: 0, totalCompanies: 0, totalUnits: 0, unitDist: [] };
   const m = monthly || { ticketsDone: 0, leaderboard: [] };
   const bulanIni = BULAN[new Date().getMonth()];
 
@@ -95,15 +98,15 @@ export function AdminDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         <KpiCard
           icon={<Users className="h-4 w-4" />}
-          label="Pelanggan"
-          value={d.totalCustomerAccounts}
+          label="Total Pengguna"
+          value={d.totalUsers}
         />
         <KpiCard
           icon={<Building2 className="h-4 w-4" />}
-          label="Perusahaan"
+          label="Total Perusahaan"
           value={d.totalCompanies}
         />
         <KpiCard
@@ -130,42 +133,6 @@ export function AdminDashboard() {
       <div className="rounded-xl border border-border bg-card">
         <div className="px-5 py-4">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Building2 className="h-4 w-4" /> Unit per Site
-          </h3>
-        </div>
-        {d.unitDist.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Building2 className="h-10 w-10 mb-2" />
-            <p className="text-sm font-medium">Belum ada data</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto ">
-            {d.unitDist.map((s, i) => (
-              <div key={s.name} className="flex items-center gap-3 px-5 py-3">
-                <span className={`w-6 text-xs font-bold ${i === 0 ? "text-amber-600" : "text-muted-foreground"}`}>{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
-                    <span className="text-xs font-bold text-muted-foreground ml-2">{s.count}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full bg-primary"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(100, (s.count / (d.unitDist[0]?.count || 1)) * 100)}%` }}
-                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 * i }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="rounded-xl border border-border bg-card">
-        <div className="px-5 py-4">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Wrench className="h-4 w-4" /> Leaderboard Teknisi ({bulanIni})
           </h3>
         </div>
@@ -180,9 +147,9 @@ export function AdminDashboard() {
             {m.leaderboard.map((t, i) => (
               <div key={t.name} className="flex items-center gap-4 px-5 py-3.5">
                 <div
-                  className={`h-8 w-8 grid place-items-center rounded-full text-xs font-bold ${
+                  className={`h-8 w-8 grid place-items-center rounded-lg text-xs font-bold ${
                     i === 0
-                      ? "bg-amber-100 text-amber-700"
+                      ? "bg-emerald-100 text-emerald-700"
                       : i === 1
                         ? "bg-muted text-foreground"
                         : i === 2
@@ -194,6 +161,42 @@ export function AdminDashboard() {
                 </div>
                 <p className="text-sm font-semibold text-foreground truncate flex-1">{t.name}</p>
                 <span className="text-xs font-bold text-muted-foreground">{t.completed} tiket</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-border bg-card">
+        <div className="px-5 py-4">
+          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Building2 className="h-4 w-4" /> Unit per Site
+          </h3>
+        </div>
+        {d.unitDist.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+            <Building2 className="h-10 w-10 mb-2" />
+            <p className="text-sm font-medium">Belum ada data</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border max-h-[24rem] overflow-y-auto ">
+            {d.unitDist.map((s, i) => (
+              <div key={s.name} className="flex items-center gap-3 px-5 py-3">
+                <span className={`w-6 text-xs font-bold ${i === 0 ? "text-emerald-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
+                    <span className="text-xs font-bold text-muted-foreground ml-2">{s.count}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                    <motion.div
+                      className="h-full rounded-full bg-primary"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${Math.min(100, (s.count / (d.unitDist[0]?.count || 1)) * 100)}%` }}
+                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 * i }}
+                    />
+                  </div>
+                </div>
               </div>
             ))}
           </div>

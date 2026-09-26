@@ -67,7 +67,7 @@ function AuthError({ message }: { message: string | null }) {
   );
 }
 
-const PasswordInput = React.forwardRef<
+export const PasswordInput = React.forwardRef<
   HTMLInputElement,
   React.InputHTMLAttributes<HTMLInputElement> & { id: string; error?: boolean }
 >(function PasswordInput({ id, disabled, error, ...props }, forwardedRef) {

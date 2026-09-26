@@ -28,7 +28,6 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Pagination, PaginationContent, PaginationItem } from "@/components/ui/pagination";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "admin", label: "Admin" },
@@ -55,6 +54,7 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
 
 interface UserRow {
   id: string;
+  email: string | null;
   username: string;
   name: string;
   wa_number: string | null;
@@ -95,6 +95,7 @@ export function AdminUsers() {
   const [deleting, setDeleting] = useState(false);
 
   const [formName, setFormName] = useState("");
+  const [formEmail, setFormEmail] = useState("");
   const [formUsername, setFormUsername] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
@@ -126,7 +127,7 @@ export function AdminUsers() {
     const { data: userData } = await supabase
       .from("users")
       .select(
-        "id, username, name, wa_number, role, roles, status, must_change_password, last_login",
+        "id, email, username, name, wa_number, role, roles, status, must_change_password, last_login",
       )
       .eq("is_deleted", false)
       .order("name");
@@ -149,6 +150,7 @@ export function AdminUsers() {
     for (const u of userData) {
       rows.push({
         id: u.id,
+        email: u.email,
         username: u.username,
         name: u.name,
         wa_number: u.wa_number,
@@ -166,6 +168,7 @@ export function AdminUsers() {
 
   function resetForm() {
     setFormName("");
+    setFormEmail("");
     setFormUsername("");
     setFormPassword("");
     setShowPw(false);
@@ -198,6 +201,7 @@ export function AdminUsers() {
   function openEditDialog(u: UserRow) {
     const roles = ((u.roles || "").split(",").filter(Boolean) as AppRole[]) || [];
     setFormName(u.name || "");
+    setFormEmail(u.email || "");
     setFormUsername(u.username);
     setFormPassword("");
     setShowPw(false);
@@ -233,16 +237,24 @@ export function AdminUsers() {
       toast.error("Username hanya boleh huruf, angka, titik, dan underscore");
       return;
     }
-    const { data: dup } = await supabase
-      .from("users")
-      .select("id")
-      .eq("username", username)
-      .maybeSingle();
-    if (dup && dup.id !== editingId) {
+    const { data: dupRows } = await supabase.from("users").select("id, username");
+    const dup = (dupRows || []).find(
+      (u) => u.id !== editingId && (u.username || "").toLowerCase() === username.toLowerCase(),
+    );
+    if (dup) {
       toast.error(`Username "${username}" sudah dipakai user lain`);
       return;
     }
     const newPw = formPassword.trim();
+    const email = formEmail.trim();
+    if (!email) {
+      toast.error("Email wajib diisi");
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      toast.error("Format email tidak valid");
+      return;
+    }
     if (editingId) {
       if (newPw && newPw.length < 6) {
         toast.error("Password minimal 6 karakter");
@@ -279,6 +291,27 @@ export function AdminUsers() {
     if (editingId) {
       // RLS users hanya mengizinkan self-update last_login; tulis user lain
       // lewat RPC SECURITY DEFINER (validasi caller role=admin).
+      const existing = users.find((u) => u.id === editingId);
+      if (existing && existing.email !== email) {
+        const { VITE_SUPABASE_URL } = import.meta.env;
+        const headers = await getAuthHeaders();
+        if (!headers) {
+          toast.error("Sesi berakhir, silakan login ulang");
+          setSaving(false);
+          return;
+        }
+        const res = await fetch(`${VITE_SUPABASE_URL}/functions/v1/admin-update-email`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ userId: editingId, email }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        if (!res.ok || data.error) {
+          toast.error("Gagal mengubah email: " + (data.error || "Edge Function belum di-deploy"));
+          setSaving(false);
+          return;
+        }
+      }
       const { data: saveResult, error: saveError } = await supabase.rpc("admin_save_user", {
         p_id: editingId,
         p_email: "",
@@ -292,7 +325,7 @@ export function AdminUsers() {
       if (saveError || (saveResult as { error?: string } | null)?.error) {
         toast.error(
           "Gagal menyimpan user: " +
-            (saveError?.message || (saveResult as { error?: string } | null)?.error),
+          (saveError?.message || (saveResult as { error?: string } | null)?.error),
         );
         setSaving(false);
         return;
@@ -329,6 +362,7 @@ export function AdminUsers() {
           headers,
           body: JSON.stringify({
             username,
+            email,
             password: newPassword,
             name: formName.trim(),
             wa_number: formWa.trim(),
@@ -391,8 +425,8 @@ export function AdminUsers() {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         toast.error(
           "Gagal menghapus user: " +
-            (data.error ||
-              "Edge Function belum di-deploy (supabase functions deploy admin-delete-user)"),
+          (data.error ||
+            "Edge Function belum di-deploy (supabase functions deploy admin-delete-user)"),
         );
         setDeleting(false);
         return;
@@ -427,8 +461,8 @@ export function AdminUsers() {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         toast.error(
           "Gagal reset password: " +
-            (data.error ||
-              "Edge Function belum di-deploy (supabase functions deploy admin-reset-password)"),
+          (data.error ||
+            "Edge Function belum di-deploy (supabase functions deploy admin-reset-password)"),
         );
         return false;
       }
@@ -471,53 +505,59 @@ export function AdminUsers() {
 
   return (
     <div className="space-y-4">
-  <div className="bg-card p-4 rounded-xl border border-border">
-    <div className="flex items-center justify-between flex-wrap gap-2">
-    <div className="relative flex-1 min-w-0">
-      <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-      <input
-        value={searchQ}
-        onChange={(e) => {
-          setSearchQ(e.target.value);
-          setPage(1);
-        }}
-        placeholder="Cari nama atau username…"
-        className="pl-9 pr-4 h-9 rounded-lg border border-border bg-card text-sm outline-none focus:ring-2 focus:ring-foreground/20 transition w-full text-foreground"
-      />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+        <div className="bg-foreground text-primary-foreground rounded-xl px-5 py-4 flex flex-col gap-1">
+          <span className="text-[10px] font-mono uppercase tracking-widest opacity-80">Karyawan Internal</span>
+          <span className="text-2xl font-bold">{users.filter(u => u.role !== 'customer').length}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={openAddDialog}
-            className="h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
-          >
-            <Plus className="h-3.5 w-3.5" /> Tambah Pengguna
-          </button>
+        <div className="bg-foreground text-primary-foreground rounded-xl px-5 py-4 flex flex-col gap-1">
+          <span className="text-[10px] font-mono uppercase tracking-widest opacity-80">Pelanggan</span>
+          <span className="text-2xl font-bold">{users.filter(u => u.role === 'customer').length}</span>
         </div>
-      </div>
       </div>
 
-      <Tabs
-        value={userTab}
-        onValueChange={(v) => {
-          setUserTab(v as "internal" | "customer");
-          setPage(1);
-        }}
-      >
-        <TabsList className="flex-wrap h-auto gap-1 rounded border border-border bg-card p-1.5">
-          <TabsTrigger
-            value="internal"
-            className="border border-border rounded bg-card text-muted-foreground text-[11px] font-semibold uppercase tracking-wider font-mono [&[data-state=active]]:bg-foreground [&[data-state=active]]:text-primary-foreground [&[data-state=active]]:border-foreground [&[data-state=active]]:shadow"
+      <div className="bg-card p-1 rounded-xl border border-border grid grid-cols-2 gap-1">
+        {(["internal", "customer"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => {
+              setUserTab(t);
+              setPage(1);
+            }}
+            className={`px-3.5 h-8 rounded-[3px] text-xs font-medium transition inline-flex items-center justify-center gap-1.5 ${userTab === t
+                ? "bg-foreground text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent"
+              }`}
           >
-            Karyawan Internal
-          </TabsTrigger>
-          <TabsTrigger
-            value="customer"
-            className="border border-border rounded bg-card text-muted-foreground text-[11px] font-semibold uppercase tracking-wider font-mono [&[data-state=active]]:bg-foreground [&[data-state=active]]:text-primary-foreground [&[data-state=active]]:border-foreground [&[data-state=active]]:shadow"
-          >
-            Pelanggan
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+            {t === "internal" ? "Karyawan Internal" : "Pelanggan"}
+          </button>
+        ))}
+      </div>
+
+      <div className="bg-card p-4 rounded-xl border border-border">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="relative flex-1 min-w-0">
+            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={searchQ}
+              onChange={(e) => {
+                setSearchQ(e.target.value);
+                setPage(1);
+              }}
+              placeholder="Cari nama atau username…"
+              className="pl-9 pr-4 h-9 rounded-lg border border-border bg-card text-sm outline-none focus:ring-2 focus:ring-foreground/20 transition w-full text-foreground"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={openAddDialog}
+              className="h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
+            >
+              <Plus className="h-3.5 w-3.5" /> Tambah Pengguna
+            </button>
+          </div>
+        </div>
+      </div>
 
       {loading ? null : paginated.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
@@ -531,131 +571,129 @@ export function AdminUsers() {
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <div className="min-w-[640px]">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Nama
-                  </th>
-                  <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Username
-                  </th>
-                  <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Role
-                  </th>
-                  <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Status
-                  </th>
-                  <th className="text-center px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Tiket Aktif
-                  </th>
-                  <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Terakhir Login
-                  </th>
-                  <th className="text-right px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
-                    Aksi
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginated.map((u) => (
-                  <tr
-                    key={u.id}
-                    className="border-b border-border last:border-0 hover:bg-accent transition"
-                  >
-                    <td className="px-4 py-3 text-xs font-medium text-foreground">
-                      <span className="inline-flex items-center gap-2">
-                        <span className="h-6 w-6 rounded-full bg-muted grid place-items-center text-[10px] font-bold text-muted-foreground">
-                          {u.name
-                            ? u.name
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      Nama
+                    </th>
+                    <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      Username
+                    </th>
+                    <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      Role
+                    </th>
+                    <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      Status
+                    </th>
+                    <th className="text-center px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      Tiket Aktif
+                    </th>
+                    <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      Terakhir Login
+                    </th>
+                    <th className="text-right px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map((u) => (
+                    <tr
+                      key={u.id}
+                      className="border-b border-border last:border-0 hover:bg-accent transition"
+                    >
+                      <td className="px-4 py-3 text-xs font-medium text-foreground">
+                        <span className="inline-flex items-center gap-2">
+                          <span className="h-6 w-6 rounded-full bg-muted grid place-items-center text-[10px] font-bold text-muted-foreground">
+                            {u.name
+                              ? u.name
                                 .split(" ")
                                 .map((n: string) => n[0])
                                 .join("")
                                 .slice(0, 2)
                                 .toUpperCase()
-                            : "?"}
-                        </span>
-                        {u.name}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{u.username}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {u.roles.split(",").filter(Boolean).map((r) => (
-                          <span
-                            key={r}
-                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${ROLE_BADGE_COLORS[r] || "bg-muted text-muted-foreground"}`}
-                          >
-                            {getRoleLabel(r)}
+                              : "?"}
                           </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={`text-[10px] font-medium px-2 py-0.5 rounded ${
-                          u.status === "aktif"
-                            ? "bg-green-100 text-green-700"
-                            : "bg-red-100 text-red-700"
-                        }`}
-                      >
-                        {STATUS_OPTIONS.find((s) => s.value === u.status)?.label || u.status}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={`text-xs font-mono font-bold ${
-                          u.active_tickets > 0 ? "text-yellow-600" : "text-muted-foreground"
-                        }`}
-                      >
-                        {u.active_tickets}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="text-[10px] text-muted-foreground">
-                        {u.last_login
-                          ? new Date(u.last_login).toLocaleString("id-ID", {
+                          {u.name}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs font-mono text-muted-foreground">{u.username}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-1">
+                          {u.roles.split(",").filter(Boolean).map((r) => (
+                            <span
+                              key={r}
+                              className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${ROLE_BADGE_COLORS[r] || "bg-muted text-muted-foreground"}`}
+                            >
+                              {getRoleLabel(r)}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`text-[10px] font-medium px-2 py-0.5 rounded ${u.status === "aktif"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
+                            }`}
+                        >
+                          {STATUS_OPTIONS.find((s) => s.value === u.status)?.label || u.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={`text-xs font-mono font-bold ${u.active_tickets > 0 ? "text-yellow-600" : "text-muted-foreground"
+                            }`}
+                        >
+                          {u.active_tickets}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-[10px] text-muted-foreground">
+                          {u.last_login
+                            ? new Date(u.last_login).toLocaleString("id-ID", {
                               dateStyle: "medium",
                               timeStyle: "short",
                             })
-                          : "—"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-end">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              aria-label="Aksi"
-                              className="h-8 w-8 grid place-items-center rounded-[3px] bg-black text-white hover:bg-neutral-800 transition"
+                            : "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                aria-label="Aksi"
+                                className="h-8 w-8 grid place-items-center rounded-[3px] bg-black text-white hover:bg-neutral-800 transition"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="min-w-[140px] bg-card border-border text-card-foreground"
                             >
-                              <MoreHorizontal className="h-4 w-4" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="min-w-[140px] bg-card border-border text-card-foreground"
-                          >
-                            <DropdownMenuItem
-                              onClick={() => openEditDialog(u)}
-                              className="cursor-pointer focus:bg-black focus:text-white"
-                            >
-                              <Pencil className="h-3.5 w-3.5" /> Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => setDeleteTarget(u)}
-                              className="cursor-pointer text-red-500 focus:bg-red-100 focus:text-red-500"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" /> Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                              <DropdownMenuItem
+                                onClick={() => openEditDialog(u)}
+                                className="cursor-pointer focus:bg-black focus:text-white"
+                              >
+                                <Pencil className="h-3.5 w-3.5" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDeleteTarget(u)}
+                                className="cursor-pointer text-red-500 focus:bg-red-100 focus:text-red-500"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
           {totalPages > 1 && (
@@ -698,13 +736,13 @@ export function AdminUsers() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg bg-card">
+        <DialogContent className="max-w-lg bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-4 pr-8">
             <DialogTitle className="text-foreground">
-              {editingId ? "Edit User" : "Tambah User Baru"}
+              {editingId ? "Edit User" : "Tambah Pengguna Baru"}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 max-h-[min(65vh,520px)] overflow-y-auto pr-1">
+          <div className="space-y-4 pr-1">
             <div>
               <label className="text-xs font-medium text-muted-foreground mb-1 block">Nama Lengkap</label>
               <input
@@ -721,7 +759,16 @@ export function AdminUsers() {
                 onChange={(e) => setFormUsername(e.target.value)}
                 className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
                 placeholder="Username login"
-                disabled={!!editingId}
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>
+              <input
+                type="email"
+                value={formEmail}
+                onChange={(e) => setFormEmail(e.target.value)}
+                className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                placeholder="email@contoh.com"
               />
             </div>
             {!editingId && (
@@ -760,13 +807,12 @@ export function AdminUsers() {
                       key={r.value}
                       onClick={() => togglePrimaryRole(r.value)}
                       disabled={blocked}
-                      className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${
-                        selected
+                      className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${selected
                           ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
                           : blocked
                             ? "border-border text-muted-foreground opacity-40 cursor-not-allowed"
                             : "border-border text-muted-foreground hover:border-foreground/40"
-                      }`}
+                        }`}
                     >
                       {r.label}
                     </button>
@@ -783,11 +829,10 @@ export function AdminUsers() {
                   <button
                     key={r.value}
                     onClick={() => toggleRole(r.value)}
-                    className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${
-                      formRoles.includes(r.value)
+                    className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${formRoles.includes(r.value)
                         ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
                         : "border-border text-muted-foreground hover:border-foreground/40"
-                    }`}
+                      }`}
                   >
                     {r.label}
                   </button>
@@ -802,13 +847,12 @@ export function AdminUsers() {
                     <button
                       key={s.value}
                       onClick={() => setFormStatus(s.value)}
-                      className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${
-                        formStatus === s.value
+                      className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${formStatus === s.value
                           ? s.value === "aktif"
                             ? "bg-green-600 text-white border-green-600"
                             : "bg-red-600 text-white border-red-600"
                           : "border-border text-muted-foreground hover:border-foreground/40"
-                      }`}
+                        }`}
                     >
                       {s.label}
                     </button>
@@ -853,6 +897,7 @@ export function AdminUsers() {
               disabled={
                 saving ||
                 !formName.trim() ||
+                !formEmail.trim() ||
                 !formUsername.trim() ||
                 !formPrimaryRole ||
                 (!editingId && !formPassword.trim())

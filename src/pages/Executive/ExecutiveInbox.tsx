@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Search, AlertTriangle, Table, LayoutGrid, User, Filter } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
@@ -19,6 +20,20 @@ export default function ExecutiveInbox() {
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
+
+    // Klik notifikasi di APK → drawer tiket auto-terbuka.
+    const location = useLocation()
+    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    const navigate = useNavigate()
+    useEffect(() => {
+        if (!notifyOpenTicket) return
+        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!t) return
+        setSelectedTicket(t)
+        setActiveDrawerTab('detail')
+        navigate(location.pathname, { replace: true, state: null })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notifyOpenTicket])
 
     useEffect(() => {
         const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3')
@@ -59,7 +74,7 @@ export default function ExecutiveInbox() {
                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
                         <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-none">
                         <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
                             <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
                                 <LayoutGrid className="h-3.5 w-3.5" /> Kanban
@@ -68,7 +83,7 @@ export default function ExecutiveInbox() {
                                 <Table className="h-3.5 w-3.5" /> Tabel
                             </button>
                         </div>
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-1 min-w-0 sm:flex-none">
                             <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
                             <MultiSelectFilter
                                 label="Semua"
@@ -79,7 +94,7 @@ export default function ExecutiveInbox() {
                                     { value: 'Medium', label: 'Medium' },
                                     { value: 'Low', label: 'Low' },
                                 ]}
-                                className="px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full flex-1 gap-1"
+                                className="px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full flex-1 gap-1 sm:w-[130px] sm:flex-none"
                             />
                         </div>
                     </div>

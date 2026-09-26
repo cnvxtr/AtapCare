@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { authErrorMessage } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { LIGHT } from "./Login";
+import { LIGHT, PasswordInput } from "./Login";
 import logo from "../assets/logo.png";
 
 type Phase = "checking" | "invalid" | "ready";
@@ -56,6 +55,13 @@ export default function ResetPassword() {
     setTimeout(() => navigate("/login"), 1500);
   };
 
+  // Kembali ke halaman masuk HARUS memutus sesi recovery dulu; tanpa itu /login
+  // melihat pengguna masih "login" dan langsung mengarahkan ulang ke dashboard.
+  const handleBackToLogin = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
+
   return (
     <div className={`min-h-screen flex items-center justify-center bg-white p-6 ${LIGHT}`}>
       <div className="w-full max-w-md">
@@ -77,8 +83,8 @@ export default function ResetPassword() {
                 <div className="rounded-lg border border-destructive/20 bg-destructive/10 p-3 text-sm text-destructive">
                   Tautan tidak valid atau sudah kedaluwarsa. Ajukan tautan atur ulang yang baru.
                 </div>
-                <Button asChild variant="outline" className="w-full h-11">
-                  <Link to="/login">Kembali ke Halaman Masuk</Link>
+                <Button variant="outline" className="w-full h-11" onClick={handleBackToLogin}>
+                  Kembali ke Halaman Masuk
                 </Button>
               </div>
             )}
@@ -105,9 +111,8 @@ export default function ResetPassword() {
                 >
                   <div className="space-y-2">
                     <Label htmlFor="pw">Kata Sandi Baru</Label>
-                    <Input
+                    <PasswordInput
                       id="pw"
-                      type="password"
                       autoComplete="new-password"
                       placeholder="Minimal 6 karakter"
                       disabled={busy}
@@ -117,9 +122,8 @@ export default function ResetPassword() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="pw2">Konfirmasi Kata Sandi Baru</Label>
-                    <Input
+                    <PasswordInput
                       id="pw2"
-                      type="password"
                       autoComplete="new-password"
                       placeholder="Ulangi kata sandi baru"
                       disabled={busy}
@@ -135,11 +139,13 @@ export default function ResetPassword() {
             )}
           </div>
         </div>
-        <p className="mt-6 text-center text-sm text-muted-foreground">
-          <Link to="/login" className="underline underline-offset-2 hover:no-underline">
-            Kembali ke Halaman Masuk
-          </Link>
-        </p>
+        <button
+          type="button"
+          onClick={handleBackToLogin}
+          className="mt-6 w-full text-center text-sm text-muted-foreground underline underline-offset-2 hover:no-underline"
+        >
+          Kembali ke Halaman Masuk
+        </button>
       </div>
     </div>
   );

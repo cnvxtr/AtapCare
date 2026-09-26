@@ -3,7 +3,7 @@ import { useTickets, type Ticket } from '../../context/TicketContext'
 import { Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { AlertTriangle, Inbox, Wrench, ClipboardCheck } from 'lucide-react'
 import { Badge } from '../../components/Badge'
-import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards } from '../../components/TicketDrawer'
+import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, parseDescription } from '../../components/TicketDrawer'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 import TrendChart from '../../components/TrendChart'
 import AnimatedNumber from '../../components/AnimatedNumber'
@@ -138,22 +138,23 @@ export default function ExecutiveDashboard() {
                     <h3 className="font-display font-bold text-foreground">10 Tiket Aktif Terbaru</h3>
                 </div>
                 <div className="overflow-x-auto">
-                    <div className="min-w-[720px]">
+                    <div className="min-w-[840px]">
                     <table className="w-full table-fixed text-left">
                         <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                             <tr>
-                                <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
+                                <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[120px]">No. WA</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
                                 <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
                             {displayTickets.length === 0 ? (
-                                <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                             ) : (
                                 displayTickets.map(ticket => (
                                     <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
                                         <td className="p-4 font-mono text-xs font-medium whitespace-nowrap">{ticket.code}</td>
                                         <td className="p-4 text-xs">{ticket.customer}</td>
+                                        <td className="p-4 text-xs font-mono whitespace-nowrap">{parseDescription(ticket.description).waPelapor || '—'}</td>
                                         <td className="p-4 text-xs truncate" title={ticket.site}>{ticket.site || '-'}</td>
                                         <td className="p-4 text-xs truncate" title={ticket.unit}>{ticket.unit || '-'}</td>
                                         <td className="p-4"><Badge type="priority" value={ticket.priority || '-'} /></td>

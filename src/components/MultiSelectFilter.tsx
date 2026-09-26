@@ -53,7 +53,7 @@ export default function MultiSelectFilter({
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
                 <button type="button" className={cn('inline-flex items-center justify-between gap-1 text-left', className)}>
-                    <span className="truncate">{text}</span>
+<span className="truncate">{text}</span>
                     <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                 </button>
             </DropdownMenuTrigger>

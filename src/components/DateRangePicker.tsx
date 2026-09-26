@@ -21,10 +21,12 @@ export default function DateRangePicker({
   from,
   to,
   onChange,
+  className,
 }: {
   from?: string;
   to?: string;
   onChange: (from?: string, to?: string) => void;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -37,7 +39,7 @@ export default function DateRangePicker({
     [from, to],
   );
 
-  const label = from && to ? `${fmt(from)} – ${fmt(to)}` : "Semua Tanggal";
+  const label = from && to ? `${fmt(from)} – ${fmt(to)}` : "Semua";
 
   const apply = (range: DateRange | null) => {
     if (range) {
@@ -53,10 +55,10 @@ export default function DateRangePicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-8 items-center gap-1.5 rounded border border-border bg-card px-2 text-[13px] text-foreground hover:bg-muted transition-colors"
+          className={`inline-flex h-8 items-center gap-1.5 rounded border border-border bg-card px-2 text-[13px] text-foreground hover:bg-muted transition-colors ${className || ""}`}
         >
-          <CalendarIcon className="h-3.5 w-3.5 opacity-50 shrink-0" />
-          <span className="truncate max-w-[150px]">{label}</span>
+          <CalendarIcon className={`h-3.5 w-3.5 shrink-0 ${from && to ? "text-foreground" : "opacity-50"}`} />
+          <span className="hidden md:inline truncate max-w-[150px]">{label}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="z-[130] w-auto bg-transparent border-transparent p-0">

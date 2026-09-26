@@ -82,6 +82,7 @@ function AppRoutes() {
   // saat berada di root. Ini cegah "swipe back langsung keluar app" (bug #4).
   useEffect(() => {
     if (!isNativePlatform()) return
+    document.documentElement.classList.add('native')
     const sub = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
       if (canGoBack) { navigate(-1) }
       else { CapacitorApp.exitApp() }
@@ -101,7 +102,11 @@ function AppRoutes() {
   if (loading) {
     return (
       <div className="flex h-screen items-center justify-center bg-muted">
-        <p className="text-muted-foreground font-medium">Memuat sistem...</p>
+        <div
+          className="h-12 w-12 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin"
+          role="status"
+          aria-label="Memuat"
+        />
       </div>
     )
   }
@@ -111,7 +116,12 @@ function AppRoutes() {
   return (
     <Routes>
       {/* GERBANG 1: Portal Publik (Tanpa Login) */}
-      <Route path="/" element={<Landing />} />
+      <Route
+        path="/"
+        element={isNativePlatform()
+          ? <Navigate to="/login" replace />
+          : <Landing />}
+      />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
       {/* Publik & tanpa guard isAuthenticated: saat link recovery dibuka, sesi memang sudah aktif */}

@@ -63,10 +63,10 @@ const WIZARD_STEPS: Array<{ n: WizardStep; label: string }> = [
   { n: 3, label: "Unit" },
 ];
 
-const MASTER_TABS: Array<{ key: MasterTab; label: string; icon: React.ElementType }> = [
-  { key: "assets", label: "Pohon Aset", icon: Building2 },
-  { key: "categories", label: "Temuan Awal", icon: ListTree },
-  { key: "rootcauses", label: "Temuan Akhir", icon: Tags },
+const MASTER_TABS: Array<{ key: MasterTab; label: string }> = [
+  { key: "assets", label: "Pohon Aset" },
+  { key: "categories", label: "Temuan Awal" },
+  { key: "rootcauses", label: "Temuan Akhir" },
 ];
 
 const ITEMS_PER_PAGE = 20;
@@ -383,6 +383,10 @@ export function AdminMasterData() {
     label: string;
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [pendingArchive, setPendingArchive] = useState<{
+    table: CatalogTable;
+    item: CatalogItem;
+  } | null>(null);
 
   // ─── Tab Master Data: Pohon Aset / Temuan Awal / Temuan Akhir ───
   const [tab, setTab] = useState<MasterTab>("assets");
@@ -425,6 +429,13 @@ export function AdminMasterData() {
   }
 
   async function handleCatalogArchive(table: CatalogTable, item: CatalogItem) {
+    setPendingArchive({ table, item });
+  }
+
+  async function confirmCatalogArchive() {
+    if (!pendingArchive) return;
+    const { table, item } = pendingArchive;
+    setPendingArchive(null);
     const api = table === "problem_categories" ? problemCategoriesApi : rootCausesApi;
     const ok = await api.softDelete(item.id);
     if (!ok) {
@@ -959,7 +970,7 @@ export function AdminMasterData() {
                 : "text-muted-foreground hover:bg-accent"
             }`}
           >
-            <t.icon className="h-3.5 w-3.5" /> {t.label}
+            {t.label}
           </button>
         ))}
       </div>
@@ -1080,7 +1091,7 @@ export function AdminMasterData() {
                           </div>
                         </td>
                         <td className="px-4 py-3 text-xs text-foreground">{c.pic_name || "—"}</td>
-                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground">
+                        <td className="px-4 py-3 text-xs font-mono text-muted-foreground whitespace-nowrap">
                           {c.pic_phone || "—"}
                         </td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
@@ -1132,7 +1143,7 @@ export function AdminMasterData() {
                                 <td className="px-4 py-3 text-xs text-foreground">
                                   {site.pic_name || "—"}
                                 </td>
-                                <td className="px-4 py-3 text-xs font-mono text-muted-foreground">
+                                <td className="px-4 py-3 text-xs font-mono text-muted-foreground whitespace-nowrap">
                                   {site.pic_phone || "—"}
                                 </td>
                                 <td className="px-4 py-3 text-xs text-muted-foreground">—</td>
@@ -1360,6 +1371,36 @@ export function AdminMasterData() {
             >
               {deleting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
               Ya, Hapus
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Dialog Konfirmasi Arsip Katalog (Temuan Awal/Akhir) ── */}
+      <Dialog
+        open={!!pendingArchive}
+        onOpenChange={(o) => !o && setPendingArchive(null)}
+      >
+        <DialogContent className="sm:max-w-md bg-card p-5 max-h-[90vh] overflow-y-auto">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-foreground">
+              Arsipkan {pendingArchive?.table === "problem_categories" ? "Temuan Awal" : "Temuan Akhir"}?
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Apakah Anda yakin ingin mengarsipkan{" "}
+            <span className="font-medium text-foreground">{pendingArchive?.item.name}</span>?
+            Item yang diarsipkan tetap ada dan bisa dipulihkan.
+          </p>
+          <div className="mt-6 flex justify-end gap-2">
+            <DialogClose className="px-4 py-2 rounded-[3px] border border-border text-sm font-medium text-muted-foreground hover:bg-accent transition">
+              Batal
+            </DialogClose>
+            <button
+              onClick={confirmCatalogArchive}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-[3px] bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition"
+            >
+              Ya, Arsipkan
             </button>
           </div>
         </DialogContent>

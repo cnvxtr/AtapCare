@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
+import { useTickets } from '../../context/TicketContext'
 import { LogOut, Sun, Moon, Bell, ChevronDown, Check } from 'lucide-react'
 import {
   getMyNotifications, getUnreadCount, markAllRead, markNotificationRead,
@@ -15,6 +17,7 @@ import { registerPush, playChime } from '../../lib/pushNotifications'
 import { ROLE_LABELS } from '../../services/users'
 import ErrorBoundary from '../ErrorBoundary'
 import BottomTabs from './BottomTabs'
+import PullToRefresh from './PullToRefresh'
 import RatingWatcher from '../customer/RatingWatcher'
 
 const PAGE_TITLES: Record<string, string> = {
@@ -39,6 +42,7 @@ export default function MobileLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, logout, switchRole } = useAuth()
+  const { tickets } = useTickets()
   const [showNotifSheet, setShowNotifSheet] = useState(false)
   const [showRoleSheet, setShowRoleSheet] = useState(false)
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
@@ -47,6 +51,9 @@ export default function MobileLayout() {
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
+
+  // Nonce untuk remount Outlet saat pull-to-refresh: refetch tanpa reload halaman.
+  const [refreshNonce, setRefreshNonce] = useState(0)
 
   const prevNotifIds = useRef<string[]>([])
   const firstNotifLoad = useRef(true)
@@ -104,6 +111,27 @@ export default function MobileLayout() {
     }
   }
 
+  // Klik notif → buka halaman terkait. Teknisi/helpdesk/PM/executive/admin → drawer
+  // tiket auto-terbuka via `location.state.__openTicketId`; customer → halaman detail penuh.
+  const handleNotifOpen = (n: NotificationRow) => {
+    if (!n.ticket_id || !user) return
+    const t = tickets.find(x => x.id === n.ticket_id)
+    setShowNotifSheet(false)
+    markNotificationRead(n.id)
+    setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
+    setNotifCount(c => Math.max(0, c - 1))
+    if (user.role === 'customer') {
+      navigate(t ? `/customer/ticket/${t.code}` : roleHome('customer'))
+      return
+    }
+    const dest =
+      user.role === 'admin' ? '/admin/reports' :
+      user.role === 'executive' ? '/executive/inbox' :
+      user.role === 'pm' ? '/command-center' :
+      user.role === 'teknisi' ? '/tugas' : '/inbox'
+    navigate(dest, { state: t ? { __openTicketId: t.id } : undefined })
+  }
+
   // Ganti Role — perilaku identik dengan sidebar web.
   const roleList = (user?.roles || user?.role || '').split(',').filter(Boolean)
   const canSwitchRole = roleList.length > 1
@@ -152,6 +180,14 @@ export default function MobileLayout() {
             </button>
           )}
 
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={toggleTheme}
+            className="h-11 w-11 grid place-items-center rounded-xl hover:bg-accent transition-colors"
+          >
+            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+
           {/* Notifikasi */}
           <button
             onClick={() => setShowNotifSheet(true)}
@@ -164,38 +200,28 @@ export default function MobileLayout() {
               </span>
             )}
           </button>
-
-          {/* Dark Mode Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="h-11 w-11 grid place-items-center rounded-xl hover:bg-accent transition-colors"
-          >
-            {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </button>
         </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 px-4 py-3 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
-        <ErrorBoundary>
-          <Outlet />
-        </ErrorBoundary>
+        <PullToRefresh onRefresh={() => setRefreshNonce((n) => n + 1)}>
+          <ErrorBoundary>
+            <Outlet key={refreshNonce} />
+          </ErrorBoundary>
+        </PullToRefresh>
       </main>
 
       {/* Bottom Tabs */}
       <BottomTabs role={user?.role || 'helpdesk'} />
 
       {/* Notification Bottom Sheet */}
-      {createPortal(
-        <>
-          <div
-            className={`fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200 ${showNotifSheet ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-            onClick={() => setShowNotifSheet(false)}
-          />
-          <div
-            className={`fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col transition-transform duration-300 ease-out ${showNotifSheet ? 'translate-y-0' : 'translate-y-full'}`}
-          >
-            {/* Handle */}
+      <AnimatePresence>
+        {showNotifSheet && createPortal(
+          <>
+            <motion.div className="fixed inset-0 z-[55] bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setShowNotifSheet(false)} />
+            <motion.div className="fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col"
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 320 }}>
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
@@ -222,7 +248,7 @@ export default function MobileLayout() {
                   {notifs.map((n) => {
                     const actionable = n.ticket_id && n.title?.startsWith('Minta pengalihan:')
                     return (
-                      <div key={n.id} className={`flex flex-col items-start py-3 px-3.5 bg-muted rounded-xl ${n.read ? 'opacity-60' : ''}`}>
+                      <div key={n.id} onClick={() => { if (!actionable) handleNotifOpen(n) }} className={`flex flex-col items-start py-3 px-3.5 bg-muted rounded-xl ${n.read ? 'opacity-60' : ''} ${actionable ? '' : 'cursor-pointer active:bg-accent'}`}>
                         <span className="text-sm font-medium text-foreground">{n.title}</span>
                         {n.message && <span className="text-xs text-muted-foreground mt-0.5">{n.message}</span>}
                         <span className="text-[10px] text-muted-foreground/70 mt-1">
@@ -232,14 +258,14 @@ export default function MobileLayout() {
                           <div className="flex gap-2 mt-2 w-full">
                             <button
                               disabled={backupBusy !== null}
-                              onClick={() => handleBackupAction(n, 'approve')}
+                              onClick={(e) => { e.stopPropagation(); handleBackupAction(n, 'approve') }}
                               className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                             >
                               Setujui
                             </button>
                             <button
                               disabled={backupBusy !== null}
-                              onClick={() => handleBackupAction(n, 'reject')}
+                              onClick={(e) => { e.stopPropagation(); handleBackupAction(n, 'reject') }}
                               className="flex-1 py-1.5 text-xs bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
                             >
                               Tolak
@@ -252,45 +278,44 @@ export default function MobileLayout() {
                 </div>
               )}
             </div>
-          </div>
-        </>,
-        document.body
-      )}
+            </motion.div>
+          </>,
+          document.body
+        )}
+      </AnimatePresence>
 
       {/* Role Switcher Bottom Sheet */}
-      {createPortal(
-        <>
-          <div
-            className={`fixed inset-0 z-[55] bg-black/40 transition-opacity duration-200 ${showRoleSheet ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-            onClick={() => setShowRoleSheet(false)}
-          />
-          <div
-            className={`fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[60vh] flex flex-col transition-transform duration-300 ease-out ${showRoleSheet ? 'translate-y-0' : 'translate-y-full'}`}
-          >
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-            <div className="px-5 pb-3 border-b border-border">
-              <span className="text-sm font-semibold text-foreground">Ganti Role</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Role aktif saat ini: {ROLE_LABELS[user?.role || ''] || user?.role}</p>
-            </div>
-            <div className="flex-1 overflow-y-auto p-3 space-y-1">
-              {roleList.map((r) => (
-                <button
-                  key={r}
-                  disabled={switchingRole || r === user?.role}
-                  onClick={() => handleSwitchRole(r)}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-muted hover:bg-accent disabled:opacity-50 transition-colors"
-                >
-                  <span className="text-sm font-medium text-foreground">{ROLE_LABELS[r] || r}</span>
-                  {r === user?.role && <Check className="h-4 w-4 text-foreground" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </>,
-        document.body
-      )}
+      <AnimatePresence>
+        {showRoleSheet && createPortal(
+          <>
+            <motion.div className="fixed inset-0 z-[55] bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setShowRoleSheet(false)} />
+            <motion.div className="fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[60vh] flex flex-col"
+              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 320 }}>
+              <div className="flex justify-center pt-3 pb-1">
+                <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+              </div>
+              <div className="px-5 pb-3 border-b border-border">
+                <span className="text-sm font-semibold text-foreground">Ganti Role</span>
+                <p className="text-xs text-muted-foreground mt-0.5">Role aktif saat ini: {ROLE_LABELS[user?.role || ''] || user?.role}</p>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-1">
+                {roleList.map((r) => (
+                  <button
+                    key={r}
+                    disabled={switchingRole || r === user?.role}
+                    onClick={() => handleSwitchRole(r)}
+                    className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-muted hover:bg-accent disabled:opacity-50 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-foreground">{ROLE_LABELS[r] || r}</span>
+                    {r === user?.role && <Check className="h-4 w-4 text-foreground" />}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </>,
+          document.body
+        )}
+      </AnimatePresence>
 
       {/* Logout Modal */}
       {showLogoutConfirm && createPortal((

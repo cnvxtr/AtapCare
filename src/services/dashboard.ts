@@ -13,6 +13,7 @@ export interface AdminMonthlyData {
 
 export interface AdminSystemData {
   totalCustomerAccounts: number;
+  totalUsers: number;
   totalCompanies: number;
   totalUnits: number;
   unitDist: { name: string; count: number }[];
@@ -26,8 +27,12 @@ export async function getAdminSystemData(): Promise<AdminSystemData> {
     getUnits(),
   ]);
 
-  const totalCustomerAccounts = (usersRes.data || []).filter(
-    (u) => u.role === "customer" && (!u.status || u.status === "aktif"),
+  const activeUsers = (usersRes.data || []).filter(
+    (u) => !u.status || u.status === "aktif",
+  );
+  const totalUsers = activeUsers.length;
+  const totalCustomerAccounts = activeUsers.filter(
+    (u) => u.role === "customer",
   ).length;
 
   const siteNameById = new Map(sites.map((s) => [s.id, s.name]));
@@ -40,14 +45,14 @@ export async function getAdminSystemData(): Promise<AdminSystemData> {
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count);
 
-  return { totalCustomerAccounts, totalCompanies: customers.length, totalUnits: units.length, unitDist };
+  return { totalCustomerAccounts, totalUsers, totalCompanies: customers.length, totalUnits: units.length, unitDist };
 }
 
 export async function getAdminMonthlyData(): Promise<AdminMonthlyData> {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
-  const [closedRes, usersRes] = await Promise.all([
+  const [closedRes, usersRes, assignmentsRes] = await Promise.all([
     supabase
       .from("tickets")
       .select("id, assigned_to")
@@ -57,23 +62,35 @@ export async function getAdminMonthlyData(): Promise<AdminMonthlyData> {
       .from("users")
       .select("id, full_name")
       .eq("is_deleted", false),
+    supabase
+      .from("ticket_assignments")
+      .select("ticket_id, user_id, role"),
   ]);
 
   const closed = closedRes.data || [];
   const users = usersRes.data || [];
   const userNameById = new Map(users.map((u) => [u.id, u.full_name]));
 
+  const closedIds = new Set(closed.map((t) => t.id));
   const counts = new Map<string, number>();
   for (const t of closed) {
     if (!t.assigned_to) continue; // tiket tanpa penugasan bukan bagian leaderboard teknisi
     const name = userNameById.get(t.assigned_to) || "Teknisi";
     counts.set(name, (counts.get(name) || 0) + 1);
   }
+  // Pendukung (role 'teknisi') ikut dihitung sebagai 1 tiket per tiket CLOSED
+  // periode ini; gabung ke skor yang sama dengan lead.
+  for (const a of assignmentsRes.data || []) {
+    if (a.role !== "teknisi" || !closedIds.has(a.ticket_id)) continue;
+    const name = userNameById.get(a.user_id) || "Teknisi";
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
 
+  // Union nama lead + pendukung: teknisi yang hanya jadi pendukung tetap muncul.
   const leaderboard = Array.from(counts.entries()).map(([name, completed]) => ({
     name,
     completed,
-  }));
+  })).sort((a, b) => b.completed - a.completed);
 
   return { ticketsDone: closed.length, leaderboard };
 }

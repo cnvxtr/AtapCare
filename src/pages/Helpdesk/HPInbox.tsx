@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useTickets, type Ticket, type Priority, type TicketStatus } from '../../context/TicketContext'
-import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, ImagePlus, MapPin, FileText, Info, Camera } from 'lucide-react'
+import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, MapPin, Info, FileText } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, parseDescription } from '../../components/TicketDrawer'
 import { waMeLink } from '../../services/wa'
@@ -10,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
+import CameraFileUpload from '../../components/CameraFileUpload'
 import { PhoneInput } from '../../components/ui/input'
 import { getCustomers, getSites, getUnits, problemCategoriesApi, type Customer, type SiteRow, type UnitRow, type CatalogItem } from '../../services/master-data'
 import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
@@ -35,6 +37,20 @@ export default function HPInbox() {
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
+
+    // Klik notifikasi di APK → drawer tiket auto-terbuka.
+    const location = useLocation()
+    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    const navigate = useNavigate()
+    useEffect(() => {
+        if (!notifyOpenTicket) return
+        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!t) return
+        setSelectedTicket(t)
+        setActiveDrawerTab('detail')
+        navigate(location.pathname, { replace: true, state: null })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notifyOpenTicket])
 
     // State Modals
     const [showVoidModal, setShowVoidModal] = useState(false)
@@ -72,7 +88,6 @@ export default function HPInbox() {
         catatanInternal: ''
     })
     const [photos, setPhotos] = useState<File[]>([])
-    const [uploadMenuOpen, setUploadMenuOpen] = useState(false)
     const addPhotos = (incoming: File[]) => {
         setPhotos(prev => [...prev, ...incoming]);
     }
@@ -368,6 +383,17 @@ export default function HPInbox() {
         setShowValidationModal(false); setSelectedTicket(null)
     }
 
+    const viewToggle = (
+        <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
+            <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                <LayoutGrid className="h-3.5 w-3.5" /> Kanban
+            </button>
+            <button onClick={() => setView('list')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'list' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+                <Table className="h-3.5 w-3.5" /> Tabel
+            </button>
+        </div>
+    )
+
     return (
         <div className={`space-y-6 flex flex-col ${view === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
             {/* HEADER */}
@@ -381,19 +407,15 @@ export default function HPInbox() {
             {/* BOX 1: Pencarian, Prioritas, Buat Tiket */}
             <div className="bg-card p-4 rounded-xl border border-border">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <div className="relative flex-1">
-                        <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
-                        <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
+                    <div className="flex flex-1 items-center gap-2">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
+                            <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
+                        </div>
+                        <div className="sm:hidden shrink-0">{viewToggle}</div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 flex-1">
-                        <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
-                            <button onClick={() => setView('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                                <LayoutGrid className="h-3.5 w-3.5" /> Kanban
-                            </button>
-                            <button onClick={() => setView('list')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${view === 'list' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
-                                <Table className="h-3.5 w-3.5" /> Tabel
-                            </button>
-                        </div>
+                        <div className="hidden sm:flex shrink-0">{viewToggle}</div>
                         <div className="flex items-center gap-2 flex-1 min-w-0">
                             <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
                             <MultiSelectFilter
@@ -488,22 +510,23 @@ export default function HPInbox() {
             ) : (
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <div className="overflow-x-auto">
-                    <div className="min-w-[720px]">
+                    <div className="min-w-[840px]">
                         <table className="w-full table-fixed text-left">
                             <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                                 <tr>
-                                    <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
+                                    <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[120px]">No. WA</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
                                     <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-border">
                                 {filteredTickets.length === 0 ? (
-                                    <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                    <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                                 ) : (
                                     filteredTickets.map(ticket => (
                                         <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
                                             <td className="p-4 font-mono text-xs font-medium whitespace-nowrap">{ticket.code}</td>
                                             <td className="p-4 text-xs">{ticket.customer}</td>
+                                            <td className="p-4 text-xs font-mono whitespace-nowrap">{parseDescription(ticket.description).waPelapor || '—'}</td>
                                             <td className="p-4 text-xs truncate" title={ticket.site}>{ticket.site || '-'}</td>
                                             <td className="p-4 text-xs truncate" title={ticket.unit}>{ticket.unit || '-'}</td>
                                             <td className="p-4">
@@ -883,36 +906,7 @@ export default function HPInbox() {
                                             )}
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Upload Foto & File (wajib)</label>
-                                            <div className="relative">
-                                                <div
-                                                    role="button"
-                                                    tabIndex={0}
-                                                    onClick={() => setUploadMenuOpen(o => !o)}
-                                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUploadMenuOpen(o => !o) } }}
-                                                    onDragOver={(e) => e.preventDefault()}
-                                                    onDrop={(e) => { e.preventDefault(); addPhotos(Array.from(e.dataTransfer.files)) }}
-                                                    className="group flex flex-col items-center gap-1.5 rounded-xl border border-border p-6 text-center text-sm text-muted-foreground hover:border-foreground/50 hover:bg-muted/40 hover:text-foreground transition cursor-pointer"
-                                                >
-                                                    <span className="inline-flex p-2.5 rounded-full bg-muted group-hover:bg-accent transition"><ImagePlus className="w-5 h-5" /></span>
-                                                    <span>Tarik & lepas foto atau file di sini, atau klik untuk memilih</span>
-                                                </div>
-                                                {uploadMenuOpen && (
-                                                    <>
-                                                        <div className="fixed inset-0 z-40" onClick={() => setUploadMenuOpen(false)} aria-hidden="true" />
-                                                        <div className="absolute z-50 mt-2 w-full rounded-lg border border-border bg-card shadow-lg p-1.5 flex flex-col gap-1">
-                                                            <button type="button" onClick={() => { document.getElementById('upload-camera-input')?.click(); setUploadMenuOpen(false) }} className="flex items-center gap-2 px-3 py-2 rounded text-sm hover:bg-muted text-left">
-                                                                <Camera className="w-4 h-4" /> Kamera
-                                                            </button>
-                                                            <button type="button" onClick={() => { document.getElementById('upload-photo-input')?.click(); setUploadMenuOpen(false) }} className="flex items-center gap-2 px-3 py-2 rounded text-sm hover:bg-muted text-left">
-                                                                <FileText className="w-4 h-4" /> File
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                )}
-                                                <input id="upload-photo-input" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,.rar" multiple className="hidden" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
-                                                <input id="upload-camera-input" type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { addPhotos(Array.from(e.target.files || [])); e.target.value = '' }} />
-                                            </div>
+                                            <CameraFileUpload label="Upload Foto & File (wajib)" onFiles={addPhotos} />
                                             <FieldError msg={formErrors.photos} />
                                             {photos.length > 0 && (
                                                 <div className="mt-2.5 flex flex-wrap gap-2">

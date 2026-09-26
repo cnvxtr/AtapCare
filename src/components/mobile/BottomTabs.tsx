@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   LayoutDashboard, Inbox, FileBarChart2, Users, Building2,
-  LayoutGrid, ClipboardList, Star,
+  ClipboardList, Star,
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { resolveAvatarUrl } from '../../services/photoService'
@@ -30,7 +30,7 @@ const TABS: Record<string, TabItem[]> = {
   ],
   pm: [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Beranda' },
-    { path: '/command-center', icon: LayoutGrid, label: 'Command' },
+    { path: '/command-center', icon: Inbox, label: 'Command' },
   ],
   teknisi: [
     { path: '/tugas', icon: ClipboardList, label: 'Tugas' },

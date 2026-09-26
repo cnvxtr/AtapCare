@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core'
+import { PushNotifications } from '@capacitor/push-notifications'
 import { supabase } from '@/lib/supabase'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
@@ -14,9 +16,14 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return arr
 }
 
-// Daftar SW + minta izin notifikasi + subscribe push. Non-blocking: semua
+// Daftar SW + minta izin + subscribe push. Non-blocking: semua
 // kegagalan diabaikan — fitur mewah, bukan blocker. Dipanggil sekali saat login.
+// Native (APK): daftar ke FCM via plugin Capacitor. Browser: Web Push VAPID.
 export async function registerPush(userId: string): Promise<void> {
+  if (Capacitor.isNativePlatform()) {
+    await registerNative(userId)
+    return
+  }
   if (!('serviceWorker' in navigator) || !('PushManager' in window) || !VAPID_PUBLIC_KEY) return
   if (Notification.permission === 'denied') return
   if (Notification.permission !== 'granted') {
@@ -26,6 +33,30 @@ export async function registerPush(userId: string): Promise<void> {
     return
   }
   void doSubscribe(userId)
+}
+
+// Native: minta izin, tidak perlu SW. Saat app terbuka, banner/chime sudah
+// ditangani realtime polling (MainLayout/MobileLayout) — push plugin hanya
+// untuk kondisi background/killed. Tap notif → buka URL (deep link data.url).
+async function registerNative(userId: string): Promise<void> {
+  try {
+    if ((await PushNotifications.checkPermissions()).receive !== 'granted') {
+      const p = await PushNotifications.requestPermissions()
+      if (p.receive !== 'granted') return
+    }
+    await PushNotifications.register()
+    PushNotifications.addListener('registration', async ({ value }) => {
+      if (!value) return
+      await supabase.from('fcm_tokens').upsert(
+        { user_id: userId, token: value },
+        { onConflict: 'token' },
+      )
+    })
+    PushNotifications.addListener('pushNotificationActionPerformed', (n) => {
+      const url = n.notification.data?.url
+      if (typeof url === 'string' && url.startsWith('/')) location.href = url
+    })
+  } catch { /* push tak tersedia — abaikan */ }
 }
 
 async function doSubscribe(userId: string): Promise<void> {

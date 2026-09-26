@@ -6,7 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import Logo from '../Logo'
 import {
-  LayoutDashboard, Inbox, ClipboardList, LayoutGrid,
+  LayoutDashboard, Inbox, ClipboardList,
   ChevronRight, Bell, LogOut, Menu, PanelLeftClose, PanelLeftOpen,
   Users, Building2, FileBarChart2, Sun, Moon, Check, Star
 } from 'lucide-react'
@@ -36,7 +36,7 @@ const menuItems = (role?: string) =>
     : role === 'pm'
       ? [
         { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-        { icon: LayoutGrid, label: 'Command Center', path: '/command-center' },
+        { icon: Inbox, label: 'Command Center', path: '/command-center' },
       ]
     : role === 'admin'
       ? [
@@ -179,7 +179,7 @@ export default function MainLayout() {
   return (
     <div className="max-w-full min-h-screen bg-background text-foreground flex">
       {/* Sidebar */}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-64 ${collapsed ? 'lg:w-16' : ''} shrink-0 flex-col border-r border-border bg-card transition-all duration-200 overflow-hidden lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-60 ${collapsed ? 'lg:w-16' : ''} shrink-0 flex-col border-r border-border bg-card transition-all duration-200 overflow-hidden lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {/* Logo */}
         <div className={`h-16 flex items-center gap-2 px-5 border-b border-border ${collapsed ? 'justify-center px-0' : ''}`}>
           <div className={`relative shrink-0 cursor-pointer`} onClick={collapsed ? () => setCollapsed(false) : () => navigate(user?.role === 'admin' ? '/admin' : '/dashboard')} onMouseEnter={() => setHoverLogo(true)} onMouseLeave={() => setHoverLogo(false)} role={collapsed ? 'button' : undefined} tabIndex={collapsed ? 0 : undefined}>
@@ -191,8 +191,8 @@ export default function MainLayout() {
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-tight min-w-0 cursor-pointer" onClick={() => navigate(user?.role === 'admin' ? '/admin' : '/dashboard')}>
-              <span className="font-display text-sm font-bold uppercase tracking-[0.2em] truncate">Atap Care</span>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-widest truncate">PT Atap Teknologi Indonesia</span>
+              <span className="font-display text-sm font-bold uppercase tracking-[0.14em] truncate">Atap Care</span>
+              <span className="text-[8px] text-muted-foreground uppercase tracking-tight whitespace-nowrap">PT Atap Teknologi Indonesia</span>
             </div>
           )}
           {!collapsed && (
@@ -316,7 +316,7 @@ export default function MainLayout() {
       </aside>
 
       {/* Main */}
-      <div className={`flex-1 min-w-0 flex flex-col pt-16 ${collapsed ? 'lg:ml-16' : 'lg:ml-64'}`}>
+      <div className={`flex-1 min-w-0 flex flex-col pt-16 ${collapsed ? 'lg:ml-16' : 'lg:ml-60'}`}>
         {/* Top bar */}
         <header className={`h-16 fixed top-0 left-0 right-0 z-30 border-b border-border bg-background ${collapsed ? 'lg:left-16' : 'lg:left-64'}`}>
           <div className="h-full px-4 sm:px-6 flex items-center gap-4">

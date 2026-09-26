@@ -13,6 +13,12 @@ body {
     padding-right: env(safe-area-inset-right);
 }
 
+/* Web: biarkan pull-to-refresh native Chrome/Edge. Hanya APK (html.native)
+   yang dikunci (contain) karena memakai PullToRefresh kustom. */
+html.native {
+    overscroll-behavior-y: contain;
+}
+
 html {
     scroll-behavior: smooth;
 }

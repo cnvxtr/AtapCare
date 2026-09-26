@@ -37,6 +37,7 @@ export interface TicketReportRow {
   closedAt: string;
   problemDesc: string;
   resultDesc: string;
+  support: string;
 }
 
 // Tabel layar: tanpa kolom deskripsi (deskripsi hanya muncul di export).
@@ -69,13 +70,15 @@ export const TICKET_REPORT_HEADERS = [
   "Prioritas",
   "Status",
   "Teknisi",
+  "Teknisi Pendukung",
   "Tanggal Masuk",
   "Tanggal Keluar",
 ];
 
 // Indeks ulang kolom: dari urutan properti TicketReportRow (Object.values) ke
-// urutan export. problemDesc (12) → kolom 7, resultDesc (13) → kolom 9.
-export const TICKET_EXPORT_INDEXES = [0, 1, 2, 3, 4, 5, 12, 6, 13, 7, 8, 9, 10, 11];
+// urutan export. problemDesc (12) → kolom 7, resultDesc (13) → kolom 9,
+// support (14) → kolom 13 (setelah Teknisi).
+export const TICKET_EXPORT_INDEXES = [0, 1, 2, 3, 4, 5, 12, 6, 13, 7, 8, 9, 14, 10, 11];
 
 export const ROOTCAUSE_HEADERS = ["Temuan Akhir", "Total"];
 
@@ -128,6 +131,7 @@ async function buildTicketQuery(filters: ReportFilters) {
 
 function toTicketRow(
   t: {
+    id: string;
     code: string;
     customer: string;
     company: string;
@@ -144,6 +148,7 @@ function toTicketRow(
   },
   names?: Map<string, string>,
   serials?: Map<string, string>,
+  supportById?: Map<string, string>,
 ): TicketReportRow {
   // Deskripsi masalah: buang baris metadata (Jabatan/WA Pelapor) yang ditulis
   // RPC pembuatan tiket, sisakan keluhan dari pelapor / catatan helpdesk.
@@ -173,6 +178,9 @@ function toTicketRow(
     closedAt: t.closed_at ? fmt(t.closed_at) : "—",
     problemDesc,
     resultDesc: "—",
+    // sengaja di akhir object: posisi Object.values dipakai TICKET_EXPORT_INDEXES,
+    // ditambahkan di tengah akan menggeser mapping kolom tabel layar.
+    support: supportById?.get(t.id) ?? "—",
   };
 }
 
@@ -200,21 +208,40 @@ export async function getTicketReport(filters: ReportFilters): Promise<TicketRep
   const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
   const raw = res.data || [];
   const resultById = new Map<string, string>();
+  const supportById = new Map<string, string>();
   const ids = raw.map((t) => t.id).filter(Boolean);
   if (ids.length) {
-    const { data: acts } = await supabase
-      .from("activities")
-      .select("ticket_id, created_at, action, details")
-      .in("ticket_id", ids)
-      .in("action", ["Tugas diselesaikan", "Tiket dibuat dengan status Selesai"])
-      .order("created_at", { ascending: false });
+    const [acts, supports] = await Promise.all([
+      supabase
+        .from("activities")
+        .select("ticket_id, created_at, action, details")
+        .in("ticket_id", ids)
+        .in("action", ["Tugas diselesaikan", "Tiket dibuat dengan status Selesai"])
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("ticket_assignments")
+        .select("ticket_id, user_id")
+        .in("ticket_id", ids)
+        .eq("role", "teknisi"),
+    ]);
+    const supportNamesByTicket = new Map<string, string[]>();
+    for (const a of supports?.data || []) {
+      const name = names.get(a.user_id);
+      if (!name) continue;
+      const list = supportNamesByTicket.get(a.ticket_id) || [];
+      list.push(name);
+      supportNamesByTicket.set(a.ticket_id, list);
+    }
+    for (const [ticketId, list] of supportNamesByTicket) {
+      supportById.set(ticketId, list.join(", "));
+    }
     const latestByTicket = new Map<string, { created_at: string; details?: string }>();
-    for (const a of acts || []) {
+    for (const a of acts?.data || []) {
       if (!latestByTicket.has(a.ticket_id)) latestByTicket.set(a.ticket_id, a);
     }
     for (const [ticketId, a] of latestByTicket) resultById.set(ticketId, extractResultDesc(a.details));
   }
-  return raw.map((t) => ({ ...toTicketRow(t, names, serials), resultDesc: resultById.get(t.id) ?? "—" }));
+  return raw.map((t) => ({ ...toTicketRow(t, names, serials, supportById), resultDesc: resultById.get(t.id) ?? "—" }));
 }
 
 // ponytail: relasi tiket→unit lewat kecocokan nama (site|unit), bukan FK —

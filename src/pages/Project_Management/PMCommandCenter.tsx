@@ -1,10 +1,11 @@
 import { useState, useMemo, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
-import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock, Download } from 'lucide-react'
+import { Search, Table, LayoutGrid, Filter, User, AlertTriangle, ChevronDown, Check, X, Pause, Clock, Download, CalendarClock } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
-import TicketDrawer, { PhotoLightbox, TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath, downloadFromUrl } from '../../components/TicketDrawer'
+import TicketDrawer, { PhotoLightbox, TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, getAssignmentInfo, isScheduleOvertime, isFileToken, isImageFileByPath, downloadFromUrl, parseDescription } from '../../components/TicketDrawer'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuItem } from '../../components/ui/dropdown-menu'
 import FieldError from '../../components/FieldError'
@@ -79,6 +80,20 @@ export default function PMCommandCenter() {
     // State untuk Drawer & Modals
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
+
+    // Klik notifikasi di APK → drawer tiket auto-terbuka.
+    const location = useLocation()
+    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    const navigate = useNavigate()
+    useEffect(() => {
+        if (!notifyOpenTicket) return
+        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!t) return
+        setSelectedTicket(t)
+        setActiveDrawerTab('detail')
+        navigate(location.pathname, { replace: true, state: null })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [notifyOpenTicket])
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [showReassignModal, setShowReassignModal] = useState(false)
     const [showPendingDecision, setShowPendingDecision] = useState(false)
@@ -100,10 +115,9 @@ export default function PMCommandCenter() {
     const [supportSel, setSupportSel] = useState<string[]>([])
     const [scheduleDate, setScheduleDate] = useState('')
     const [scheduleTime, setScheduleTime] = useState('')
-    const [calendarOpen, setCalendarOpen] = useState(false)
-    const [reassignCalendarOpen, setReassignCalendarOpen] = useState(false)
     const [reassignScheduleDate, setReassignScheduleDate] = useState('')
     const [reassignScheduleTime, setReassignScheduleTime] = useState('')
+    const [scheduleModal, setScheduleModal] = useState<'assign' | 'reassign' | null>(null)
     const [actionReason, setActionReason] = useState('')
     const [technicians, setTechnicians] = useState<{ id: string; name: string }[]>([])
 
@@ -229,8 +243,8 @@ export default function PMCommandCenter() {
         const { jadwal } = getAssignmentInfo(t.activities)
         const [date, time] = (jadwal || '').split(' ')
         setSelectedTech(leadId)
-        setScheduleDate(date || '')
-        setScheduleTime(time || '')
+        setReassignScheduleDate(date || '')
+        setReassignScheduleTime(time || '')
         setActionReason('')
         setReassignErrors({})
         getSupportMemberIds(t.id)
@@ -312,7 +326,7 @@ export default function PMCommandCenter() {
         setShowAssignModal(false); setShowReassignModal(false); setShowPendingDecision(false)
         setPendingDecision(null); setPendingNote(''); setPendingErrors({})
         setConfirmAssign(null); setAssignErrors({}); setReassignErrors({})
-        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleTime(''); setCalendarOpen(false); setActionReason('')
+        setSelectedTicket(null); setSelectedTech(''); setSupportSel([]); setScheduleDate(''); setScheduleTime(''); setScheduleModal(null); setActionReason('')
     }
 
     return (
@@ -339,7 +353,7 @@ export default function PMCommandCenter() {
                         <Search className="absolute left-3 top-2.5 w-4 h-4 text-muted-foreground" />
                         <input type="text" placeholder="Cari kode, pelanggan, site, atau deskripsi..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-sm focus:ring-2 focus:ring-gray-400 outline-none" />
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 flex-1 sm:flex-none">
                         <div className="flex items-center gap-1 p-1 rounded border border-border bg-card shrink-0">
                             <button onClick={() => setViewMode('kanban')} className={`px-2.5 py-1.5 rounded text-xs inline-flex items-center gap-1.5 transition ${viewMode === 'kanban' ? 'bg-foreground text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
                                 <LayoutGrid className="h-3.5 w-3.5" /> Kanban
@@ -348,7 +362,7 @@ export default function PMCommandCenter() {
                                 <Table className="h-3.5 w-3.5" /> Tabel
                             </button>
                         </div>
-                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-1 min-w-0 sm:flex-none">
                             <Filter className="w-4 h-4 text-muted-foreground shrink-0" />
                             <MultiSelectFilter
                                 label="Semua"
@@ -359,7 +373,7 @@ export default function PMCommandCenter() {
                                     { value: 'Medium', label: 'Medium' },
                                     { value: 'Low', label: 'Low' },
                                 ]}
-                                className="px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full flex-1 gap-1"
+                                className="px-2 h-8 bg-card border border-border rounded text-[13px] text-foreground min-w-0 max-w-full flex-1 gap-1 sm:w-[130px] sm:flex-none"
                             />
                         </div>
                     </div>
@@ -445,22 +459,23 @@ export default function PMCommandCenter() {
             ) : (
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                     <div className="overflow-x-auto">
-                        <div className="min-w-[720px]">
+                        <div className="min-w-[840px]">
                             <table className="w-full table-fixed text-left">
                                 <thead className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground border-b border-border">
                                     <tr>
-                                        <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
+                                        <th className="px-4 py-3 font-medium text-left w-[170px]">Kode</th><th className="px-4 py-3 font-medium text-left">Pelapor</th><th className="px-4 py-3 font-medium text-left w-[120px]">No. WA</th><th className="px-4 py-3 font-medium text-left w-[14%]">Site</th>
                                         <th className="px-4 py-3 font-medium text-left w-[18%]">Unit</th><th className="px-4 py-3 font-medium text-left w-[85px]">Prioritas</th><th className="px-4 py-3 font-medium text-left w-[120px]">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border">
                                     {listTickets.length === 0 ? (
-                                        <tr><td colSpan={6} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
+                                        <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                                     ) : (
                                         listTickets.map(ticket => (
                                             <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
                                                 <td className="p-4 font-mono text-xs font-medium whitespace-nowrap">{ticket.code}</td>
                                                 <td className="p-4 text-xs">{ticket.customer}</td>
+                                                <td className="p-4 text-xs font-mono whitespace-nowrap">{parseDescription(ticket.description).waPelapor || '—'}</td>
                                                 <td className="p-4 text-xs truncate" title={ticket.site}>{ticket.site || '-'}</td>
                                                 <td className="p-4 text-xs truncate" title={ticket.unit}>{ticket.unit || '-'}</td>
                                                 <td className="p-4">
@@ -547,6 +562,9 @@ export default function PMCommandCenter() {
                             )}
                             {['WORKING', 'RESOLVED'].includes(selectedTicket.status) && (
                                 <p className="text-center text-xs text-muted-foreground italic">Monitoring Mode: Menunggu update dari lapangan atau validasi Helpdesk.</p>
+                            )}
+                            {['NEW', 'OPEN', 'CLOSED', 'VOID', 'DUPLICATE'].includes(selectedTicket.status) && (
+                                <p className="text-center text-xs text-muted-foreground italic">Read Only / Monitoring Mode</p>
                             )}
                         </>
                     }
@@ -654,25 +672,14 @@ export default function PMCommandCenter() {
                             </div>
                             <div>
                                 <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
-                                <button type="button" onClick={() => setCalendarOpen(!calendarOpen)} className={`w-full mt-1 px-3 py-2 border ${assignErrors.date || assignErrors.time ? 'border-red-500 focus:border-red-500' : calendarOpen ? 'border-foreground' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                <button type="button" onClick={() => setScheduleModal('assign')} className={`w-full mt-1 px-3 py-2 border ${assignErrors.date || assignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
                                     <span className={`truncate ${scheduleDate && scheduleTime ? 'text-foreground' : 'text-muted-foreground'}`}>
                                         {scheduleDate && scheduleTime
                                             ? `${new Date(`${scheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${displayTime(scheduleTime)}`
                                             : 'Pilih Tanggal & Jam'}
                                     </span>
-                                    <ChevronDown className={`w-4 h-4 opacity-50 shrink-0 transition-transform ${calendarOpen ? 'rotate-180' : ''}`} />
+                                    <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                                 </button>
-                                {calendarOpen && (
-                                    <div className="mt-2 rounded-lg border border-border bg-card">
-                                        <SchedulePicker
-                                            date={scheduleDate}
-                                            time={scheduleTime}
-                                            onDate={d => { setScheduleDate(d); setAssignErrors(prev => ({ ...prev, date: undefined })) }}
-                                            onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
-                                            onConfirm={() => setCalendarOpen(false)}
-                                        />
-                                    </div>
-                                )}
                                 <FieldError msg={assignErrors.date || assignErrors.time} />
                             </div>
                             <div className="flex gap-3 pt-2">
@@ -801,25 +808,14 @@ export default function PMCommandCenter() {
                             </div>
                             <div>
                                 <label className="text-xs font-semibold text-foreground">Jadwal Pelaksanaan</label>
-                                <button type="button" onClick={() => setReassignCalendarOpen(!reassignCalendarOpen)} className={`w-full mt-1 px-3 py-2 border ${reassignErrors.date || reassignErrors.time ? 'border-red-500 focus:border-red-500' : reassignCalendarOpen ? 'border-foreground' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
+                                <button type="button" onClick={() => setScheduleModal('reassign')} className={`w-full mt-1 px-3 py-2 border ${reassignErrors.date || reassignErrors.time ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded text-sm flex items-center justify-between gap-1 outline-none`}>
                                     <span className={`truncate ${reassignScheduleDate && reassignScheduleTime ? 'text-foreground' : 'text-muted-foreground'}`}>
                                         {reassignScheduleDate && reassignScheduleTime
                                             ? `${new Date(`${reassignScheduleDate}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} · ${displayTime(reassignScheduleTime)}`
                                             : 'Pilih Tanggal & Jam'}
                                     </span>
-                                    <ChevronDown className={`w-4 h-4 opacity-50 shrink-0 transition-transform ${reassignCalendarOpen ? 'rotate-180' : ''}`} />
+                                    <ChevronDown className="w-4 h-4 opacity-50 shrink-0" />
                                 </button>
-                                {reassignCalendarOpen && (
-                                    <div className="mt-2 rounded-lg border border-border bg-card">
-                                        <SchedulePicker
-                                            date={reassignScheduleDate}
-                                            time={reassignScheduleTime}
-                                            onDate={d => { setReassignScheduleDate(d); setReassignErrors(prev => ({ ...prev, date: undefined })) }}
-                                            onTime={t => { setReassignScheduleTime(t); setReassignErrors(prev => ({ ...prev, time: undefined })) }}
-                                            onConfirm={() => setReassignCalendarOpen(false)}
-                                        />
-                                    </div>
-                                )}
                                 <FieldError msg={reassignErrors.date || reassignErrors.time} />
                             </div>
                             <div>
@@ -835,8 +831,37 @@ export default function PMCommandCenter() {
                     </div>
                 </div>
             ), document.body)}
-            
-            {/* 3. MODAL PROSES PENGAJUAN PENDING */}
+
+            {/* 3. MODAL JADWAL PELAKSANAAN (dibuka dari Tugaskan/Ganti Teknisi) */}
+            {scheduleModal && createPortal((
+                <div className="fixed inset-0 bg-black/80 z-[140] flex items-center justify-center p-4 fade-in" onClick={() => setScheduleModal(null)}>
+                    <div className="bg-card w-[640px] max-w-full rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                            <h3 className="text-lg font-bold"><CalendarClock className="w-5 h-5 inline mr-2" /> Jadwal Pelaksanaan</h3>
+                            <button onClick={() => setScheduleModal(null)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </div>
+                        {scheduleModal === 'assign' ? (
+                            <SchedulePicker
+                                date={scheduleDate}
+                                time={scheduleTime}
+                                onDate={d => { setScheduleDate(d); setAssignErrors(prev => ({ ...prev, date: undefined })) }}
+                                onTime={t => { setScheduleTime(t); setAssignErrors(prev => ({ ...prev, time: undefined })) }}
+                                onConfirm={() => setScheduleModal(null)}
+                            />
+                        ) : (
+                            <SchedulePicker
+                                date={reassignScheduleDate}
+                                time={reassignScheduleTime}
+                                onDate={d => { setReassignScheduleDate(d); setReassignErrors(prev => ({ ...prev, date: undefined })) }}
+                                onTime={t => { setReassignScheduleTime(t); setReassignErrors(prev => ({ ...prev, time: undefined })) }}
+                                onConfirm={() => setScheduleModal(null)}
+                            />
+                        )}
+                    </div>
+                </div>
+            ), document.body)}
+
+            {/* 4. MODAL PROSES PENGAJUAN PENDING */}
             {showPendingDecision && selectedTicket && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">

@@ -17,7 +17,7 @@ type ProfileField = { key: string; label: string; oldVal: string; newVal: string
 const FIELD_LABELS: Record<string, string> = { fullName: 'Nama Lengkap', username: 'Username', waNumber: 'No. Telepon' }
 
 export default function Profile() {
-  const { user, logout } = useAuth()
+  const { user, logout, refreshUser } = useAuth()
 
   // Profile edit state
   const [fullName, setFullName] = useState(user?.full_name || '')
@@ -40,10 +40,12 @@ export default function Profile() {
   const [changingPassword, setChangingPassword] = useState(false)
   const [showCurrentPw, setShowCurrentPw] = useState(false)
   const [showNewPw, setShowNewPw] = useState(false)
+  const [showConfirmPw, setShowConfirmPw] = useState(false)
 
   // Avatar state
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [showAvatarPreview, setShowAvatarPreview] = useState(false)
+  const [showAvatarDeleteConfirm, setShowAvatarDeleteConfirm] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Activities state
@@ -165,7 +167,7 @@ export default function Profile() {
       return
     }
     toast.success('Profil berhasil disimpan.')
-    window.location.reload()
+    await refreshUser()
   }
 
   const handleChangePassword = async () => {
@@ -225,7 +227,7 @@ export default function Profile() {
       }
 
       toast.success('Foto profil berhasil diubah.')
-      window.location.reload()
+      await refreshUser()
     } catch {
       toast.error('Gagal upload avatar.')
     } finally {
@@ -235,6 +237,7 @@ export default function Profile() {
 
   const handleAvatarDelete = async () => {
     if (!user?.avatar_url) return
+    setShowAvatarDeleteConfirm(false)
     setAvatarUploading(true)
     try {
       const { error: removeError } = await supabase.storage.from('avatars').remove([user.avatar_url])
@@ -248,7 +251,7 @@ export default function Profile() {
         return
       }
       toast.success('Foto profil dihapus.')
-      window.location.reload()
+      await refreshUser()
     } catch {
       toast.error('Gagal menghapus foto.')
     } finally {
@@ -312,7 +315,7 @@ export default function Profile() {
                   <Camera className="h-4 w-4" /> Edit Foto Profil
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={handleAvatarDelete}
+                  onClick={() => setShowAvatarDeleteConfirm(true)}
                   className="cursor-pointer flex items-center gap-2 text-red-500 focus:text-red-500 [&_svg]:text-red-500"
                 >
                   <Trash2 className="h-4 w-4" /> Hapus Foto Profil
@@ -375,14 +378,7 @@ export default function Profile() {
         <PasswordField label="Password Lama" value={currentPassword} onChange={setCurrentPassword} show={showCurrentPw} onToggle={() => setShowCurrentPw(!showCurrentPw)} />
         <PasswordField label="Password Baru" value={newPassword} onChange={setNewPassword} show={showNewPw} onToggle={() => setShowNewPw(!showNewPw)} />
         <div>
-          <label className="block text-[11px] font-mono uppercase tracking-widest text-muted-foreground mb-1.5">Konfirmasi Password Baru</label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
-            className="w-full px-3 py-2 rounded-[5px] bg-muted/60 border border-border text-sm outline-none transition-all focus:border-foreground/40 focus:ring-2 focus:ring-foreground/10"
-            placeholder="Ulangi password baru"
-          />
+          <PasswordField label="Konfirmasi Password Baru" value={confirmPassword} onChange={setConfirmPassword} show={showConfirmPw} onToggle={() => setShowConfirmPw(!showConfirmPw)} />
           {newPassword && confirmPassword && newPassword !== confirmPassword && (
             <p className="text-[11px] text-red-500 mt-1">Password tidak cocok</p>
           )}
@@ -462,6 +458,29 @@ export default function Profile() {
                 {initials}
               </div>
             )}
+          </div>
+        </div>
+      ), document.body)}
+
+      {/* MODAL KONFIRMASI HAPUS FOTO */}
+      {showAvatarDeleteConfirm && createPortal((
+        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowAvatarDeleteConfirm(false)}>
+          <div className="bg-card border border-border w-full max-w-sm rounded-lg shadow-2xl p-6 text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-50 border border-red-200 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-display font-bold text-foreground mb-2">Hapus Foto Profil?</h3>
+            <p className="text-sm text-muted-foreground mb-6">
+              Apakah Anda yakin ingin menghapus foto profil? Tindakan ini tidak dapat dibatalkan.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setShowAvatarDeleteConfirm(false)} className="flex-1 px-4 py-2.5 bg-card border border-border text-muted-foreground hover:bg-muted rounded text-sm font-semibold transition-colors">
+                Batal
+              </button>
+              <button onClick={handleAvatarDelete} className="flex-1 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 rounded text-sm font-bold transition-colors">
+                Ya, Hapus
+              </button>
+            </div>
           </div>
         </div>
       ), document.body)}

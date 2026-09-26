@@ -195,12 +195,17 @@ export default function CustomerTicketDetail() {
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) // newest first
 
     return acts.map((act, idx) => {
-      const rawAction = act.action.startsWith('Tiket ditugaskan ke') ? 'Tiket ditugaskan ke teknisi' : act.action
-      const label = CUSTOMER_LABELS[rawAction] || act.action
+      let rawAction = act.action.startsWith('Tiket ditugaskan ke') ? 'Tiket ditugaskan ke teknisi' : act.action
 
       // Clean details: remove raw photo paths, extract useful info
       let details: string | undefined
-      if (rawAction === 'Tiket ditugaskan ke teknisi' && act.details) {
+      if (act.action === 'Temuan awal / akhir diperbarui' || act.action.startsWith('Kategori / akar masalah')) {
+        // ponytail: label tunggal tanpa isi temuan — isi detail tidak ditampilkan ke pelanggan
+        const d = act.details ?? ''
+        const hasEarly = /^Kategori:\s*\S/m.test(d)
+        const hasRoot = /^Akar masalah:\s*\S/m.test(d)
+        rawAction = hasEarly && hasRoot ? 'Temuan awal & akhir diperbarui' : hasRoot ? 'Temuan akhir diperbarui' : hasEarly ? 'Temuan awal diperbarui' : 'Temuan awal / akhir diperbarui'
+      } else if (rawAction === 'Tiket ditugaskan ke teknisi' && act.details) {
         const schedule = act.details.match(/Jadwal:\s*(.+)/)?.[1]?.trim()
         const supportMatch = act.details.match(/^Pendukung:\s*(.+)$/m)
         const parts: string[] = []
@@ -215,6 +220,7 @@ export default function CustomerTicketDetail() {
       } else if (rawAction === 'Tugas diselesaikan') {
         details = gpsCoords['end'] || undefined
       }
+      const label = CUSTOMER_LABELS[rawAction] || rawAction
 
       return {
         name: label,
@@ -248,9 +254,11 @@ export default function CustomerTicketDetail() {
           <Badge type="status" value={ticket.status} />
           {ticket.priority && <Badge type="priority" value={ticket.priority} />}
         </div>
-        <p className="font-mono text-xs text-muted-foreground mt-1">
-          {formatWIB(ticket.createdAt)}
-          {ticket.closedAt && ` — ${formatWIB(ticket.closedAt)}`}
+        <p className="font-mono text-xs text-muted-foreground">
+          Dibuat: {formatWIB(ticket.createdAt)}
+        </p>
+        <p className="font-mono text-xs text-muted-foreground mt-0.5">
+          Selesai: {ticket.closedAt ? formatWIB(ticket.closedAt) : '-'}
         </p>
       </div>
 

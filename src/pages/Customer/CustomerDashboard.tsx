@@ -6,6 +6,9 @@ import { useEffect, useState } from 'react'
 import { Badge } from '../../components/Badge'
 import { ClipboardCheck, ChevronRight, AlertTriangle, CheckCircle2, Plus } from 'lucide-react'
 
+const formatShort = (iso: string) =>
+    new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+
 export default function CustomerDashboard() {
     const navigate = useNavigate()
     const { user } = useAuth()
@@ -77,12 +80,13 @@ export default function CustomerDashboard() {
                                     <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 flex-wrap">
+                                    <div className="flex items-center justify-between gap-2">
                                         <span className="text-sm font-semibold font-mono">{ticket.code}</span>
-                                        <Badge type="status" value={ticket.status} />
-                                        {ticket.priority && <Badge type="priority" value={ticket.priority} />}
+                                        <span className="text-[11px] font-mono text-muted-foreground shrink-0">{formatShort(ticket.createdAt)}</span>
                                     </div>
-                                    <p className="text-xs text-muted-foreground mt-1 truncate">{ticket.description}</p>
+                                    <div className="mt-1.5">
+                                        <Badge type="status" value={ticket.status} />
+                                    </div>
                                 </div>
                                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                             </button>

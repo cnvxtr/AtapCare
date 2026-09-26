@@ -10,6 +10,7 @@ import { useIsMobile } from '../lib/platform'
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
+import { toast } from 'sonner'
 import { problemCategoriesApi, rootCausesApi } from '../services/master-data'
 
 export type DrawerTab = 'detail' | 'timeline'
@@ -213,6 +214,10 @@ export async function downloadFromUrl(url: string, filename: string) {
             const file = await Filesystem.writeFile({ path: filename, data, directory: Directory.Cache })
             try {
                 await Share.share({ url: file.uri, title: filename, dialogTitle: 'Bagikan Berkas' })
+            } catch (err) {
+                // Cancel/dismiss share sheet = bukan error → diam, tanpa toast.
+                const msg = err instanceof Error ? err.message : String(err)
+                if (!/cancel/i.test(msg)) throw err
             } finally {
                 await Filesystem.deleteFile({ path: filename, directory: Directory.Cache })
             }
@@ -223,7 +228,9 @@ export async function downloadFromUrl(url: string, filename: string) {
             a.click()
             URL.revokeObjectURL(a.href)
         }
-    } catch { window.open(url, '_blank') }
+    } catch {
+        toast.error('Tidak dapat mengunduh file. Coba lagi atau gunakan tampilan web.')
+    }
 }
 
 export function isFileToken(s: string): boolean {
@@ -334,7 +341,12 @@ export function sanitizeTimeline(action: string, details?: string, includeSuppor
         a = 'Tiket ditugaskan ke teknisi'
     }
     if (a.startsWith('Tiket dieskalasi ke PM Lead')) a = 'Tiket dieskalasi'
+    if (a.startsWith('Kategori / akar masalah')) a = 'Temuan awal / akhir diperbarui'
     if (d) {
+        if (a.startsWith('Temuan awal / akhir diperbarui')) {
+            // ponytail: aksi lama & baru tetap di DB; cukup ganti label saat render (root-cause fix)
+            d = d.replace(/^Kategori:\s*/m, 'Temuan Awal: ').replace(/^Akar masalah:\s*/m, 'Temuan Akhir: ')
+        }
         d = d.replace(/^Pendukung:\s*.+\n?/gm, '').replace(/\n+$/, '') || undefined
     }
     return { action: a, details: d }
@@ -435,16 +447,18 @@ export function TicketCatalogCards({ categoryId, rootCauseId, rootCauseNote }: {
 // guard jadwal (canTravel) tidak terkunci. (ponytail: tak perlu library tanggal.)
 const JADWAL_RE = /Jadwal:\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/
 
-export function getAssignmentInfo(items: { action: string; details?: string }[]): { teknisi?: string; jadwal?: string } {
+export function getAssignmentInfo(items: { action: string; details?: string }[]): { teknisi?: string; jadwal?: string; support?: string } {
     const toJadwal = (detail: string): string | undefined => {
         const m = detail.match(JADWAL_RE)
         return m ? `${m[1]} ${m[2]}` : undefined
     }
     let teknisi: string | undefined
     let jadwal: string | undefined
+    let support: string | undefined
     // Aktivitas terbaru dulu; teknisi diambil dari penyebut penugasan terakhir
     // (termasuk 'Pengalihan disetujui' → lead baru), jadwal dari detail 'Jadwal:'
-    // terakhir. Iterasi lanjut sampai keduanya ketemu.
+    // terakhir, pendukung dari baris 'Pendukung:' detail penugasan terakhir.
+    // Iterasi lanjut sampai semua informasi ketemu.
     for (const act of [...items].reverse()) {
         const detail = act.details || ''
         if (teknisi === undefined) {
@@ -456,10 +470,13 @@ export function getAssignmentInfo(items: { action: string; details?: string }[])
                 teknisi = detail.match(/^Penanggung jawab dialihkan ke (.+?)(?:\s*\(sebelumnya [^)]*\))?$/)?.[1]?.trim()
             }
         }
+        if (support === undefined && act.action.startsWith('Tiket ditugaskan ke')) {
+            support = detail.match(/^Pendukung:\s*(.+)$/m)?.[1]?.trim()
+        }
         if (jadwal === undefined) jadwal = toJadwal(detail)
-        if (teknisi !== undefined && jadwal !== undefined) break
+        if (teknisi !== undefined && jadwal !== undefined && support !== undefined) break
     }
-    return { teknisi, jadwal }
+    return { teknisi, jadwal, support }
 }
 
 export function formatJadwal(jadwal: string): string {
@@ -470,12 +487,13 @@ export function formatJadwal(jadwal: string): string {
 }
 
 export function AssignmentCard({ items }: { items: { action: string; details?: string }[] }) {
-    const { teknisi, jadwal } = getAssignmentInfo(items)
-    if (!teknisi && !jadwal) return null
+    const { teknisi, jadwal, support } = getAssignmentInfo(items)
+    if (!teknisi && !jadwal && !support) return null
     return (
         <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {teknisi && <div className="bg-muted p-4 rounded-lg border border-border"><p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Ditugaskan ke</p><p className="font-medium text-sm">{teknisi}</p></div>}
+                {support && <div className="bg-muted p-4 rounded-lg border border-border"><p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Teknisi Pendukung</p><p className="font-medium text-sm">{support}</p></div>}
                 {jadwal && <div className="bg-muted p-4 rounded-lg border border-border"><p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Dijadwalkan</p><p className="font-medium text-sm">{formatJadwal(jadwal)}</p></div>}
             </div>
             <div className="border-t border-border" />

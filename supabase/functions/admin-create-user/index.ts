@@ -52,6 +52,7 @@ Deno.serve(async (req) => {
 
     let body: {
       username?: string;
+      email?: string;
       password?: string;
       name?: string;
       wa_number?: string;
@@ -64,22 +65,25 @@ Deno.serve(async (req) => {
     } catch {
       body = {};
     }
-    const { username, password, name, wa_number, role, roles, status } = body;
+    const { username, email, password, name, wa_number, role, roles, status } = body;
 
     if (typeof username !== "string" || !username.trim()) {
       return json({ error: "Username wajib diisi" }, 400);
+    }
+    if (typeof email !== "string" || !email.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())) {
+      return json({ error: "Email wajib diisi dan harus valid" }, 400);
     }
     if (typeof password !== "string" || password.length < 6) {
       return json({ error: "Password minimal 6 karakter" }, 400);
     }
 
-    const email = `${username.trim()}@atapcare.local`;
+    const finalEmail = email.trim();
 
     // Idempoten: kalau auth user sudah ada (mis. retry setelah response hilang),
     // pakai userId yang ada — baris public.users tetap di-upsert di bawah.
     let userId: string;
     const { data: created, error: createError } = await supabase.auth.admin.createUser({
-      email,
+      email: finalEmail,
       password,
       email_confirm: true,
     });
@@ -90,8 +94,18 @@ Deno.serve(async (req) => {
       userId = created.user.id;
     } else {
       const { data: list } = await supabase.auth.admin.listUsers({ perPage: 1000 });
-      const existing = list.users.find((u) => u.email === email);
+      const existing = list.users.find((u) => u.email === finalEmail);
       if (!existing) return json({ error: createError?.message || "Gagal membuat user" }, 500);
+      // Retry idempoten: email harus milik username yang sama. Email asing = bentrok
+      // dengan akun lain, jangan reuse userId-nya.
+      const { data: owner } = await supabase
+        .from("users")
+        .select("username")
+        .eq("id", existing.id)
+        .maybeSingle();
+      if (owner && owner.username !== username.trim()) {
+        return json({ error: `Email "${finalEmail}" sudah dipakai akun lain` }, 400);
+      }
       userId = existing.id;
     }
 
@@ -100,7 +114,7 @@ Deno.serve(async (req) => {
     // tersimpan benar — tidak bergantung RPC admin_save_user yang bisa tertinggal.
     const { error: upsertError } = await supabase.from("users").upsert({
       id: userId,
-      email,
+      email: finalEmail,
       username: username.trim(),
       name: name || "",
       full_name: name || "",

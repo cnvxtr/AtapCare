@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { selectTriggerFilter, selectTriggerFilterSm } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -18,6 +19,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { FileSpreadsheet, Loader2, Search } from "lucide-react";
 import MultiSelectFilter from "@/components/MultiSelectFilter";
 import DateRangePicker from "@/components/DateRangePicker";
+import { isNativePlatform } from "@/lib/platform";
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, type DrawerTab } from "@/components/TicketDrawer";
 import { useTickets } from "@/context/TicketContext";
 import {
@@ -75,10 +77,10 @@ const STATUS_COLS: Record<TabKey, number[]> = {
   sparepart: [],
 };
 
-function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
+function FilterGroup({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <label className="text-xs text-muted-foreground whitespace-nowrap">{label}</label>
+    <div className={`flex items-center gap-1.5 min-w-0 ${className || ""}`}>
+      <label className="text-xs text-muted-foreground whitespace-nowrap truncate">{label}</label>
       {children}
     </div>
   );
@@ -97,6 +99,20 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const { tickets: allTickets } = useTickets();
   const [selectedTicket, setSelectedTicket] = useState<TicketReportRow | null>(null);
   const [activeDrawerTab, setActiveDrawerTab] = useState<DrawerTab>("detail");
+
+  // Klik notifikasi di APK → drawer tiket auto-terbuka (read-only untuk admin).
+  const location = useLocation();
+  const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId;
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!notifyOpenTicket) return
+    const t = allTickets.find((x) => x.id === notifyOpenTicket)
+    if (!t) return
+    setSelectedTicket(t as unknown as TicketReportRow)
+    setActiveDrawerTab("detail")
+    navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [notifyOpenTicket])
 
   const [tickets, setTickets] = useState<TicketReportRow[]>([]);
   const [kpis, setKpis] = useState<Array<Record<string, string | number>>>([]);
@@ -154,6 +170,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
         : tab === "rootcause"
             ? ROOTCAUSE_HEADERS
             : SERIAL_NUMBER_HEADERS;
+  const twoCol = activeHeaders.length === 2;
   const exportHeaders: string[] =
     tab === "tickets" ? TICKET_REPORT_HEADERS : activeHeaders;
 
@@ -188,7 +205,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
         ? STATUS_COLS[tab].map((c) => TICKET_EXPORT_INDEXES.indexOf(c) + 1)
         : STATUS_COLS[tab].map((c) => c + 1);
     setExporting(true);
-    toast.info(`Menyiapkan unduhan XLSX "${label}"…`);
+    if (!isNativePlatform()) toast.info(`Menyiapkan unduhan XLSX "${label}"…`);
     exportStyledXlsx({
       rows,
       headers,
@@ -198,7 +215,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       priorityCols,
       statusCols,
     })
-      .then(() => toast.success(`XLSX "${label}" berhasil diunduh (${rows.length} baris)`))
+      .then(() => { if (!isNativePlatform()) toast.success(`XLSX "${label}" berhasil diunduh (${rows.length} baris)`) })
       .catch(() => toast.error("Gagal membuat file XLSX."))
       .finally(() => setExporting(false));
   }
@@ -223,11 +240,29 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
 
   return (
     <div className="space-y-4">
+      {/* ─── Tab Dataset ─────────────────────────────────────────── */}
+      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="space-y-4">
+        <div className={`bg-card p-1 rounded-xl border border-border grid gap-1 ${mode === "admin" ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2"}`}>
+          {visibleDatasets.map((d) => (
+            <button
+              key={d.key}
+              onClick={() => setTab(d.key)}
+              className={`px-3.5 h-8 rounded-[3px] text-xs font-medium transition inline-flex items-center justify-center gap-1.5 ${
+                tab === d.key
+                  ? "bg-foreground text-primary-foreground"
+                  : "text-muted-foreground hover:bg-accent"
+              }`}
+            >
+              {d.label}
+            </button>
+          ))}
+        </div>
+
       {/* ─── Baris Filter ────────────────────────────────────────── */}
       <Card>
         <CardContent className="px-2.5 py-3">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
-            <div className="relative grow">
+            <div className="relative flex-1 min-w-[7rem] md:grow md:min-w-0">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
@@ -237,53 +272,38 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                 className="h-8 w-full min-w-0 rounded-lg border border-border bg-card pl-8 pr-2 text-[13px] text-foreground placeholder:text-muted-foreground outline-none transition-colors focus:ring-2 focus:ring-foreground/20"
               />
             </div>
-            <FilterGroup label="Periode">
+            <div className="flex items-center gap-1.5 min-w-0 shrink-0">
+              <label className="hidden md:inline text-xs text-muted-foreground whitespace-nowrap truncate">Periode</label>
               <DateRangePicker from={filters.from} to={filters.to} onChange={setRange} />
-            </FilterGroup>
-            {(tab === "tickets" || tab === "kpi") && (
-              <>
-                <FilterGroup label="Perusahaan">
+            </div>
+            {tab === "tickets" && (
+              <div className="w-full md:w-auto flex flex-wrap gap-x-1.5 gap-y-2">
+                <FilterGroup label="Perusahaan" className="flex-1 md:flex-none">
                   <MultiSelectFilter
                     label="Semua"
                     options={companies.map((c) => ({ value: c, label: c }))}
                     selected={selectedRecord(filters.company)}
                     onToggle={(v) => toggleFilterValue("company", v)}
-                    className={`${selectTriggerFilter} max-md:min-w-[100px]`}
+                    className={`${selectTriggerFilter} w-full md:w-auto max-md:min-w-[100px]`}
                   />
                 </FilterGroup>
-                <FilterGroup label="Prioritas">
+                <FilterGroup label="Prioritas" className="flex-1 md:flex-none">
                   <MultiSelectFilter
                     label="Semua"
                     options={PRIORITY_OPTIONS}
                     selected={selectedRecord(filters.priority)}
                     onToggle={(v) => toggleFilterValue("priority", v)}
-                    className={`${selectTriggerFilterSm} max-md:min-w-[90px]`}
+                    className={`${selectTriggerFilterSm} w-full md:w-auto max-md:min-w-[90px]`}
                   />
                 </FilterGroup>
-              </>
+              </div>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* ─── 3 Tab Dataset ───────────────────────────────────────── */}
-      <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)}>
-        {mode === "admin" && (
-          <TabsList className="flex-wrap h-auto gap-1 rounded border border-border bg-card p-1.5">
-            {DATASETS.map((d) => (
-              <TabsTrigger
-                key={d.key}
-                value={d.key}
-                className="border border-border rounded bg-card text-muted-foreground [&[data-state=active]]:bg-foreground [&[data-state=active]]:text-primary-foreground [&[data-state=active]]:border-foreground [&[data-state=active]]:shadow"
-              >
-                {d.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        )}
-
-        {visibleDatasets.map((d) => (
-          <TabsContent key={d.key} value={d.key}>
+      {visibleDatasets.map((d) => (
+          <TabsContent key={d.key} value={d.key} className="mt-0">
             <Card>
               <CardContent className="p-4">
                 <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
@@ -328,14 +348,14 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                 ) : (
                   <div className="rounded-xl border border-border bg-card overflow-hidden">
                     <div className="overflow-x-auto">
-                      <div className="min-w-[900px]">
+                      <div className={twoCol ? "w-full" : "min-w-[900px]"}>
                       <Table>
                           <TableHeader>
                             <TableRow>
                               {activeHeaders.map((h) => (
                                 <TableHead
                                   key={h}
-                                  className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground px-1.5 py-1.5 whitespace-nowrap"
+                                  className={`text-[9px] font-mono uppercase tracking-widest text-muted-foreground px-1.5 py-1.5 whitespace-nowrap ${twoCol ? "text-center w-1/2" : ""}`}
                                 >
                                   {h}
                                 </TableHead>
@@ -348,7 +368,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                               {r.slice(0, activeHeaders.length).map((c, j) => (
                                 <TableCell
                                   key={j}
-                                  className="text-[10px] px-1.5 py-1.5"
+                                  className={`text-[10px] px-1.5 py-1.5 ${twoCol ? "text-center w-1/2" : ""}`}
                                 >
                                   {PRIORITY_COLS[tab].includes(j) ? (
                                     <ColorBadge type="priority" value={String(c ?? "—")} />

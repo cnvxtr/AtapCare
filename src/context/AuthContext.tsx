@@ -27,6 +27,7 @@ interface AuthContextType {
     register: (name: string, email: string, phone: string, password: string, companyCode?: string) => Promise<{ error: string | null; ok?: boolean }>
     logout: () => Promise<void>
     switchRole: (role: string) => Promise<{ error: string | null }>
+    refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -213,6 +214,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         }
     }
 
+    const refreshUser = async () => {
+        if (!user) return
+        const profile = await fetchUserProfile(user.id)
+        if (profile && !isDeactivated(profile)) {
+            setUser(profile)
+            setAuditActor(profile.full_name)
+        }
+    }
+
     const switchRole = async (role: string) => {
         if (!user) return { error: 'Tidak ada sesi' }
         const { data, error } = await supabase.rpc('switch_role', { p_role: role })
@@ -232,7 +242,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole, refreshUser }}>
             {children}
         </AuthContext.Provider>
     )
