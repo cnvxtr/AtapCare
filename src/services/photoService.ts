@@ -5,7 +5,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 // Fraksi 0..1 untuk progres upload (dipakai ProgressBar).
-export type UploadProgress = (fraction: number) => void
+type UploadProgress = (fraction: number) => void
 
 // Upload via XMLHttpRequest karena supabase-js (fetch) tidak memberi event progres.
 // Endpoint & header identik dengan supabase.storage.upload → kebijakan Storage sama.
@@ -61,7 +61,7 @@ export function compressImageToBlob(file: File, maxDim = 800, quality = 0.6): Pr
 
 // Simpan foto terkompresi ke Storage, kembalikan path (bukan URL) agar tidak kedaluwarsa.
 // Folder = kode tiket (dikenal sebelum tiket dibuat / saat menindak tiket).
-export async function uploadTicketPhoto(file: File, folder: string, onProgress?: UploadProgress): Promise<string> {
+async function uploadTicketPhoto(file: File, folder: string, onProgress?: UploadProgress): Promise<string> {
     const blob = await compressImageToBlob(file)
     // ponytail: crypto.randomUUID belum tentu ada di WebView Android 8 (API 26) → fallback sederhana.
     const uid = crypto.randomUUID ? crypto.randomUUID() : `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
@@ -71,7 +71,7 @@ export async function uploadTicketPhoto(file: File, folder: string, onProgress?:
 }
 
 // Upload file non-image (PDF, DOC, XLSX, dll) tanpa kompresi, preserve extension.
-export async function uploadTicketFile(file: File, folder: string, onProgress?: UploadProgress): Promise<string> {
+async function uploadTicketFile(file: File, folder: string, onProgress?: UploadProgress): Promise<string> {
     const ext = file.name.split('.').pop() || 'bin'
     const uid = crypto.randomUUID ? crypto.randomUUID() : `f${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
     const path = `${folder}/${uid}.${ext}`

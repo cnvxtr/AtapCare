@@ -253,7 +253,7 @@ export function setAuditActor(name: string | null) {
   currentActor = name;
 }
 
-export async function logActivity(
+async function logActivity(
   action: string,
   entityType: string,
   entityId?: string,

@@ -69,7 +69,7 @@ async function getRatingTickets(): Promise<RatingRow[]> {
 }
 
 // Leaderboard per user id helpdesk (bukan per nama) agar nama sama terpisah.
-export function buildSeedHelpdeskLeaderboard(rows: RatingRow[]): HelpdeskScore[] {
+function buildSeedHelpdeskLeaderboard(rows: RatingRow[]): HelpdeskScore[] {
   const map = new Map<string, HelpdeskScore>();
   for (const r of rows) {
     // Tanpa atribusi user → satu bucket "Tanpa atribusi" agar tdk salah menggabung

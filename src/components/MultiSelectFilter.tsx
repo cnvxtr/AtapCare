@@ -2,7 +2,7 @@ import { Check, ChevronDown } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-export type FilterOption = { value: string; label: string }
+type FilterOption = { value: string; label: string }
 
 // Semua <-> spesifik: klik spesifik mematikan 'all' (spesifik lain independen);
 // bila tidak ada spesifik terpilih, 'all' di-restore agar filter tak pernah kosong.

@@ -4,14 +4,14 @@ import * as React from "react"
 import { CheckCircle2, Circle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-export interface OrderStep {
+interface OrderStep {
   name: string
   timestamp: string
   isCompleted: boolean
   details?: React.ReactNode
 }
 
-export interface OrderTrackingProps
+interface OrderTrackingProps
   extends React.HTMLAttributes<HTMLDivElement> {
   steps: OrderStep[]
 }

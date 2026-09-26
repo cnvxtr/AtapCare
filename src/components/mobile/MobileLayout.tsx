@@ -1,12 +1,11 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type TouchEvent as ReactTouchEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { AnimatePresence, motion } from 'framer-motion'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { useTickets } from '../../context/TicketContext'
-import { LogOut, Sun, Moon, Bell, ChevronDown, Check } from 'lucide-react'
+import { Sun, Moon, Bell, ChevronDown, Check } from 'lucide-react'
 import {
   getMyNotifications, getUnreadCount, markAllRead, markNotificationRead,
   type NotificationRow,
@@ -38,19 +37,59 @@ const PAGE_TITLES: Record<string, string> = {
 const roleHome = (r?: string) =>
   r === 'admin' ? '/admin' : r === 'teknisi' ? '/tugas' : r === 'customer' ? '/customer' : r === 'executive' ? '/executive' : '/dashboard'
 
+// ponytail: drag-down manual tanpa lib; ambang 90px, hanya aktif dari area kepala sheet.
+function useSheetDismiss(onClose: () => void) {
+  const [dy, setDy] = useState(0)
+  const startY = useRef<number | null>(null)
+  return {
+    style: { transform: `translateY(${dy}px)`, transition: dy > 0 ? 'none' : 'transform .25s ease' },
+    onTouchStart: (e: ReactTouchEvent<HTMLDivElement>) => { startY.current = e.touches[0].clientY },
+    onTouchMove: (e: ReactTouchEvent<HTMLDivElement>) => {
+      if (startY.current === null) return
+      const y = e.touches[0].clientY - startY.current
+      if (y > 0) setDy(y)
+    },
+    onTouchEnd: () => {
+      const shouldClose = dy > 90
+      startY.current = null
+      setDy(0)
+      if (shouldClose) onClose()
+    },
+  }
+}
+
 export default function MobileLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, logout, switchRole } = useAuth()
+  const { user, switchRole } = useAuth()
   const { tickets } = useTickets()
   const [showNotifSheet, setShowNotifSheet] = useState(false)
   const [showRoleSheet, setShowRoleSheet] = useState(false)
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
+
+  const notifDismiss = useSheetDismiss(() => setShowNotifSheet(false))
+  const roleDismiss = useSheetDismiss(() => setShowRoleSheet(false))
+
+  // Kunci scroll halaman saat sheet/modal terbuka (notif, role).
+  // html + body sekaligus: di sebagian WebView/Chrome Android, overflow:hidden
+  // pada body saja tidak menahan scroll dokumen (viewport = html).
+  const anySheetOpen = showNotifSheet || showRoleSheet
+  useEffect(() => {
+    const root = document.documentElement
+    const prev = root.style.overflow
+    root.style.overflow = anySheetOpen ? 'hidden' : ''
+    document.body.style.overflow = anySheetOpen ? 'hidden' : ''
+    document.body.style.overscrollBehaviorY = anySheetOpen ? 'none' : ''
+    return () => {
+      root.style.overflow = prev
+      document.body.style.overflow = ''
+      document.body.style.overscrollBehaviorY = ''
+    }
+  }, [anySheetOpen])
 
   // Nonce untuk remount Outlet saat pull-to-refresh: refetch tanpa reload halaman.
   const [refreshNonce, setRefreshNonce] = useState(0)
@@ -90,11 +129,6 @@ export default function MobileLayout() {
   const pageTitle = location.pathname.startsWith('/customer/ticket/')
     ? 'Detail Tiket'
     : PAGE_TITLES[location.pathname] || 'Atap Care'
-
-  const handleLogout = () => {
-    logout()
-    setShowLogoutConfirm(false)
-  }
 
   const handleBackupAction = async (n: NotificationRow, action: 'approve' | 'reject') => {
     if (!n.ticket_id || backupBusy) return
@@ -216,13 +250,16 @@ export default function MobileLayout() {
       <BottomTabs role={user?.role || 'helpdesk'} />
 
       {/* Notification Bottom Sheet */}
-      <AnimatePresence>
-        {showNotifSheet && createPortal(
-          <>
-            <motion.div className="fixed inset-0 z-[55] bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setShowNotifSheet(false)} />
-            <motion.div className="fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col"
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 320 }}>
-            <div className="flex justify-center pt-3 pb-1">
+      {showNotifSheet && createPortal(
+        <>
+          <div className="fixed inset-0 z-[55] bg-black/40 fade-in" onClick={() => setShowNotifSheet(false)} onTouchMove={(e) => e.preventDefault()} />
+          <div className="fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[75vh] flex flex-col slide-up" style={notifDismiss.style}>
+            <div
+              className="flex justify-center pt-3 pb-1"
+              onTouchStart={notifDismiss.onTouchStart}
+              onTouchMove={notifDismiss.onTouchMove}
+              onTouchEnd={notifDismiss.onTouchEnd}
+            >
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
             {/* Header */}
@@ -238,7 +275,7 @@ export default function MobileLayout() {
               )}
             </div>
             {/* List */}
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto overscroll-contain">
               {notifs.length === 0 ? (
                 <div className="px-5 py-12 text-center text-sm text-muted-foreground">
                   Tidak ada notifikasi
@@ -248,7 +285,7 @@ export default function MobileLayout() {
                   {notifs.map((n) => {
                     const actionable = n.ticket_id && n.title?.startsWith('Minta pengalihan:')
                     return (
-                      <div key={n.id} onClick={() => { if (!actionable) handleNotifOpen(n) }} className={`flex flex-col items-start py-3 px-3.5 bg-muted rounded-xl ${n.read ? 'opacity-60' : ''} ${actionable ? '' : 'cursor-pointer active:bg-accent'}`}>
+                      <div key={n.id} onClick={() => handleNotifOpen(n)} className={`flex flex-col items-start py-3 px-3.5 bg-muted rounded-xl cursor-pointer active:bg-accent ${n.read ? 'opacity-60' : ''}`}>
                         <span className="text-sm font-medium text-foreground">{n.title}</span>
                         {n.message && <span className="text-xs text-muted-foreground mt-0.5">{n.message}</span>}
                         <span className="text-[10px] text-muted-foreground/70 mt-1">
@@ -278,27 +315,29 @@ export default function MobileLayout() {
                 </div>
               )}
             </div>
-            </motion.div>
-          </>,
-          document.body
-        )}
-      </AnimatePresence>
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* Role Switcher Bottom Sheet */}
-      <AnimatePresence>
-        {showRoleSheet && createPortal(
-          <>
-            <motion.div className="fixed inset-0 z-[55] bg-black/40" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }} onClick={() => setShowRoleSheet(false)} />
-            <motion.div className="fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[60vh] flex flex-col"
-              initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 320 }}>
-              <div className="flex justify-center pt-3 pb-1">
+      {showRoleSheet && createPortal(
+        <>
+          <div className="fixed inset-0 z-[55] bg-black/40 fade-in" onClick={() => setShowRoleSheet(false)} onTouchMove={(e) => e.preventDefault()} />
+          <div className="fixed bottom-0 inset-x-0 z-[56] bg-card border-t border-border rounded-t-2xl shadow-2xl max-h-[60vh] flex flex-col slide-up" style={roleDismiss.style}>
+              <div
+                className="flex justify-center pt-3 pb-1"
+                onTouchStart={roleDismiss.onTouchStart}
+                onTouchMove={roleDismiss.onTouchMove}
+                onTouchEnd={roleDismiss.onTouchEnd}
+              >
                 <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
               </div>
               <div className="px-5 pb-3 border-b border-border">
                 <span className="text-sm font-semibold text-foreground">Ganti Role</span>
                 <p className="text-xs text-muted-foreground mt-0.5">Role aktif saat ini: {ROLE_LABELS[user?.role || ''] || user?.role}</p>
               </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-1">
+              <div className="flex-1 overflow-y-auto overscroll-contain p-3 space-y-1">
                 {roleList.map((r) => (
                   <button
                     key={r}
@@ -311,40 +350,11 @@ export default function MobileLayout() {
                   </button>
                 ))}
               </div>
-            </motion.div>
-          </>,
-          document.body
-        )}
-      </AnimatePresence>
-
-      {/* Logout Modal */}
-      {showLogoutConfirm && createPortal((
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in">
-          <div className="bg-card border border-border w-full max-w-sm rounded-2xl shadow-2xl p-6 text-center">
-            <div className="w-12 h-12 bg-red-50 border border-red-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <LogOut className="w-6 h-6 text-red-500" />
-            </div>
-            <h3 className="text-lg font-display font-bold text-foreground mb-2">Keluar?</h3>
-            <p className="text-sm text-muted-foreground mb-6">
-              Anda harus login kembali untuk mengakses sistem.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                className="flex-1 px-4 py-2.5 bg-card border border-border text-muted-foreground hover:bg-muted rounded-xl text-sm font-semibold transition-colors"
-              >
-                Batal
-              </button>
-              <button
-                onClick={handleLogout}
-                className="flex-1 px-4 py-2.5 bg-red-600 text-white hover:bg-red-700 rounded-xl text-sm font-bold transition-colors"
-              >
-                Ya, Keluar
-              </button>
-            </div>
           </div>
-        </div>
-      ), document.body)}
+        </>,
+        document.body
+      )}
+
       <RatingWatcher />
     </div>
   )

@@ -318,7 +318,7 @@ export default function MainLayout() {
       {/* Main */}
       <div className={`flex-1 min-w-0 flex flex-col pt-16 ${collapsed ? 'lg:ml-16' : 'lg:ml-60'}`}>
         {/* Top bar */}
-        <header className={`h-16 fixed top-0 left-0 right-0 z-30 border-b border-border bg-background ${collapsed ? 'lg:left-16' : 'lg:left-64'}`}>
+        <header className={`h-16 fixed top-0 left-0 right-0 z-30 border-b border-border bg-background ${collapsed ? 'lg:left-16' : 'lg:left-60'}`}>
           <div className="h-full px-4 sm:px-6 flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="p-3 sm:p-2 -ml-2 rounded hover:bg-accent transition lg:hidden">
               <Menu className="h-5 w-5" />

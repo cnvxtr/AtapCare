@@ -276,7 +276,7 @@ function usePhotoResolver(tokens: string[]): Record<string, string> {
 
 // Di Timeline & Activity, foto ditampilkan sebagai label yang bisa diklik (bukan <img> inline)
 // agar baris tetap ringan; foto penuh muncul lewat lightbox saat diklik.
-export function DetailsText({ text }: { text?: string }) {
+function DetailsText({ text }: { text?: string }) {
     const [preview, setPreview] = useState<{ images: string[]; index: number; titles?: string[] } | null>(null)
     const parts = useMemo(() => text?.split(FILE_TOKEN_RE) ?? [], [text])
     const tokens = parts.filter(isFileToken)
@@ -322,7 +322,7 @@ export function TicketTimeline({ items, isFinal }: { items: { timestamp: string;
 // Sanitasi tampilan timeline agar tidak memuat nama/role orang (mis. "Tiket ditugaskan
 // ke Rahma" → "…teknisi", baris "Pendukung: Hilman" dihapus). Data mentah di DB tetap
 // utuh untuk audit — hanya render yang dibersihkan.
-export function sanitizeTimeline(action: string, details?: string, includeSupport?: boolean): { action: string; details?: string } {
+function sanitizeTimeline(action: string, details?: string, includeSupport?: boolean): { action: string; details?: string } {
     let a = action
     let d = details
     if (a.startsWith('Tiket ditugaskan ke')) {
@@ -346,6 +346,9 @@ export function sanitizeTimeline(action: string, details?: string, includeSuppor
         if (a.startsWith('Temuan awal / akhir diperbarui')) {
             // ponytail: aksi lama & baru tetap di DB; cukup ganti label saat render (root-cause fix)
             d = d.replace(/^Kategori:\s*/m, 'Temuan Awal: ').replace(/^Akar masalah:\s*/m, 'Temuan Akhir: ')
+            const awal = /Temuan Awal:/.test(d)
+            const akhir = /Temuan Akhir:/.test(d) || /Catatan:/.test(d)
+            a = awal && akhir ? 'Temuan awal / akhir diperbarui' : awal ? 'Temuan awal diperbarui' : akhir ? 'Temuan akhir diperbarui' : 'Temuan awal / akhir diperbarui'
         }
         d = d.replace(/^Pendukung:\s*.+\n?/gm, '').replace(/\n+$/, '') || undefined
     }
@@ -508,12 +511,12 @@ const PHOTO_SRC_RE = FILE_TOKEN_RE
 // "Tiket dibuat…" / "Foto keluhan…", sedangkan dokumentasi teknisi di "Tugas
 // diselesaikan" / "Tiket dijeda". Path lama dipakai sebagai fallback untuk
 // aktivitas lain (tiket lama/unknown) agar klasifikasi tetap aman.
-export function isClientActivity(action?: string): boolean {
+function isClientActivity(action?: string): boolean {
     if (!action) return false
     return action.startsWith('Foto keluhan') || action.startsWith('Tiket dibuat')
 }
 
-export const isClientPhotoPath = (src: string) => src.startsWith('data:image') || src.startsWith('ticket-photos/guest/')
+const isClientPhotoPath = (src: string) => src.startsWith('data:image') || src.startsWith('ticket-photos/guest/')
 
 export function extractAttachments(items: { timestamp?: string; action?: string; details?: string }[]): { src: string; when: string; isClient: boolean }[] {
     const all: { src: string; when: string; isClient: boolean }[] = []
@@ -533,7 +536,7 @@ export function extractAttachments(items: { timestamp?: string; action?: string;
 // Galeri lampiran: foto (data URL / path gambar) ditampilkan sebagai thumbnail grid
 // yang bisa diklik via lightbox; file non-gambar ditampilkan sebagai kartu dengan
 // nama file & tombol download. Semua lampiran dipindai dari detail aktivitas tiket.
-export function PhotoGallery({ items, status }: { items: { timestamp: string; action: string; details?: string }[]; status?: string }) {
+function PhotoGallery({ items, status }: { items: { timestamp: string; action: string; details?: string }[]; status?: string }) {
     const all = extractAttachments(items)
     const photos = all.filter(p => isImageFileByPath(p.src))
     const files = all.filter(p => !isImageFileByPath(p.src))

@@ -13,7 +13,7 @@ export type Priority = 'Critical' | 'Medium' | 'Low'
 // lewat transisi `pending_requested_at` per tiket milik teknisi (snapshot ref
 // sekali pakai), BUKAN lewat string action — jadi tidak re-toast tiap fetch.
 
-export interface TicketActivity {
+interface TicketActivity {
     id: string
     timestamp: string
     user: string
@@ -410,7 +410,11 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (loading) {
-        return <div className="flex h-screen items-center justify-center bg-muted">Memuat sistem...</div>
+        return (
+            <div className="flex h-screen items-center justify-center bg-muted">
+                <div className="h-12 w-12 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" role="status" aria-label="Memuat" />
+            </div>
+        )
     }
 
     return (

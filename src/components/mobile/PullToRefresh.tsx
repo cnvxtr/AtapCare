@@ -8,15 +8,13 @@ const MAX_PULL = 120
 function RefreshBadge({ progress }: { progress: number }) {
   return (
     <div
-      className="w-28 h-28 rounded-full bg-card border border-border shadow-2xl flex flex-col items-center justify-center"
+      className="h-12 w-12 grid place-items-center"
       style={{
         opacity: Math.max(0.2, Math.min(1, progress)),
         transform: `scale(${0.7 + Math.min(1, progress) * 0.3})`,
       }}
     >
-      <span className="font-display font-bold text-lg leading-none text-foreground">Atap</span>
-      <span className="my-1.5 h-0.5 w-10 rounded-full bg-foreground/30" />
-      <span className="font-display font-bold text-lg leading-none text-foreground">Care</span>
+      <div className="h-8 w-8 border-4 border-foreground/20 border-t-foreground rounded-full animate-spin" />
     </div>
   )
 }

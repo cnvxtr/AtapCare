@@ -229,7 +229,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     return { all: false, ...Object.fromEntries(arr.map((v) => [v, true])) };
   }
 
-  function toggleFilterValue(key: "company" | "status" | "priority", value: string) {
+  function toggleFilterValue(key: "company" | "priority", value: string) {
     setFilters((f) => {
       if (value === "all") return { ...f, [key]: undefined };
       const cur = (f[key] as string[] | undefined) ?? [];

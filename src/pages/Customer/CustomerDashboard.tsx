@@ -80,13 +80,11 @@ export default function CustomerDashboard() {
                                     <ClipboardCheck className="h-5 w-5 text-muted-foreground" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="text-sm font-semibold font-mono">{ticket.code}</span>
-                                        <span className="text-[11px] font-mono text-muted-foreground shrink-0">{formatShort(ticket.createdAt)}</span>
-                                    </div>
+                                    <span className="text-sm font-semibold font-mono">{ticket.code}</span>
                                     <div className="mt-1.5">
                                         <Badge type="status" value={ticket.status} />
                                     </div>
+                                    <p className="mt-1.5 text-[11px] font-mono text-muted-foreground">Tanggal dibuat: {formatShort(ticket.createdAt)}</p>
                                 </div>
                                 <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
                             </button>

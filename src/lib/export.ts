@@ -7,7 +7,7 @@ export type ExportCell = string | number | null | undefined;
 
 // Unduh file: web → blob download; native → share sheet (webview tak mendukung
 // anchor download). Tulis ke cache, share, lalu bersihkan.
-export async function downloadBlob(blob: Blob, filename: string) {
+async function downloadBlob(blob: Blob, filename: string) {
   if (Capacitor.isNativePlatform()) {
     try {
       const b64 = await new Promise<string>((resolve, reject) => {

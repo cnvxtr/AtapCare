@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { setAuditActor } from '../services/master-data'
 
-export interface UserProfile {
+interface UserProfile {
     id: string
     email: string
     full_name: string
@@ -238,7 +238,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     if (loading) {
-        return <div className="flex h-screen items-center justify-center bg-muted">Memuat sistem...</div>
+        return (
+            <div className="flex h-screen items-center justify-center bg-muted">
+                <div className="h-12 w-12 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" role="status" aria-label="Memuat" />
+            </div>
+        )
     }
 
     return (

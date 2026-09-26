@@ -37,7 +37,9 @@ Deno.serve(async (req) => {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data: { user }, error: authError } = await userClient.auth.getUser(jwt);
-  if (authError || !user) return json({ error: "Unauthorized" }, 401);
+  if (authError || !user) {
+    return json({ error: authError?.message || "Session tidak valid, login ulang" }, 401);
+  }
 
   const { data: profile } = await supabase
     .from("users")

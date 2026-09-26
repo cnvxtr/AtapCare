@@ -8,20 +8,6 @@ export interface ReportFilters {
   priority?: string[];
 }
 
-// Label status Indonesia untuk filter. "Ditugaskan" mencakup beberapa status
-// mentah (UNASSIGNED/SCHEDULED/EN_ROUTE) yang berlabel sama di UI.
-export const STATUS_FILTER_GROUPS: Record<string, string[]> = {
-  Baru: ["NEW"],
-  Diproses: ["OPEN"],
-  Ditugaskan: ["UNASSIGNED", "SCHEDULED", "EN_ROUTE"],
-  Dikerjakan: ["WORKING"],
-  Dijeda: ["PENDING"],
-  Selesai: ["RESOLVED"],
-  Tutup: ["CLOSED"],
-  Dibatalkan: ["VOID"],
-  Digabungkan: ["DUPLICATE"],
-};
-
 export interface TicketReportRow {
   code: string;
   customer: string;
@@ -120,10 +106,7 @@ async function buildTicketQuery(filters: ReportFilters) {
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
   if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
-  if (filters.status?.length) {
-    const raws = filters.status.flatMap((s) => STATUS_FILTER_GROUPS[s] ?? [s]);
-    if (raws.length) q = q.in("status", raws);
-  }
+  if (filters.status?.length) q = q.in("status", filters.status);
   if (filters.priority?.length) q = q.in("priority", filters.priority);
   if (filters.company?.length) q = q.in("company", filters.company);
   return q;

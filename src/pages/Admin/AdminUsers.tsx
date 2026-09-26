@@ -70,7 +70,14 @@ const ITEMS_PER_PAGE = 10;
 
 async function getAuthHeaders(): Promise<Record<string, string> | null> {
   const { VITE_SUPABASE_ANON_KEY } = import.meta.env;
-  const { data: sessionData } = await supabase.auth.getSession();
+  let { data: sessionData } = await supabase.auth.getSession();
+  // Token tinggal kedaluwarsa (≤60 dtk) → refresh dulu; kalau telat, edge
+  // function menolak dengan "Unauthorized". Satu guard melindungi semua call.
+  const expAt = sessionData.session?.expires_at;
+  if (sessionData.session && expAt && Date.now() >= (expAt - 60) * 1000) {
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed.session) sessionData = refreshed;
+  }
   const token = sessionData.session?.access_token;
   if (!token) return null;
   return {
@@ -139,11 +146,15 @@ export function AdminUsers() {
 
     const { data: activeRows } = await supabase
       .from("tickets")
-      .select("assigned_to")
+      .select("assigned_to, created_by_user_id")
       .in("status", ["NEW", "OPEN", "UNASSIGNED", "SCHEDULED", "EN_ROUTE", "WORKING", "PENDING"]);
+    // ponytail: dua semantik "tiket aktif" — karyawan = tiket yg DITUGASKAN (assigned_to),
+    // pelanggan = tiket yang DIBUAT akun tsb (created_by_user_id). Hitung dua-duanya sekali.
     const countByUser: Record<string, number> = {};
+    const countByReporter: Record<string, number> = {};
     for (const t of activeRows || []) {
       if (t.assigned_to) countByUser[t.assigned_to] = (countByUser[t.assigned_to] || 0) + 1;
+      if (t.created_by_user_id) countByReporter[t.created_by_user_id] = (countByReporter[t.created_by_user_id] || 0) + 1;
     }
 
     const rows: UserRow[] = [];
@@ -159,7 +170,7 @@ export function AdminUsers() {
         status: (u.status || "aktif") as UserStatus,
         must_change_password: u.must_change_password,
         last_login: u.last_login,
-        active_tickets: countByUser[u.id] || 0,
+        active_tickets: u.role === "customer" ? countByReporter[u.id] || 0 : countByUser[u.id] || 0,
       });
     }
     setUsers(rows);
@@ -199,7 +210,7 @@ export function AdminUsers() {
   }
 
   function openEditDialog(u: UserRow) {
-    const roles = ((u.roles || "").split(",").filter(Boolean) as AppRole[]) || [];
+    const roles = ((u.roles || "").split(",").filter(Boolean) as AppRole[]);
     setFormName(u.name || "");
     setFormEmail(u.email || "");
     setFormUsername(u.username);
@@ -505,17 +516,6 @@ export function AdminUsers() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
-        <div className="bg-foreground text-primary-foreground rounded-xl px-5 py-4 flex flex-col gap-1">
-          <span className="text-[10px] font-mono uppercase tracking-widest opacity-80">Karyawan Internal</span>
-          <span className="text-2xl font-bold">{users.filter(u => u.role !== 'customer').length}</span>
-        </div>
-        <div className="bg-foreground text-primary-foreground rounded-xl px-5 py-4 flex flex-col gap-1">
-          <span className="text-[10px] font-mono uppercase tracking-widest opacity-80">Pelanggan</span>
-          <span className="text-2xl font-bold">{users.filter(u => u.role === 'customer').length}</span>
-        </div>
-      </div>
-
       <div className="bg-card p-1 rounded-xl border border-border grid grid-cols-2 gap-1">
         {(["internal", "customer"] as const).map((t) => (
           <button
@@ -525,8 +525,8 @@ export function AdminUsers() {
               setPage(1);
             }}
             className={`px-3.5 h-8 rounded-[3px] text-xs font-medium transition inline-flex items-center justify-center gap-1.5 ${userTab === t
-                ? "bg-foreground text-primary-foreground"
-                : "text-muted-foreground hover:bg-accent"
+              ? "bg-foreground text-primary-foreground"
+              : "text-muted-foreground hover:bg-accent"
               }`}
           >
             {t === "internal" ? "Karyawan Internal" : "Pelanggan"}
@@ -557,6 +557,12 @@ export function AdminUsers() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <span className="inline-flex items-center bg-foreground text-primary-foreground rounded px-3 py-1.5 text-xs font-semibold">
+          {filtered.length} {userTab === "internal" ? "Karyawan" : "Pelanggan"}
+        </span>
       </div>
 
       {loading ? null : paginated.length === 0 ? (
@@ -634,8 +640,8 @@ export function AdminUsers() {
                       <td className="px-4 py-3">
                         <span
                           className={`text-[10px] font-medium px-2 py-0.5 rounded ${u.status === "aktif"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-red-100 text-red-700"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-red-100 text-red-700"
                             }`}
                         >
                           {STATUS_OPTIONS.find((s) => s.value === u.status)?.label || u.status}
@@ -808,10 +814,10 @@ export function AdminUsers() {
                       onClick={() => togglePrimaryRole(r.value)}
                       disabled={blocked}
                       className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${selected
-                          ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
-                          : blocked
-                            ? "border-border text-muted-foreground opacity-40 cursor-not-allowed"
-                            : "border-border text-muted-foreground hover:border-foreground/40"
+                        ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
+                        : blocked
+                          ? "border-border text-muted-foreground opacity-40 cursor-not-allowed"
+                          : "border-border text-muted-foreground hover:border-foreground/40"
                         }`}
                     >
                       {r.label}
@@ -830,8 +836,8 @@ export function AdminUsers() {
                     key={r.value}
                     onClick={() => toggleRole(r.value)}
                     className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${formRoles.includes(r.value)
-                        ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
-                        : "border-border text-muted-foreground hover:border-foreground/40"
+                      ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
+                      : "border-border text-muted-foreground hover:border-foreground/40"
                       }`}
                   >
                     {r.label}
@@ -848,10 +854,10 @@ export function AdminUsers() {
                       key={s.value}
                       onClick={() => setFormStatus(s.value)}
                       className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${formStatus === s.value
-                          ? s.value === "aktif"
-                            ? "bg-green-600 text-white border-green-600"
-                            : "bg-red-600 text-white border-red-600"
-                          : "border-border text-muted-foreground hover:border-foreground/40"
+                        ? s.value === "aktif"
+                          ? "bg-green-600 text-white border-green-600"
+                          : "bg-red-600 text-white border-red-600"
+                        : "border-border text-muted-foreground hover:border-foreground/40"
                         }`}
                     >
                       {s.label}

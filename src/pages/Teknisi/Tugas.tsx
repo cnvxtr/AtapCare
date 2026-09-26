@@ -79,7 +79,6 @@ export default function TugasTeknisi() {
     const [lemburTarget, setLemburTarget] = useState<Ticket | null>(null)
     const [backupRequested, setBackupRequested] = useState<Set<string>>(new Set())
     const [backupSubmitting, setBackupSubmitting] = useState(false)
-    const [showMulaiKerjaConfirm, setShowMulaiKerjaConfirm] = useState(false)
 
     // Katalog untuk dropdown & label temuan awal/akhir di drawer.
     useEffect(() => {
@@ -367,7 +366,7 @@ export default function TugasTeknisi() {
                                     selectedTicket.pendingRequestedAt ? (
                                         <div className="space-y-3">
                                             <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa mulai bekerja.</p>
-                                            <button onClick={() => setShowMulaiKerjaConfirm(true)}
+                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
                                                 disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
                                                 className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                                 {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
@@ -379,7 +378,7 @@ export default function TugasTeknisi() {
                                                 className="min-h-[44px] bg-transparent text-amber-600 border border-border rounded-[3px] font-bold flex items-center justify-center gap-2 hover:bg-amber-50/60 transition">
                                                 <PauseCircle className="w-4 h-4" /> Ajukan Pending
                                             </button>
-                                            <button onClick={() => setShowMulaiKerjaConfirm(true)}
+                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
                                                 disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
                                                 className="min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                                                 {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
@@ -631,29 +630,6 @@ export default function TugasTeknisi() {
                 </div>
             ), document.body)}
 
-            {/* Konfirmasi Mulai Kerja */}
-            {showMulaiKerjaConfirm && createPortal((
-                <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowMulaiKerjaConfirm(false)}>
-                    <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-start justify-between gap-4 mb-4">
-                            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
-                                <MapPin className="w-5 h-5" /> Mulai Kerja (GPS)
-                            </h3>
-                            <button onClick={() => setShowMulaiKerjaConfirm(false)} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-4">
-                            Lokasi perangkat akan dicatat ke aktivitas tiket saat menekan Mulai Kerja. Pastikan GPS aktif & kamu berada di lokasi penugasan.
-                        </p>
-                        <div className="flex gap-3">
-                            <button onClick={() => setShowMulaiKerjaConfirm(false)}
-                                className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium">Batal</button>
-                            <button onClick={() => { setShowMulaiKerjaConfirm(false); if (selectedTicket) handleMulaiKerja(selectedTicket) }}
-                                disabled={isLoading === 'gps'}
-                                className="flex-1 min-h-[44px] bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{isLoading === 'gps' ? 'Mengambil lokasi...' : 'Ya, Mulai Kerja'}</button>
-                        </div>
-                    </div>
-                </div>
-            ), document.body)}
-        </div>
+            </div>
     )
 }

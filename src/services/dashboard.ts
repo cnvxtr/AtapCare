@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { getCustomers, getSites, getUnits } from "./master-data";
 
-export interface LeaderboardRow {
+interface LeaderboardRow {
   name: string;
   completed: number;
 }
