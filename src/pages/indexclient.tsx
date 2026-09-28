@@ -6,37 +6,12 @@ import { getLandingStats, type LandingStats } from "@/services/ticketService";
 import { stripDark } from "@/lib/theme";
 import SiteFooter from "@/components/SiteFooter";
 import Reveal from "@/components/Reveal";
-import { SiteHeader, SocialIcon } from "@/components/SiteHeader";
+import { SiteHeader } from "@/components/SiteHeader";
 import { TroubleshootCards } from "@/components/TroubleshootCards";
 
 const ADMIN_EMAIL = "info@atapteknologi.id";
 const ADMIN_PHONE_DISPLAY = "+62 822-8000-0694";
 const ADMIN_PHONE_LINK = "6282280000694";
-
-const SOCIALS: { href: string; label: string; children: React.ReactNode }[] = [
-  {
-    href: "https://www.linkedin.com/company/atapteknologi/",
-    label: "LinkedIn",
-    children: (
-      <>
-        <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
-        <rect width="4" height="12" x="2" y="9" />
-        <circle cx="4" cy="4" r="2" />
-      </>
-    ),
-  },
-  {
-    href: "https://www.instagram.com/aptek.id?igsi=MXh4ZXQ1YXprcDY3Nw==",
-    label: "Instagram",
-    children: (
-      <>
-        <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-        <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-        <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-      </>
-    ),
-  },
-];
 
 const FLOW_STEPS: { n: string; title: string; desc: string; Icon: typeof FileText }[] = [
   { n: "01", title: "Laporkan Kendala", desc: "Masuk ke akun Anda melalui halaman Login, kirim laporan kendala beserta foto, dan dapatkan ID tiket untuk pelacakan.", Icon: FileText },
@@ -256,13 +231,6 @@ export default function Landing() {
                       <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_PHONE_DISPLAY}</p>
                     </div>
                   </a>
-                  <div className="flex items-center gap-3 pt-1">
-                    {SOCIALS.map((s) => (
-                      <SocialIcon key={s.label} href={s.href} label={s.label}>
-                        {s.children}
-                      </SocialIcon>
-                    ))}
-                  </div>
                 </div>
               </div>
             </Reveal>
