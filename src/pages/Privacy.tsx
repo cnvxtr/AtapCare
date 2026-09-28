@@ -138,6 +138,7 @@ export default function Privacy() {
               <p className="font-medium">PT Atap Teknologi Indonesia</p>
               <p className="text-muted-foreground">Alamat: Jl. Kamarung No.888, RT.03/RW.14, Padaasih, Kec. Cisarua, Kabupaten Bandung Barat, Jawa Barat 40551</p>
               <p className="text-muted-foreground">Email: <span className="font-mono">info@atapteknologi.id</span></p>
+              <p className="text-muted-foreground">No Telepon: <span className="font-mono">+62 822-8000-0694</span></p>
             </div>
           </Section>
         </article>
