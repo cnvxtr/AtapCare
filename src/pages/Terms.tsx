@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
+import { useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { SiteHeader } from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
-
+import { stripDark } from "@/lib/theme";
 export default function Terms() {
+  useEffect(() => stripDark(), [])
   return (
     <div className="min-h-screen flex flex-col bg-background text-foreground relative">
       <div className="absolute inset-0 grid-bg pointer-events-none" />

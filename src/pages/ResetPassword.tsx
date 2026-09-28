@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { LIGHT, PasswordInput } from "./Login";
 import logo from "../assets/logo.png";
+import { stripDark } from "../lib/theme";
 
 type Phase = "checking" | "invalid" | "ready";
 
 export default function ResetPassword() {
+  useEffect(() => stripDark(), [])
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("checking");
   const [pw, setPw] = useState("");

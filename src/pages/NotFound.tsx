@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
+import { useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { SiteHeader } from "@/components/SiteHeader";
 import SiteFooter from "@/components/SiteFooter";
-
+import { stripDark } from "@/lib/theme";
 export default function NotFound() {
+  useEffect(() => stripDark(), [])
   const { isAuthenticated } = useAuth();
 
   return (

@@ -11,7 +11,7 @@ import {
   type NotificationRow,
 } from '../../services/notifications'
 import { approveBackup, rejectBackup } from '../../services/ticketService'
-import { getStoredTheme, setTheme } from '../../lib/theme'
+import { getStoredTheme, setTheme, applyTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
 import { ROLE_LABELS } from '../../services/users'
 import ErrorBoundary from '../ErrorBoundary'
@@ -70,6 +70,10 @@ export default function MobileLayout() {
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
+
+  // Halaman publik membuang class dark saat mount; terapkan ulang tema dari
+  // simpanan begitu masuk shell (dark mode hanya hidup di dalam sistem).
+  useEffect(() => { applyTheme() }, [])
 
   const notifDismiss = useSheetDismiss(() => setShowNotifSheet(false))
   const roleDismiss = useSheetDismiss(() => setShowRoleSheet(false))

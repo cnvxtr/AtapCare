@@ -3,6 +3,7 @@ import { ArrowRight, ChevronDown, Clock, LifeBuoy, Mail, FileText, Filter, Calen
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { getLandingStats, type LandingStats } from "@/services/ticketService";
+import { stripDark } from "@/lib/theme";
 import SiteFooter from "@/components/SiteFooter";
 import Reveal from "@/components/Reveal";
 import { SiteHeader, SocialIcon } from "@/components/SiteHeader";
@@ -69,6 +70,7 @@ const ZONE_TITLE = "text-2xl md:text-3xl font-display font-bold tracking-tight s
 const STATS_CACHE_KEY = "atapcare-landing-stats";
 
 export default function Landing() {
+  useEffect(() => stripDark(), [])
   const [stats, setStats] = useState<LandingStats | null>(() => {
     try {
       const raw = localStorage.getItem(STATS_CACHE_KEY);

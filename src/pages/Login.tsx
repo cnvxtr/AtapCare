@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { supabase } from "../lib/supabase";
 import { isNativePlatform } from "../lib/platform";
+import { stripDark } from "../lib/theme";
 import { Button } from "@/components/ui/button";
 import { Input, PhoneInput } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -497,6 +498,7 @@ function ForgotView({ onBack }: { onBack: () => void }) {
 /* ---------------- Page ---------------- */
 
 export default function Login() {
+  useEffect(() => stripDark(), [])
   const [view, setView] = useState<"sign-in" | "sign-up" | "forgot">("sign-in");
   const [justRegistered, setJustRegistered] = useState(false);
 
