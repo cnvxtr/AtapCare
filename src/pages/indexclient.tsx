@@ -219,7 +219,7 @@ export default function Landing() {
                     <div>
                       <p className="text-sm font-semibold">Butuh Bantuan?</p>
                       <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                        Hubungi kami melalui chat atau hubungi admin.
+                        Hubungi kami melalui nomor telepon.
                       </p>
                     </div>
                   </div>
@@ -252,7 +252,7 @@ export default function Landing() {
                       <Phone className="h-4 w-4" />
                     </span>
                     <div>
-                      <p className="text-sm font-semibold">Nomor Admin</p>
+                      <p className="text-sm font-semibold">No Telepon</p>
                       <p className="font-mono text-xs text-muted-foreground group-hover:text-foreground transition">{ADMIN_PHONE_DISPLAY}</p>
                     </div>
                   </a>

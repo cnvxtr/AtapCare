@@ -20,12 +20,11 @@ export default function Privacy() {
 
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold mt-2">Kebijakan Privasi</h1>
-          <p className="text-xs text-muted-foreground font-mono mt-2">Terakhir diperbarui: 24 Agustus 2026</p>
         </div>
 
         <article className="space-y-8 text-sm leading-relaxed">
           <Section title="1. Pendahuluan">
-            <p>PT Atap Teknologi Indonesia ("kami", "perusahaan") menghormati dan melindungi privasi setiap pengguna layanan Atap Care. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi data pribadi Anda saat Anda menggunakan Portal Publik (lapor.atapcare.id) maupun APK Atap Care.</p>
+            <p>PT Atap Teknologi Indonesia ("kami", "perusahaan") menghormati dan melindungi privasi setiap pengguna layanan Atap Care. Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi data pribadi Anda saat Anda menggunakan Portal Publik Atap Care maupun APK Atap Care.</p>
             <p>Kebijakan ini disusun berdasarkan Undang-Undang No. 27 Tahun 2022 tentang Pelindungan Data Pribadi (UU PDP) serta peraturan pelaksananya.</p>
           </Section>
 
@@ -49,8 +48,8 @@ export default function Privacy() {
               </ul>
               <p>Nama pelapor pada laporan diambil otomatis dari profil akun Anda, sehingga Anda tidak perlu memasukkan ulang data identitas setiap kali melapor.</p>
             </SubSection>
-            <SubSection title="2.2 Data Petugas Internal">
-              <p>Kami mengelola data kepegawaian dasar para petugas kami, seperti nama, kontak dinas, dan penempatan tugas, semata-mata untuk keperluan operasional penanganan laporan. Akses atas data ini diatur secara ketat sesuai penugasan yang ditetapkan perusahaan.</p>
+            <SubSection title="2.2 Data Tim Internal">
+              <p>Kami mengelola data kepegawaian dasar para anggota Tim kami, seperti nama, kontak dinas, dan penempatan tugas, semata-mata untuk keperluan operasional penanganan laporan. Akses atas data ini diatur secara ketat sesuai penugasan yang ditetapkan perusahaan.</p>
             </SubSection>
             <SubSection title="2.3 Data Teknis">
               <p>Sistem mencatat data teknis minimum (waktu akses dan jejak audit aktivitas penting) untuk menjaga keamanan layanan. Jejak audit bersifat rahasia dan tidak diakseskan kepada pengguna.</p>
@@ -62,8 +61,8 @@ export default function Privacy() {
             <ul>
               <li>Menerima, memverifikasi, dan menindaklanjuti laporan kendala Anda;</li>
               <li>Menghubungi Anda terkait perkembangan laporan melalui saluran resmi (WhatsApp Group atau kontak yang terdaftar);</li>
-              <li>Menugaskan petugas yang tepat untuk menangani kendala di lokasi Anda;</li>
-              <li>Mendokumentasikan hasil pekerjaan, termasuk berita acara serah terima digital;</li>
+              <li>Menugaskan Tim yang tepat untuk menangani kendala di lokasi Anda;</li>
+              <li>Mendokumentasikan hasil pekerjaan, termasuk foto bukti penyelesaian yang divalidasi;</li>
               <li>Mengolah penilaian dan ulasan Anda atas layanan guna pemantauan dan perbaikan mutu layanan;</li>
               <li>Menjaga keamanan akun dan mencegah penyalahgunaan layanan;</li>
               <li>Memenuhi kewajiban hukum yang berlaku.</li>
@@ -81,7 +80,7 @@ export default function Privacy() {
             <ul>
               <li>Enkripsi koneksi (HTTPS/TLS) untuk seluruh komunikasi data;</li>
               <li>Kata sandi disimpan hanya dalam bentuk terenkripsi satu arah;</li>
-              <li>Pembatasan akses data secara teknis: hanya petugas yang berwenang yang dapat mengakses data tertentu, sesuai kebutuhan penugasannya;</li>
+              <li>Pembatasan akses data secara teknis: hanya Tim yang berwenang yang dapat mengakses data tertentu, sesuai kebutuhan penugasannya;</li>
               <li>Pembatasan otomatis terhadap upaya login yang tidak berhasil untuk mencegah akses ilegal;</li>
               <li>Pencatatan jejak audit atas aktivitas sensitif di dalam sistem;</li>
               <li>Pemeriksaan dan pembaruan pengamanan secara berkala.</li>
@@ -92,8 +91,8 @@ export default function Privacy() {
             <p>Kami berkomitmen memberikan informasi kepada pelanggan secara jelas namun proporsional. Dengan demikian:</p>
             <ul>
               <li>Yang kami sampaikan kepada Anda: status dan perkembangan tiket Anda, ID Tiket, serta informasi hasil penyelesaian pekerjaan;</li>
-              <li>Yang tidak kami ungkapkan: identitas lengkap dan kontak pribadi petugas penangani, catatan serta diskusi internal antar petugas, data milik pelanggan lain, evaluasi kinerja internal, maupun detail struktur dan mekanisme teknis sistem;</li>
-              <li>Dokumen dan komunikasi publik kami tidak memaparkan susunan organisasi kerja internal; penyebutan fungsi hanya dilakukan secara umum (misalnya "teknisi" atau "tim lapangan").</li>
+              <li>Yang tidak kami ungkapkan: identitas lengkap dan kontak pribadi Tim penangani, catatan serta diskusi internal antar Tim, data milik pelanggan lain, evaluasi kinerja internal, maupun detail struktur dan mekanisme teknis sistem;</li>
+              <li>Dokumen dan komunikasi publik kami tidak memaparkan susunan organisasi kerja internal; penyebutan fungsi hanya dilakukan secara umum (misalnya "Tim").</li>
             </ul>
             <p>Jika Anda memerlukan kejelasan lebih lanjut terkait penanganan laporan Anda, silakan ajukan melalui saluran resmi yang tersedia.</p>
           </Section>
@@ -113,7 +112,7 @@ export default function Privacy() {
           </Section>
 
           <Section title="9. Perlindungan Identitas dalam Dokumentasi">
-            <p>Dokumentasi pekerjaan (foto, berita acara, catatan penyelesaian) hanya dapat diakses oleh Anda dan petugas berwenang. Identitas pribadi (seperti nomor telepon) dilindungi dan dianonimkan secara permanen setelah periode retensi tertentu, sementara catatan teknis pekerjaan tetap tersimpan untuk kepentingan riwayat unit.</p>
+            <p>Dokumentasi pekerjaan (foto, catatan penyelesaian) hanya dapat diakses oleh Anda dan Tim berwenang. Identitas pribadi (seperti nomor telepon) dilindungi dan dianonimkan secara permanen setelah periode retensi tertentu, sementara catatan teknis pekerjaan tetap tersimpan untuk kepentingan riwayat unit.</p>
           </Section>
 
           <Section title="10. Cookie dan Penyimpanan Lokal">
@@ -130,7 +129,7 @@ export default function Privacy() {
           </Section>
 
           <Section title="12. Perubahan Kebijakan">
-            <p>Kebijakan Privasi ini dapat diperbarui dari waktu ke waktu. Setiap perubahan akan ditandai dengan pembaruan tanggal "Terakhir diperbarui" pada halaman ini.</p>
+            <p>Kebijakan Privasi ini dapat diperbarui dari waktu ke waktu. Setiap perubahan akan diberitahukan melalui pembaruan pada halaman ini.</p>
           </Section>
 
           <Section title="13. Hubungi Kami">
@@ -138,7 +137,7 @@ export default function Privacy() {
             <div className="mt-3 p-4 rounded-xl border border-border bg-card space-y-1">
               <p className="font-medium">PT Atap Teknologi Indonesia</p>
               <p className="text-muted-foreground">Alamat: Jl. Kamarung No.888, RT.03/RW.14, Padaasih, Kec. Cisarua, Kabupaten Bandung Barat, Jawa Barat 40551</p>
-              <p className="text-muted-foreground">Email: <span className="font-mono">legal@atapcare.id</span></p>
+              <p className="text-muted-foreground">Email: <span className="font-mono">info@atapteknologi.id</span></p>
             </div>
           </Section>
         </article>

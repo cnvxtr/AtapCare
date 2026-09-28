@@ -20,12 +20,11 @@ export default function Terms() {
 
         <div className="mb-8">
           <h1 className="text-3xl font-display font-bold mt-2">Syarat dan Ketentuan</h1>
-          <p className="text-xs text-muted-foreground font-mono mt-2">Terakhir diperbarui: 24 Agustus 2026 · Berlaku efektif: 24 Agustus 2026</p>
         </div>
 
         <article className="space-y-8 text-sm leading-relaxed">
           <Section title="1. Penerimaan Syarat">
-            <p>Selamat datang di Atap Care, sistem informasi ticketing keluhan pelanggan yang disediakan oleh PT Atap Teknologi Indonesia ("kami", "perusahaan"). Dengan mengakses atau menggunakan Portal Publik (lapor.atapcare.id), Anda menyetujui untuk terikat dengan Syarat dan Ketentuan ini ("Syarat"). Jika Anda tidak menyetujui salah satu bagian dari Syarat ini, mohon untuk tidak menggunakan layanan kami.</p>
+            <p>Selamat datang di Atap Care, sistem informasi ticketing keluhan pelanggan yang disediakan oleh PT Atap Teknologi Indonesia ("kami", "perusahaan"). Dengan mengakses atau menggunakan Portal Publik Atap Care, Anda menyetujui untuk terikat dengan Syarat dan Ketentuan ini ("Syarat"). Jika Anda tidak menyetujui salah satu bagian dari Syarat ini, mohon untuk tidak menggunakan layanan kami.</p>
             <p>Syarat ini merupakan perjanjian hukum antara Anda (selanjutnya disebut "Pengguna", "Pelanggan", atau "Anda") dan PT Atap Teknologi Indonesia terkait penggunaan layanan Atap Care.</p>
           </Section>
 
@@ -36,14 +35,14 @@ export default function Terms() {
                 <li>Pembuatan dan pengelolaan akun pelanggan (pendaftaran, login, pemulihan kata sandi, dan pengaturan profil);</li>
                 <li>Formulir pelaporan kendala terkait layanan VMS (Vessel Monitoring System) dan INTANK (Intelligent Tank Monitoring System) yang dikelola oleh PT Atap Teknologi Indonesia;</li>
                 <li>Fitur pelacakan status tiket menggunakan ID Tiket unik;</li>
-                <li>Komunikasi tindak lanjut melalui saluran resmi kami, termasuk WhatsApp; tiket yang tidak mendapat balasan dalam jangka waktu tertentu dapat ditutup otomatis.</li>
+                <li>Komunikasi tindak lanjut melalui saluran resmi kami, termasuk WhatsApp; tiket yang tidak mendapat balasan dalam 1×24 jam dapat ditutup otomatis.</li>
               </ul>
             </SubSection>
             <SubSection title="2.2 Untuk Operasional Internal">
               <ul>
-                <li>Dashboard kerja bagi petugas internal kami untuk menindaklanjuti laporan yang masuk;</li>
+                <li>Dashboard kerja bagi Tim internal kami untuk menindaklanjuti laporan yang masuk;</li>
                 <li>Penugasan, penjadwalan, dan validasi pekerjaan lapangan;</li>
-                <li>Dokumentasi pekerjaan dan Berita Acara Serah Terima (BAST) digital.</li>
+                <li>Dokumentasi pekerjaan berupa foto bukti penyelesaian yang divalidasi.</li>
               </ul>
             </SubSection>
             <p>Layanan ini tidak mencakup transaksi finansial, pembayaran, atau jual-beli produk. Layanan ini disediakan sebagai bagian dari kontrak pemeliharaan antara PT Atap Teknologi Indonesia dengan perusahaan klien korporat.</p>
@@ -58,11 +57,11 @@ export default function Terms() {
                 <li>Anda wajib memberikan data yang benar dan memperbarui data profil bila ada perubahan.</li>
               </ul>
             </SubSection>
-            <SubSection title="3.2 Akun Petugas Internal">
+            <SubSection title="3.2 Akun Tim Internal">
               <ul>
-                <li>Akun petugas dibuat secara eksklusif oleh perusahaan sesuai kebutuhan penugasan;</li>
-                <li>Setiap petugas bertanggung jawab menjaga kerahasiaan kredensialnya dan dilarang membagikannya kepada pihak lain;</li>
-                <li>Petugas wajib segera melaporkan apabila menduga terdapat akses tidak sah terhadap akunnya;</li>
+                <li>Akun anggota Tim dibuat secara eksklusif oleh perusahaan sesuai kebutuhan penugasan;</li>
+                <li>Setiap anggota Tim bertanggung jawab menjaga kerahasiaan kredensialnya dan dilarang membagikannya kepada pihak lain;</li>
+                <li>Anggota Tim wajib segera melaporkan apabila menduga terdapat akses tidak sah terhadap akunnya;</li>
                 <li>Sesi login dapat berakhir secara otomatis setelah periode tidak aktif demi keamanan.</li>
               </ul>
             </SubSection>
@@ -78,8 +77,8 @@ export default function Terms() {
                 <li>Berkomunikasi dengan kami melalui saluran resmi untuk klarifikasi atau informasi tambahan.</li>
               </ul>
             </SubSection>
-            <SubSection title="4.2 Untuk Petugas Internal">
-              <p>Petugas internal menggunakan sistem sesuai kewenangan yang ditetapkan perusahaan, dengan mematuhi Standar Operasional Prosedur (SOP) yang berlaku.</p>
+            <SubSection title="4.2 Untuk Tim Internal">
+              <p>Tim internal menggunakan sistem sesuai kewenangan yang ditetapkan perusahaan, dengan mematuhi Standar Operasional Prosedur (SOP) yang berlaku.</p>
             </SubSection>
           </Section>
 
@@ -96,7 +95,7 @@ export default function Terms() {
                 <li>Mengganggu atau membebani infrastruktur sistem secara berlebihan.</li>
               </ul>
             </SubSection>
-            <SubSection title="5.2 Larangan Khusus Petugas Internal">
+            <SubSection title="5.2 Larangan Khusus bagi Tim Internal">
               <ul>
                 <li>Mengakses tiket atau data di luar kewenangannya;</li>
                 <li>Menyalahgunakan data pelanggan untuk kepentingan pribadi;</li>
@@ -127,18 +126,18 @@ export default function Terms() {
             <p>Kami berkomitmen membuka informasi sejauh yang diperlukan bagi Anda untuk memantuh laporan sendiri. Dengan demikian:</p>
             <ul>
               <li><strong>Informasi yang dapat Anda akses:</strong> status dan perkembangan tiket Anda, ID Tiket, riwayat progres penanganan, serta lampiran hasil pekerjaan pada tiket Anda sendiri;</li>
-              <li><strong>Informasi yang tidak kami sediakan:</strong> identitas lengkap dan kontak pribadi petugas penangani, catatan serta komunikasi internal antar petugas, data milik pelanggan lain, evaluasi kinerja internal, detail kontrak/harga, dan mekanisme teknis sistem;</li>
-              <li>Penyebutan fungsi dalam seluruh dokumen publik kami bersifat umum (misalnya "teknisi" atau "tim lapangan") tanpa memaparkan struktur organisasi kerja internal.</li>
+              <li><strong>Informasi yang tidak kami sediakan:</strong> identitas lengkap dan kontak pribadi Tim penangani, catatan serta komunikasi internal antar Tim, data milik pelanggan lain, evaluasi kinerja internal, detail kontrak/harga, dan mekanisme teknis sistem;</li>
+              <li>Penyebutan fungsi dalam seluruh dokumen publik kami bersifat umum (misalnya "Tim") tanpa memaparkan struktur organisasi kerja internal.</li>
             </ul>
             <p>Anda setuju untuk tidak berupaya mengakses atau menyelidiki informasi internal di luar ketentuan ini.</p>
           </Section>
 
-          <Section title="8. Berita Acara Serah Terima (BAST)">
-            <SubSection title="8.1 Status Hukum BAST Digital">
-              <p>Foto BAST yang ditandatangani oleh PIC (Person in Charge) pelanggan dan diunggah ke sistem merupakan dokumen sah yang menjadi bukti penyelesaian pekerjaan. BAST digital ini memiliki kekuatan hukum yang sama dengan BAST fisik.</p>
+          <Section title="8. Dokumentasi Bukti Penyelesaian Pekerjaan">
+            <SubSection title="8.1 Unggah Bukti Penyelesaian">
+              <p>Setelah pekerjaan penanganan selesai dilaksanakan, dokumentasi berupa foto bukti penyelesaian pekerjaan diunggah ke sistem sebagai catatan penanganan tiket.</p>
             </SubSection>
-            <SubSection title="8.2 Tanggung Jawab PIC">
-              <p>Dengan menandatangani BAST, PIC pelanggan menyatakan bahwa: pekerjaan telah selesai dilaksanakan dengan baik, unit/perangkat telah berfungsi normal sesuai spesifikasi, dan PIC telah memeriksa dan memverifikasi hasil pekerjaan.</p>
+            <SubSection title="8.2 Validasi dan Penutupan Tiket">
+              <p>Dokumentasi penyelesaian ditinjau oleh Tim internal yang berwenang. Apabila dinilai telah memenuhi ketentuan, tiket ditutup dan dinyatakan selesai; apabila belum memenuhi, tiket dikembalikan untuk perbaikan sebelum dapat ditutup. Dokumentasi ini menjadi bagian dari riwayat penanganan unit.</p>
             </SubSection>
           </Section>
 
@@ -164,7 +163,7 @@ export default function Terms() {
           </Section>
 
           <Section title="12. Perubahan Layanan dan Syarat">
-            <p>Kami berhak untuk: memodifikasi atau menghentikan fitur layanan tertentu tanpa pemberitahuan sebelumnya, untuk keperluan pemeliharaan atau peningkatan sistem; memperbarui Syarat dan Ketentuan ini dari waktu ke waktu. Perubahan akan diberitahukan melalui pembaruan tanggal "Terakhir diperbarui". Penggunaan berkelanjutan setelah perubahan dianggap sebagai persetujuan Anda.</p>
+            <p>Kami berhak untuk: memodifikasi atau menghentikan fitur layanan tertentu tanpa pemberitahuan sebelumnya, untuk keperluan pemeliharaan atau peningkatan sistem; memperbarui Syarat dan Ketentuan ini dari waktu ke waktu. Perubahan akan diberitahukan melalui pembaruan pada halaman ini. Penggunaan berkelanjutan setelah perubahan dianggap sebagai persetujuan Anda.</p>
           </Section>
 
           <Section title="13. Hukum yang Berlaku dan Penyelesaian Sengketa">
@@ -184,8 +183,8 @@ export default function Terms() {
             <div className="mt-3 p-4 rounded-xl border border-border bg-card space-y-1">
               <p className="font-medium">PT Atap Teknologi Indonesia</p>
               <p className="text-muted-foreground">Alamat: Jl. Kamarung No.888, RT.03/RW.14, Padaasih, Kec. Cisarua, Kabupaten Bandung Barat, Jawa Barat 40551</p>
-              <p className="text-muted-foreground">Email: <span className="font-mono">legal@atapcare.id</span></p>
-              <p className="text-muted-foreground">Layanan Helpdesk: melalui WhatsApp Group resmi klien</p>
+              <p className="text-muted-foreground">Email: <span className="font-mono">info@atapteknologi.id</span></p>
+              <p className="text-muted-foreground">Layanan Support: melalui WhatsApp resmi klien</p>
             </div>
           </Section>
         </article>

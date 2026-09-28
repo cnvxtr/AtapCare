@@ -78,6 +78,10 @@ function AppRoutes() {
   const navigate = useNavigate()
   const location = useLocation()
 
+  // Navigasi SPA tidak me-reset scroll secara otomatis; pastikan tiap ganti
+  // rute (mis. dari footer Landing ke Kebijakan Privasi) mulai dari atas.
+  useEffect(() => { window.scrollTo(0, 0) }, [location.pathname])
+
   // Tombol/gestur back Android: mundur 1 langkah jika bisa, baru keluar aplikasi
   // saat berada di root. Ini cegah "swipe back langsung keluar app" (bug #4).
   useEffect(() => {
