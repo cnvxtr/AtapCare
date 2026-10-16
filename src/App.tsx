@@ -132,7 +132,11 @@ function AppRoutes() {
       if (p) navigate(p)
     })
     return () => { sub.then(s => s.remove()) }
-  }, [navigate])
+    // ponytail: jalan sekali. `navigate` berubah identitas tiap ganti pathname di
+    // react-router v7, jadi deps [navigate] membuat efek re-run → getLaunchUrl
+    // mengembalikan URL launch asli lagi → balik ke tiket + drawer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (!splashDone) {
     return <SplashScreen onFinish={() => setSplashDone(true)} />

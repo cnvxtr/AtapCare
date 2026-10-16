@@ -15,6 +15,7 @@ import { getStoredTheme, setTheme, applyTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
 import { ROLE_LABELS } from '../../services/users'
 import ErrorBoundary from '../ErrorBoundary'
+import ConfirmDialog from '../ConfirmDialog'
 import BottomTabs from './BottomTabs'
 import PullToRefresh from './PullToRefresh'
 import RatingWatcher from '../customer/RatingWatcher'
@@ -206,12 +207,22 @@ export default function MobileLayout() {
     handleMarkAllRead()
   }
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearing, setClearing] = useState(false)
+
   const handleClearNotifs = async () => {
     if (!user) return
-    if (!window.confirm('Hapus semua notifikasi?')) return
-    await deleteAllNotifications(user.id)
-    setNotifs([])
-    setNotifCount(0)
+    setClearing(true)
+    try {
+      await deleteAllNotifications(user.id)
+      setNotifs([])
+      setNotifCount(0)
+    } catch {
+      toast.error('Gagal menghapus notifikasi.')
+    } finally {
+      setClearing(false)
+      setShowClearConfirm(false)
+    }
   }
 
   return (
@@ -284,7 +295,7 @@ export default function MobileLayout() {
               <span className="text-sm font-semibold text-foreground">Notifikasi</span>
               {notifs.length > 0 && (
                 <button
-                  onClick={handleClearNotifs}
+                  onClick={() => setShowClearConfirm(true)}
                   className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-2 py-1 hover:bg-accent transition-colors"
                 >
                   Hapus
@@ -302,7 +313,7 @@ export default function MobileLayout() {
                   {notifs.map((n) => {
                     const actionable = n.ticket_id && n.title?.startsWith('Minta pengalihan:')
                     return (
-                      <div key={n.id} onClick={() => handleNotifOpen(n)} className={`flex flex-col items-start py-3 px-3.5 bg-muted rounded-xl cursor-pointer active:bg-accent ${n.read ? 'opacity-60' : ''}`}>
+                      <div key={n.id} onClick={() => handleNotifOpen(n)} className="flex flex-col items-start py-3 px-3.5 bg-muted rounded-xl cursor-pointer active:bg-accent">
                         <span className="text-sm font-medium text-foreground">{n.title}</span>
                         {n.message && <span className="text-xs text-muted-foreground mt-0.5">{n.message}</span>}
                         <span className="text-[10px] text-muted-foreground/70 mt-1">
@@ -370,6 +381,16 @@ export default function MobileLayout() {
           </div>
         </>,
         document.body
+      )}
+
+      {showClearConfirm && (
+        <ConfirmDialog
+          title="Hapus semua notifikasi?"
+          message={`${notifs.length} notifikasi akan dihapus permanen.`}
+          busy={clearing}
+          onConfirm={handleClearNotifs}
+          onClose={() => setShowClearConfirm(false)}
+        />
       )}
 
       <RatingWatcher />

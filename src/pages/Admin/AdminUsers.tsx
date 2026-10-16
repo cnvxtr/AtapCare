@@ -262,7 +262,6 @@ export function AdminUsers() {
       window.removeEventListener("focus", onShow);
       document.removeEventListener("visibilitychange", onShow);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadUsers() {

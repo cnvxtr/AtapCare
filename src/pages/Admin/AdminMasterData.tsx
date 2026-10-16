@@ -499,7 +499,6 @@ export function AdminMasterData() {
       window.removeEventListener("focus", onShow);
       document.removeEventListener("visibilitychange", onShow);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Lazy-load katalog saat tab pertama kali dibuka.

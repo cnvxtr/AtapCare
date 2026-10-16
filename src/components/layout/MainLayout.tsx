@@ -24,6 +24,7 @@ import { approveBackup, rejectBackup } from '../../services/ticketService'
 import { getStoredTheme, setTheme, applyTheme } from '../../lib/theme'
 import { registerPush, playChime } from '../../lib/pushNotifications'
 import ErrorBoundary from '../ErrorBoundary'
+import ConfirmDialog from '../ConfirmDialog'
 import RatingWatcher from '../customer/RatingWatcher'
 import { ROLE_LABELS } from '../../services/users'
 import { resolveAvatarUrl } from '../../services/photoService'
@@ -212,12 +213,22 @@ export default function MainLayout() {
     }
   }
 
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearing, setClearing] = useState(false)
+
   const handleClearNotifs = async () => {
     if (!user) return
-    if (!window.confirm('Hapus semua notifikasi?')) return
-    await deleteAllNotifications(user.id)
-    setNotifs([])
-    setNotifCount(0)
+    setClearing(true)
+    try {
+      await deleteAllNotifications(user.id)
+      setNotifs([])
+      setNotifCount(0)
+    } catch {
+      toast.error('Gagal menghapus notifikasi.')
+    } finally {
+      setClearing(false)
+      setShowClearConfirm(false)
+    }
   }
 
   return (
@@ -395,7 +406,7 @@ export default function MainLayout() {
                   <span className="text-sm">Notifikasi</span>
                   {notifs.length > 0 && (
                     <button
-                      onClick={handleClearNotifs}
+                      onClick={() => setShowClearConfirm(true)}
                       className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-[5px] px-1.5 py-0.5 hover:bg-accent transition-colors"
                     >
                       Hapus
@@ -410,7 +421,7 @@ export default function MainLayout() {
                     {notifs.map((n) => {
                       const actionable = user?.role === 'pm' && !!n.ticket_id && n.title?.startsWith('Minta pengalihan:')
                       return (
-                        <div key={n.id} onClick={() => handleNotifOpen(n)} className={`flex flex-col items-start py-2.5 px-3 bg-muted rounded-[5px] cursor-pointer hover:bg-accent transition-colors ${n.read ? 'opacity-60' : ''}`}>
+                        <div key={n.id} onClick={() => handleNotifOpen(n)} className="flex flex-col items-start py-2.5 px-3 bg-muted rounded-[5px] cursor-pointer hover:bg-accent transition-colors">
                           <span className="text-sm font-medium text-foreground">{n.title}</span>
                           {n.message && <span className="text-xs text-muted-foreground mt-0.5">{n.message}</span>}
                           <span className="text-[10px] text-muted-foreground/70 mt-1">
@@ -495,6 +506,15 @@ export default function MainLayout() {
           </div>
         </div>
       ), document.body)}
+      {showClearConfirm && (
+        <ConfirmDialog
+          title="Hapus semua notifikasi?"
+          message={`${notifs.length} notifikasi akan dihapus permanen.`}
+          busy={clearing}
+          onConfirm={handleClearNotifs}
+          onClose={() => setShowClearConfirm(false)}
+        />
+      )}
       <RatingWatcher />
     </div>
   )

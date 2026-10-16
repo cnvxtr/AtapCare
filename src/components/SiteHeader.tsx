@@ -66,19 +66,3 @@ export function SiteHeader() {
     </header>
   );
 }
-
-export function SocialIcon({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
-  return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={label}
-      className="text-muted-foreground hover:text-foreground transition"
-    >
-      <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        {children}
-      </svg>
-    </a>
-  );
-}

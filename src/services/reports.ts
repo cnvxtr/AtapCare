@@ -99,22 +99,6 @@ export async function getReportCompanies(): Promise<string[]> {
   ];
 }
 
-// Opsi filter Site & Unit (cascade: site by perusahaan, unit by perusahaan+site).
-async function distinctCol(
-  col: "site" | "unit",
-  companies?: string[],
-  sites?: string[],
-): Promise<string[]> {
-  let q = supabase.from("tickets").select(col).order(col);
-  if (companies?.length) q = q.in("company", companies);
-  if (sites?.length) q = q.in("site", sites);
-  const { data } = await q;
-  return [...new Set((data || []).map((r) => (r as Record<string, string>)[col]).filter(Boolean))];
-}
-export const getReportSites = (companies?: string[]) => distinctCol("site", companies);
-export const getReportUnits = (companies?: string[], sites?: string[]) =>
-  distinctCol("unit", companies, sites);
-
 async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")

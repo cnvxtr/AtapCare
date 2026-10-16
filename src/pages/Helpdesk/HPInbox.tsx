@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTickets, type Ticket, type Priority, type TicketStatus } from '../../context/TicketContext'
-import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, MapPin, Info, FileText } from 'lucide-react'
+import { Plus, Filter, X, Search, Send, AlertTriangle, CheckCircle2, Table, LayoutGrid, User, Headset, MapPin, Info, FileText, Clock } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards, parseDescription } from '../../components/TicketDrawer'
 import { waMeLink } from '../../services/wa'
@@ -528,7 +528,7 @@ export default function HPInbox() {
                             const items = kanbanTickets.filter(t => col.statuses?.includes(t.status))
                             const c = col.statuses ? STATUS_COLORS[col.statuses[0]] : null
                             return (
-                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[35vw] snap-start shrink-0' : 'flex-1 min-w-[110px] max-w-[200px]'}`}>
+                                <div key={col.key} className={`rounded-lg border border-border bg-card/50 flex flex-col ${isMobile ? 'min-w-[28vw] max-w-[30vw] snap-start shrink-0' : 'flex-1 min-w-[110px] max-w-[200px]'}`}>
                                     <div className="relative p-2 border-b border-border">
                                         <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium rounded" style={c ? { backgroundColor: c.bg, color: c.text } : undefined}>
                                             {col.label}
@@ -543,7 +543,6 @@ export default function HPInbox() {
                                                 <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} bg-card`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                 <div className="flex items-center justify-between gap-1 mb-1">
                                                     <span className={`font-mono text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.code}</span>
-                                                    <Badge type="priority" value={t.priority || '-'} small />
                                                 </div>
                                                 <p className={`font-medium truncate ${isMobile ? 'text-[8px]' : 'text-[9px]'}`}>{t.site} - {t.unit}</p>
                                                 {t.status === 'PENDING' && getPendingAlarm(t.updatedAt) && (
@@ -551,11 +550,17 @@ export default function HPInbox() {
                                                         <AlertTriangle className="h-2 w-2" /> Dijeda {getPendingAlarm(t.updatedAt)}
                                                     </div>
                                                 )}
+                                                {t.pendingRequestedAt && (
+                                                    <div className={`mt-1 inline-flex items-center gap-1 bg-sky-100 text-sky-700 px-1.5 py-0.5 rounded-[3px] whitespace-nowrap ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>
+                                                        <Clock className="h-2 w-2" /> Menunggu PM
+                                                    </div>
+                                                )}
                                                 <div className="flex items-center justify-between gap-1 mt-1 pt-1 border-t border-border min-w-0">
                                                     <div className="flex items-center gap-1 min-w-0">
                                                         <User className="h-2 w-2 shrink-0 text-muted-foreground" />
 <span className={`text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.customer}</span>
                                                       </div>
+                                                    <Badge type="priority" value={t.priority || '-'} small />
                                         </div>
                                             </div>
                                             )

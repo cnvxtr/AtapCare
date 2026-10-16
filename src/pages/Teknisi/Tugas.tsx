@@ -57,7 +57,11 @@ export default function TugasTeknisi() {
     const { tickets, updateTicketStatus, refreshTickets, supportTickets } = useTickets()
     const navigate = useNavigate()
     const location = useLocation()
-    const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
+    const [selectedTicketSnap, setSelectedTicketSnap] = useState<Ticket | null>(null)
+    // Drawer baca data live: updateTicketStatus/refreshTickets mengganti array `tickets`,
+    // tapi snapshot tetap basi → footer tak berubah dari "Mulai Perjalanan" ke "Mulai
+    // Kerja". Pola sama seperti HPInbox `liveTicket` (alias `selectedTicket`).
+    const selectedTicket = selectedTicketSnap ? (tickets.find(t => t.id === selectedTicketSnap.id) ?? selectedTicketSnap) : null
 
     // Klik notifikasi (dalam app / dengar push) → drawer tiket auto-terbuka.
     const notifyOpenCode = notifyTicketCode(location.state, location.search)
@@ -65,7 +69,7 @@ export default function TugasTeknisi() {
         if (!notifyOpenCode) return
         const t = tickets.find(x => x.code === notifyOpenCode)
         if (!t) return
-        setSelectedTicket(t)
+        setSelectedTicketSnap(t)
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -117,7 +121,11 @@ export default function TugasTeknisi() {
         const byStatus: Record<string, Ticket[]> = {}
         for (const s of ['SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'RESOLVED', 'CLOSED']) byStatus[s] = []
         for (const t of myTickets) {
-            if (byStatus[t.status]) byStatus[t.status].push(t)
+            // ponytail: tiket yang menunggu ACC PM tampil di tab "Dijeda" walau statusnya
+            // masih EN_ROUTE/WORKING — kerjanya toh sudah terkunci. Balik sendiri kalau ditolak
+            // (pendingRequestedAt bersih) atau tetap di sini kalau disetujui (jadi PENDING).
+            const s = t.pendingRequestedAt && (t.status === 'EN_ROUTE' || t.status === 'WORKING') ? 'PENDING' : t.status
+            if (byStatus[s]) byStatus[s].push(t)
         }
         for (const s of Object.keys(byStatus)) {
             byStatus[s].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
@@ -145,7 +153,7 @@ export default function TugasTeknisi() {
         setIsLoading(id)
         await updateTicketStatus(id, status as TicketStatus, note)
         setIsLoading(null)
-        if (!keepOpen) setSelectedTicket(null)
+        if (!keepOpen) setSelectedTicketSnap(null)
     }
 
     const handleMulaiKerja = async (ticket: Ticket) => {
@@ -272,7 +280,7 @@ export default function TugasTeknisi() {
         return (
             <div key={ticket.id}
                 className={`bg-card border-2 rounded-lg p-4 sm:p-5 shadow-sm hover:shadow-md transition-all cursor-pointer min-h-[96px] ${isCritical ? 'border-red-200 hover:border-red-300 pulse-ring' : 'border-border hover:border-border'}`}
-                onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}
+                onClick={() => { setSelectedTicketSnap(ticket); setActiveDrawerTab('detail') }}
             >
                 <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -284,6 +292,15 @@ export default function TugasTeknisi() {
                                 <Clock className="w-3 h-3" /> Berpotensi Lembur
                             </span>
                         )}
+                        {ticket.pendingRequestedAt ? (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                <Clock className="w-3 h-3" /> Menunggu PM
+                            </span>
+                        ) : ticket.status === 'PENDING' ? (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
+                                <Pause className="w-3 h-3" /> Disetujui
+                            </span>
+                        ) : null}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                         {ticket.priority && <Badge type="priority" value={ticket.priority} small />}
@@ -354,7 +371,7 @@ export default function TugasTeknisi() {
                             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
                             exit={{ opacity: 0, y: -50, filter: 'blur(10px)' }}
                             transition={{ duration: 0.2, ease: 'easeOut' }}
-                            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3"
+                            className="grid grid-cols-1 min-[480px]:grid-cols-2 lg:grid-cols-4 gap-3"
                         >
                             {(() => {
                                 const activeTab = TABS.find(t => t.key === activeSection)!
@@ -377,7 +394,7 @@ export default function TugasTeknisi() {
             {/* Offcanvas Drawer */}
             {selectedTicket && (
                 <TicketDrawer
-                    onClose={() => setSelectedTicket(null)}
+                    onClose={() => setSelectedTicketSnap(null)}
                     code={selectedTicket.code}
                     ticketId={selectedTicket.id}
                     status={selectedTicket.status}
@@ -405,12 +422,7 @@ export default function TugasTeknisi() {
                                 canTravel ? (
                                     selectedTicket.pendingRequestedAt ? (
                                         <div className="space-y-3">
-                                            <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa mulai bekerja.</p>
-                                            <button onClick={() => handleMulaiKerja(selectedTicket)}
-                                                disabled={isLoading === selectedTicket.id || isLoading === 'gps'}
-                                                className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                                                {isLoading === 'gps' ? 'Mengambil lokasi...' : <><MapPin className="w-4 h-4" /> Mulai Kerja (GPS)</>}
-                                            </button>
+                                            <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu keputusan PM. Anda belum bisa mulai bekerja sampai PM memutuskan.</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-3">
@@ -434,11 +446,7 @@ export default function TugasTeknisi() {
                             {selectedTicket.assignedTo === user?.id && selectedTicket.status === 'WORKING' && (
                                 selectedTicket.pendingRequestedAt ? (
                                     <div className="space-y-3">
-                                        <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu persetujuan PM. Anda tetap bisa menyelesaikan pekerjaan.</p>
-                                        <button onClick={() => setShowCompleteModal(true)}
-                                            className="w-full min-h-[44px] bg-foreground text-primary-foreground rounded-[3px] font-bold flex items-center justify-center gap-2">
-                                            <CheckCircle2 className="w-4 h-4" /> Selesaikan
-                                        </button>
+                                        <p className="text-center text-sm text-muted-foreground italic">Pengajuan pending terkirim — menunggu keputusan PM. Anda belum bisa menyelesaikan pekerjaan sampai PM memutuskan.</p>
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-2 gap-3">
