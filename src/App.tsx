@@ -37,6 +37,7 @@ import Profile from './pages/Profile'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -47,7 +48,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    // Bawa tujuan asli (pathname + search) supaya setelah login kembali ke
+    // halaman itu — bukan ke dashboard — termasuk query mis. ?dari=TS-02.
+    return <Navigate to="/login" state={{ from: location }} replace />
   }
 
   return <>{children}</>
@@ -99,6 +102,38 @@ function AppRoutes() {
     window.scrollTo(0, 0)
   }, [location.pathname])
 
+  // Klik notifikasi push browser: service worker mengirim url tujuan → pindah.
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return
+    const onMessage = (e: MessageEvent) => {
+      const d = e.data as { type?: string; url?: string } | null
+      if (d?.type === 'open-url' && typeof d.url === 'string' && d.url.startsWith('/')) navigate(d.url)
+    }
+    navigator.serviceWorker.addEventListener('message', onMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage)
+  }, [navigate])
+
+  // Klik notifikasi APK: deep link atapcare://open?to=<path> → pindah (termasuk cold start).
+  useEffect(() => {
+    if (!isNativePlatform()) return
+    const toPath = (url?: string | null) => {
+      if (!url) return null
+      try {
+        const p = new URL(url).searchParams.get('to')
+        return p && p.startsWith('/') ? p : null
+      } catch { return null }
+    }
+    const sub = CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+      const p = toPath(url)
+      if (p) navigate(p)
+    })
+    CapacitorApp.getLaunchUrl().then((res) => {
+      const p = toPath(res?.url)
+      if (p) navigate(p)
+    })
+    return () => { sub.then(s => s.remove()) }
+  }, [navigate])
+
   if (!splashDone) {
     return <SplashScreen onFinish={() => setSplashDone(true)} />
   }
@@ -117,14 +152,28 @@ function AppRoutes() {
 
   const AppLayout = isMobile ? MobileLayout : MainLayout
 
+  const homeByRole = user?.role === 'admin' ? '/admin'
+    : user?.role === 'teknisi' ? '/tugas'
+    : user?.role === 'customer' ? '/customer'
+    : user?.role === 'executive' ? '/executive'
+    : '/dashboard'
+
+  // Tujuan asli sebelum dilempar ke /login (ProtectedRoute menyimpannya di
+  // state.from) — utamakan itu daripada dashboard by role.
+  const loginFrom = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from
+  const loginTarget = loginFrom?.pathname
+    ? { pathname: loginFrom.pathname, search: loginFrom.search || '' }
+    : homeByRole
+
   return (
     <Routes>
-      {/* GERBANG 1: Portal Publik (Tanpa Login) */}
+      {/* GERBANG 1: Portal Publik. Sudah login → dashboard (termasuk saat app
+          dibuka dari ikon PWA/APK); tamu → Landing (web) atau Login (native). */}
       <Route
         path="/"
-        element={isNativePlatform()
-          ? <Navigate to="/login" replace />
-          : <Landing />}
+        element={isAuthenticated
+          ? <Navigate to={homeByRole} replace />
+          : isNativePlatform() ? <Navigate to="/login" replace /> : <Landing />}
       />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
@@ -134,12 +183,7 @@ function AppRoutes() {
       {/* GERBANG 2: Login Karyawan */}
       <Route
         path="/login"
-        element={isAuthenticated ? <Navigate to={
-          user?.role === 'admin' ? '/admin' :
-          user?.role === 'teknisi' ? '/tugas' :
-          user?.role === 'customer' ? '/customer' :
-          user?.role === 'executive' ? '/executive' : '/dashboard'
-        } replace /> : <Login />}
+        element={isAuthenticated ? <Navigate to={loginTarget} replace /> : <Login />}
       />
 
       {/* GERBANG 2: Halaman Terproteksi */}

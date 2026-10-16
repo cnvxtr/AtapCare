@@ -80,6 +80,14 @@ html {
         --warning-foreground: 0 0% 14.5%;
     }
 
+    :root {
+        color-scheme: light;
+    }
+
+    .dark {
+        color-scheme: dark;
+    }
+
     * {
         border-color: hsl(var(--border));
     }
@@ -96,6 +104,15 @@ html {
         font-family: 'Inter', sans-serif;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Field bare (tanpa bg-*) ikut token tema, bukan UA white. :where() spec 0
+       sehingga class bg-card/bg-muted/.input tetap menang. */
+    input:where(:not([type='checkbox']):not([type='radio'])),
+    textarea,
+    select {
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
     }
 
     h1,

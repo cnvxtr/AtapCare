@@ -92,6 +92,20 @@ async function fcmAccessToken(clientEmail: string, privateKey: string): Promise<
   return fcmTokenCache.token;
 }
 
+// Tujuan saat notifikasi OS diklik: staf → halaman kerja role-nya + buka tiket
+// (?open=<kode>); customer → halaman detail tiket. Tanpa kode → homepage role.
+function ticketDeepLink(role: string | undefined | null, code: string): string {
+  switch (role) {
+    case "customer": return code ? `/customer/ticket/${code}` : "/customer";
+    case "teknisi": return code ? `/tugas?open=${code}` : "/tugas";
+    case "pm": return code ? `/command-center?open=${code}` : "/command-center";
+    case "helpdesk": return code ? `/inbox?open=${code}` : "/inbox";
+    case "admin": return code ? `/admin/reports?open=${code}` : "/admin/reports";
+    case "executive": return code ? `/executive/inbox?open=${code}` : "/executive/inbox";
+    default: return "/";
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     if (req.method === "OPTIONS") return json({ ok: true });
@@ -108,23 +122,33 @@ Deno.serve(async (req) => {
 
     if (rec.push !== true) return json({ ok: true });
 
-    // Fetch ticket code + recent notifications for richer body
+    // Kode tiket: dari kolom ticket_id bila ada, kalau tidak dari teks notif
+    // (kode ATC-YYYYMMDD-xxxx selalu disertakan di judul/pesan).
     let ticketCode = "";
-    let deepLink = "/";
-    let bodyLines: string[] = [];
-
     if (rec.ticket_id) {
       const { data: ticket } = await supabase
         .from("tickets")
         .select("code")
         .eq("id", rec.ticket_id)
         .single();
+      if (ticket?.code) ticketCode = ticket.code;
+    }
+    if (!ticketCode) {
+      const m = `${rec.title || ""} ${rec.message || ""}`.match(/ATC-\d{8}-[A-Za-z0-9]+/);
+      if (m) ticketCode = m[0];
+    }
 
-      if (ticket?.code) {
-        ticketCode = ticket.code;
-        deepLink = `/customer/ticket/${ticketCode}`;
-      }
+    // Alamat tujuan diklik, sesuai role penerima.
+    const { data: owner } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", rec.user_id)
+      .single();
+    const deepLink = ticketDeepLink(owner?.role, ticketCode);
 
+    let bodyLines: string[] = [];
+
+    if (rec.ticket_id) {
       // Fetch last 3 notifications for this ticket to show context
       const { data: recent } = await supabase
         .from("notifications")

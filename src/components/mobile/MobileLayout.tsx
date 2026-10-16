@@ -4,10 +4,10 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
-import { useTickets } from '../../context/TicketContext'
 import { Sun, Moon, Bell, ChevronDown, Check } from 'lucide-react'
 import {
-  getMyNotifications, getUnreadCount, markAllRead, markNotificationRead,
+  getMyNotifications, getUnreadCount, markAllRead, markNotificationRead, deleteAllNotifications,
+  ticketCodeFromNotif,
   type NotificationRow,
 } from '../../services/notifications'
 import { approveBackup, rejectBackup } from '../../services/ticketService'
@@ -62,7 +62,6 @@ export default function MobileLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, switchRole } = useAuth()
-  const { tickets } = useTickets()
   const [showNotifSheet, setShowNotifSheet] = useState(false)
   const [showRoleSheet, setShowRoleSheet] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
@@ -149,17 +148,17 @@ export default function MobileLayout() {
     }
   }
 
-  // Klik notif → buka halaman terkait. Teknisi/helpdesk/PM/executive/admin → drawer
-  // tiket auto-terbuka via `location.state.__openTicketId`; customer → halaman detail penuh.
+  // Klik notif → buka halaman terkait. Staf → drawer tiket terbuka via kode tiket
+  // (state router); customer → halaman detail penuh.
   const handleNotifOpen = (n: NotificationRow) => {
-    if (!n.ticket_id || !user) return
-    const t = tickets.find(x => x.id === n.ticket_id)
+    if (!user) return
+    const code = ticketCodeFromNotif(n)
     setShowNotifSheet(false)
     markNotificationRead(n.id)
     setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     setNotifCount(c => Math.max(0, c - 1))
     if (user.role === 'customer') {
-      navigate(t ? `/customer/ticket/${t.code}` : roleHome('customer'))
+      navigate(code ? `/customer/ticket/${code}` : roleHome('customer'))
       return
     }
     const dest =
@@ -167,7 +166,7 @@ export default function MobileLayout() {
       user.role === 'executive' ? '/executive/inbox' :
       user.role === 'pm' ? '/command-center' :
       user.role === 'teknisi' ? '/tugas' : '/inbox'
-    navigate(dest, { state: t ? { __openTicketId: t.id } : undefined })
+    navigate(dest, { state: code ? { __openTicketCode: code } : undefined })
   }
 
   // Ganti Role — perilaku identik dengan sidebar web.
@@ -201,6 +200,20 @@ export default function MobileLayout() {
     setNotifs(prev => prev.map(n => ({ ...n, read: true })))
   }
 
+  // Klik lonceng = buka sheet + tandai semua terbaca (badge hilang), notif tetap tampil.
+  const handleBellOpen = () => {
+    setShowNotifSheet(true)
+    handleMarkAllRead()
+  }
+
+  const handleClearNotifs = async () => {
+    if (!user) return
+    if (!window.confirm('Hapus semua notifikasi?')) return
+    await deleteAllNotifications(user.id)
+    setNotifs([])
+    setNotifCount(0)
+  }
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
       {/* Top Bar */}
@@ -228,7 +241,7 @@ export default function MobileLayout() {
 
           {/* Notifikasi */}
           <button
-            onClick={() => setShowNotifSheet(true)}
+            onClick={handleBellOpen}
             className="relative h-11 w-11 grid place-items-center rounded-xl hover:bg-accent transition-colors"
           >
             <Bell className="h-5 w-5" />
@@ -269,12 +282,12 @@ export default function MobileLayout() {
             {/* Header */}
             <div className="px-5 pb-3 border-b border-border flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">Notifikasi</span>
-              {notifCount > 0 && (
+              {notifs.length > 0 && (
                 <button
-                  onClick={handleMarkAllRead}
+                  onClick={handleClearNotifs}
                   className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-2 py-1 hover:bg-accent transition-colors"
                 >
-                  Tandai dibaca
+                  Hapus
                 </button>
               )}
             </div>

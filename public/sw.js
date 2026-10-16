@@ -13,19 +13,30 @@ self.addEventListener('push', (event) => {
     body: data.body || '',
     icon: '/favicon.svg',
     badge: '/favicon.svg',
-    data: { url: data.url || '/' },
+    data: { url: data.url },
   }
   event.waitUntil(self.registration.showNotification(title, options))
 })
 
+// Klik notifikasi: kalau aplikasi sudah terbuka → fokus + suruh SPA pindah
+// (pesan 'open-url'); kalau belum → buka jendela baru di alamat tujuan.
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
   const url = (event.notification.data && event.notification.data.url) || '/'
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     for (const client of all) {
-      if ('focus' in client) { client.focus(); if (client.url === url) return }
+      if ('focus' in client) {
+        await client.focus()
+        client.postMessage({ type: 'open-url', url })
+        return
+      }
     }
     if (self.clients.openWindow) await self.clients.openWindow(url)
   })())
 })
+
+// Handler fetch minimal: memenuhi syarat installability PWA (Chrome Android)
+// tanpa caching. ponytail: no-op pass-through; ganti dengan strategi cache
+// kalau nanti butuh mode offline.
+self.addEventListener('fetch', () => {})

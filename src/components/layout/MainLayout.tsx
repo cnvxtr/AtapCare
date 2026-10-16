@@ -16,7 +16,8 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator
 } from '../../components/ui/dropdown-menu'
 import {
-  getMyNotifications, getUnreadCount, markAllRead, markNotificationRead,
+  getMyNotifications, getUnreadCount, markAllRead, markNotificationRead, deleteAllNotifications,
+  ticketCodeFromNotif,
   type NotificationRow
 } from '../../services/notifications'
 import { approveBackup, rejectBackup } from '../../services/ticketService'
@@ -76,6 +77,7 @@ export default function MainLayout() {
   const [switchingRole, setSwitchingRole] = useState(false)
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
+  const [notifOpen, setNotifOpen] = useState(false)
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
 
@@ -178,6 +180,44 @@ export default function MainLayout() {
     } else {
       toast.error(action === 'approve' ? 'Gagal menyetujui pengalihan.' : 'Gagal menolak pengalihan.')
     }
+  }
+
+  // Klik notif → buka halaman role + drawer tiket (menyertakan kode tiket).
+  const handleNotifOpen = (n: NotificationRow) => {
+    if (!user) return
+    const code = ticketCodeFromNotif(n)
+    setNotifOpen(false)
+    markNotificationRead(n.id)
+    setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
+    setNotifCount(c => Math.max(0, c - 1))
+    if (user.role === 'customer') {
+      navigate(code ? `/customer/ticket/${code}` : '/customer')
+      return
+    }
+    const dest =
+      user.role === 'admin' ? '/admin/reports' :
+      user.role === 'executive' ? '/executive/inbox' :
+      user.role === 'pm' ? '/command-center' :
+      user.role === 'teknisi' ? '/tugas' : '/inbox'
+    navigate(dest, { state: code ? { __openTicketCode: code } : undefined })
+  }
+
+  // Klik lonceng = tandai semua terbaca (badge hilang), notif tetap tampil.
+  const handleNotifOpenChange = (open: boolean) => {
+    setNotifOpen(open)
+    if (open && user && notifCount > 0) {
+      markAllRead(user.id)
+      setNotifCount(0)
+      setNotifs(prev => prev.map(n => ({ ...n, read: true })))
+    }
+  }
+
+  const handleClearNotifs = async () => {
+    if (!user) return
+    if (!window.confirm('Hapus semua notifikasi?')) return
+    await deleteAllNotifications(user.id)
+    setNotifs([])
+    setNotifCount(0)
   }
 
   return (
@@ -339,7 +379,7 @@ export default function MainLayout() {
             >
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
-            <DropdownMenu>
+            <DropdownMenu open={notifOpen} onOpenChange={handleNotifOpenChange}>
               <DropdownMenuTrigger asChild>
                 <button className="relative h-11 w-11 sm:h-9 sm:w-9 grid place-items-center rounded border border-border hover:bg-accent transition">
                   <Bell className="h-4 w-4" />
@@ -353,12 +393,12 @@ export default function MainLayout() {
               <DropdownMenuContent align="end" className="w-80 bg-card border-border">
                 <DropdownMenuLabel className="flex items-center justify-between">
                   <span className="text-sm">Notifikasi</span>
-                  {notifCount > 0 && (
+                  {notifs.length > 0 && (
                     <button
-                      onClick={() => { if (user) { markAllRead(user.id); setNotifCount(0); setNotifs(notifs.map(n => ({ ...n, read: true }))) } }}
+                      onClick={handleClearNotifs}
                       className="text-xs text-muted-foreground hover:text-foreground border border-border rounded-[5px] px-1.5 py-0.5 hover:bg-accent transition-colors"
                     >
-                      Tandai dibaca
+                      Hapus
                     </button>
                   )}
                 </DropdownMenuLabel>
@@ -370,7 +410,7 @@ export default function MainLayout() {
                     {notifs.map((n) => {
                       const actionable = user?.role === 'pm' && !!n.ticket_id && n.title?.startsWith('Minta pengalihan:')
                       return (
-                        <div key={n.id} className={`flex flex-col items-start py-2.5 px-3 bg-muted rounded-[5px] ${n.read ? 'opacity-60' : ''}`}>
+                        <div key={n.id} onClick={() => handleNotifOpen(n)} className={`flex flex-col items-start py-2.5 px-3 bg-muted rounded-[5px] cursor-pointer hover:bg-accent transition-colors ${n.read ? 'opacity-60' : ''}`}>
                           <span className="text-sm font-medium text-foreground">{n.title}</span>
                           {n.message && <span className="text-xs text-muted-foreground mt-0.5">{n.message}</span>}
                           <span className="text-[10px] text-muted-foreground/70 mt-1">
@@ -380,14 +420,14 @@ export default function MainLayout() {
                             <div className="flex gap-2 mt-2 w-full">
                               <button
                                 disabled={backupBusy !== null}
-                                onClick={() => handleBackupAction(n, 'approve')}
+                                onClick={(e) => { e.stopPropagation(); handleBackupAction(n, 'approve') }}
                                 className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-[3px] font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
                               >
                                 Setujui
                               </button>
                               <button
                                 disabled={backupBusy !== null}
-                                onClick={() => handleBackupAction(n, 'reject')}
+                                onClick={(e) => { e.stopPropagation(); handleBackupAction(n, 'reject') }}
                                 className="flex-1 py-1.5 text-xs bg-red-600 text-white rounded-[3px] font-semibold hover:bg-red-700 disabled:opacity-50 transition-colors"
                               >
                                 Tolak

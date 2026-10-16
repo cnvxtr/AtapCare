@@ -8,6 +8,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Intent;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 
 import androidx.annotation.NonNull;
 import androidx.core.app.NotificationCompat;
@@ -78,12 +79,14 @@ public class AtapCareMessagingService extends MessagingService {
         nm.createNotificationChannel(
                 new NotificationChannel(CHANNEL_ID, "Atap Care", NotificationManager.IMPORTANCE_HIGH));
 
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.setAction(Intent.ACTION_MAIN);
-        intent.addCategory(Intent.CATEGORY_LAUNCHER);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        // Deep link ke dalam aplikasi: atapcare://open?to=<encoded path>. Plugin
+        // Capacitor App memancarkan appUrlOpen → JS berpindah ke tiket yang tepat,
+        // termasuk saat app baru dibuka dari notifikasi (cold start).
         String url = remoteMessage.getData().get("url");
-        if (url != null) intent.putExtra("url", url);
+        Intent intent = new Intent(Intent.ACTION_VIEW,
+                Uri.parse("atapcare://open?to=" + Uri.encode(url != null ? url : "/")));
+        intent.setClass(this, MainActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         PendingIntent pi = PendingIntent.getActivity(
                 this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 

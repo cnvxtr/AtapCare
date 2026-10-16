@@ -1,75 +1,73 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { supabase } from '../../lib/supabase'
 import { createTicket, type CreateTicketPayload } from '../../services/ticketService'
 import { FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import CameraFileUpload from '../../components/CameraFileUpload'
-import { Combobox, type ComboboxOption } from '../../components/ui/combobox'
-
-interface CustomerRow { id: string; name: string }
-interface SiteRow { id: string; name: string }
-interface UnitRow { id: string; name: string }
+import { Combobox } from '@/components/ui/combobox'
+import { TROUBLE_CARDS } from '../../components/troubleCards'
 
 export default function CustomerReport() {
     const navigate = useNavigate()
     const { user } = useAuth()
 
     const [companyName, setCompanyName] = useState('')
-    const [customerId, setCustomerId] = useState(user?.customer_id || '')
-    const [sites, setSites] = useState<ComboboxOption[]>([])
-    const [selectedSiteId, setSelectedSiteId] = useState('')
-    const [units, setUnits] = useState<ComboboxOption[]>([])
-    const [selectedUnitId, setSelectedUnitId] = useState('')
+    const [sites, setSites] = useState<{ id: string; name: string }[]>([])
+    const [units, setUnits] = useState<{ id: string; name: string }[]>([])
+    const [siteId, setSiteId] = useState('')
+    const [unitId, setUnitId] = useState('')
 
-    const [description, setDescription] = useState('')
+    // Prefill dari kartu "Kendala Umum" di beranda (?dari=TS-02) — customer
+    // tinggal tambah detail, tidak mengetik ulang.
+    const [searchParams] = useSearchParams()
+    const [description, setDescription] = useState(() => {
+        const card = TROUBLE_CARDS.find(c => c.code === searchParams.get('dari'))
+        return card ? `${card.title} — ${card.desc}` : ''
+    })
     const [photos, setPhotos] = useState<File[]>([])
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState('')
 
+    // Akun pelanggan cukup terhubung ke perusahaan (kode unik, migrasi 84).
+    // Site & Unit dipilih sendiri dari daftar milik perusahaannya.
+    const locked = !!user?.customer_id
+    const siteName = sites.find((s) => s.id === siteId)?.name || ''
+    const unitName = units.find((u) => u.id === unitId)?.name || ''
+
     useEffect(() => {
-        if (!user?.customer_id) { setCompanyName(''); return }
-        setCustomerId(user.customer_id)
-        supabase.from('customers').select('id, name').eq('id', user.customer_id).single().then(({ data }) => {
-            setCompanyName((data as CustomerRow | null)?.name || '')
-        })
+        if (!user?.customer_id) return
+        supabase.from('customers').select('name').eq('id', user.customer_id).single()
+            .then(({ data }) => setCompanyName((data as { name: string } | null)?.name || ''))
+        supabase.from('sites').select('id, name').eq('customer_id', user.customer_id)
+            .eq('is_deleted', false).order('name')
+            .then(({ data }) => setSites((data as { id: string; name: string }[]) || []))
     }, [user?.customer_id])
 
+    // Daftar Unit mengikuti Site terpilih.
     useEffect(() => {
-        if (!customerId) { setSites([]); setSelectedSiteId(''); setUnits([]); setSelectedUnitId(''); return }
-        supabase.from('sites').select('id, name').eq('customer_id', customerId).order('name').then(({ data }) => {
-            setSites((data || []).map((s: SiteRow) => ({ value: s.id, label: s.name })))
-        })
-        setSelectedSiteId(''); setUnits([]); setSelectedUnitId('')
-    }, [customerId])
-
-    useEffect(() => {
-        if (!selectedSiteId) { setUnits([]); setSelectedUnitId(''); return }
-        supabase.from('units').select('id, name').eq('site_id', selectedSiteId).order('name').then(({ data }) => {
-            setUnits((data || []).map((u: UnitRow) => ({ value: u.id, label: u.name })))
-        })
-        setSelectedUnitId('')
-    }, [selectedSiteId])
-
-    const selectedSite = sites.find(s => s.value === selectedSiteId)
-    const selectedUnit = units.find(u => u.value === selectedUnitId)
+        if (!siteId) return
+        supabase.from('units').select('id, name').eq('site_id', siteId)
+            .eq('is_deleted', false).order('name')
+            .then(({ data }) => setUnits((data as { id: string; name: string }[]) || []))
+    }, [siteId])
 
     const removePhoto = (idx: number) => setPhotos(prev => prev.filter((_, i) => i !== idx))
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        if (!description.trim() || !selectedSite) {
-            setError('Site dan deskripsi wajib diisi.'); return
-        }
+        if (!description.trim()) { setError('Deskripsi wajib diisi.'); return }
+        if (!siteId) { setError('Pilih Site terlebih dahulu.'); return }
+        if (!unitId) { setError('Pilih Unit terlebih dahulu.'); return }
         if (photos.length === 0) { setError('Foto & File Pendukung wajib diunggah.'); return }
         setIsLoading(true); setError('')
         const payload: CreateTicketPayload = {
             reporterName: user?.full_name || '',
             position: 'Pelanggan',
             phone: user?.wa_number || '',
-            site: selectedSite.label,
-            unit: selectedUnit?.label || '',
+            site: siteName,
+            unit: unitName,
             description,
             photos: photos.length > 0 ? photos : undefined,
         }
@@ -78,6 +76,21 @@ export default function CustomerReport() {
         if (result.error) { setError(result.error); return }
         toast.success('Tiket berhasil dibuat!')
         navigate('/customer')
+    }
+
+    if (!locked) {
+        return (
+            <div className="max-w-2xl mx-auto">
+                <div className="bg-card border border-red-300 rounded-lg p-6 text-center space-y-1">
+                    <p className="text-sm font-semibold text-red-600">
+                        Akun Anda belum terhubung ke perusahaan.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                        Silakan hubungi admin untuk memasukkan kode perusahaan Anda.
+                    </p>
+                </div>
+            </div>
+        )
     }
 
     return (
@@ -90,15 +103,24 @@ export default function CustomerReport() {
                 </div>
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Site</label>
-                    <Combobox options={sites} value={selectedSiteId} onChange={setSelectedSiteId}
-                        placeholder={companyName ? "Ketik nama site..." : "Perusahaan belum terhubung"}
-                        disabled={!companyName} emptyText="Site tidak ditemukan" />
+                    <Combobox
+                        options={sites.map((s) => ({ value: s.id, label: s.name }))}
+                        value={siteId}
+                        onChange={(v) => { setSiteId(v); setUnitId('') }}
+                        placeholder="Pilih Site…"
+                        emptyText="Site tidak ditemukan"
+                    />
                 </div>
                 <div>
                     <label className="block text-xs font-medium mb-1.5">Unit</label>
-                    <Combobox options={units} value={selectedUnitId} onChange={setSelectedUnitId}
-                        placeholder={selectedSiteId ? "Ketik nama unit..." : "Pilih site terlebih dahulu"}
-                        disabled={!selectedSiteId} emptyText="Unit tidak ditemukan" />
+                    <Combobox
+                        options={units.map((u) => ({ value: u.id, label: u.name }))}
+                        value={unitId}
+                        onChange={setUnitId}
+                        placeholder={siteId ? 'Pilih Unit…' : 'Pilih Site dulu'}
+                        disabled={!siteId}
+                        emptyText="Unit tidak ditemukan"
+                    />
                 </div>
                 <div>
                     <label className="block text-xs font-medium mb-1.5">No. Telepon</label>

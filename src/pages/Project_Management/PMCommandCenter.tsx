@@ -15,6 +15,7 @@ import { getTechnicians } from '../../services/users'
 import { getPendingAlarm, getPendingHours } from '../../lib/pendingAlarm'
 import { getBackupRequest, approveBackup, rejectBackup, approvePending, rejectPending, getSupportMemberIds, type BackupRequest } from '../../services/ticketService'
 import { resolvePhotos } from '../../services/photoService'
+import { notifyTicketCode } from '../../services/notifications'
 import { SEGMENTS } from '../../lib/constants'
 import { useIsMobile } from '../../lib/platform'
 
@@ -81,19 +82,19 @@ export default function PMCommandCenter() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
 
-    // Klik notifikasi di APK → drawer tiket auto-terbuka.
+    // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka.
     const location = useLocation()
-    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    const notifyOpenCode = notifyTicketCode(location.state, location.search)
     const navigate = useNavigate()
     useEffect(() => {
-        if (!notifyOpenTicket) return
-        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!notifyOpenCode) return
+        const t = tickets.find(x => x.code === notifyOpenCode)
         if (!t) return
         setSelectedTicket(t)
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [notifyOpenTicket])
+    }, [notifyOpenCode])
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [showReassignModal, setShowReassignModal] = useState(false)
     const [showPendingDecision, setShowPendingDecision] = useState(false)
@@ -587,7 +588,7 @@ export default function PMCommandCenter() {
                                     <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
                                 </div>
                             </div>
-                            <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} />
+                            <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} categoryNote={selectedTicket.categoryNote} />
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}

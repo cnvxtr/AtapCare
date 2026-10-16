@@ -1,32 +1,6 @@
-import { Cpu, Router as RouterIcon, Wifi, Zap } from "lucide-react";
+import { Link } from "react-router-dom";
 import Reveal from "@/components/Reveal";
-
-const TROUBLE_CARDS = [
-  {
-    code: "TS-01",
-    title: "Perangkat Tidak Menyala",
-    desc: "Periksa sumber daya, adaptor, dan kabel. Bila tetap mati, laporkan dengan foto unit.",
-    Icon: Zap,
-  },
-  {
-    code: "TS-02",
-    title: "Koneksi Terputus",
-    desc: "Restart perangkat, tunggu 3 menit. Catat lampu indikator sebelum melapor.",
-    Icon: Wifi,
-  },
-  {
-    code: "TS-03",
-    title: "Jaringan Lambat",
-    desc: "Uji kecepatan pada dua perangkat berbeda lalu lampirkan hasilnya pada tiket.",
-    Icon: RouterIcon,
-  },
-  {
-    code: "TS-04",
-    title: "Perangkat Bermasalah",
-    desc: "Sebutkan kode unit dan gejala yang muncul agar teknisi menyiapkan sparepart.",
-    Icon: Cpu,
-  },
-];
+import { TROUBLE_CARDS } from "./troubleCards";
 
 export function TroubleshootCards() {
   return (
@@ -43,7 +17,10 @@ export function TroubleshootCards() {
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {TROUBLE_CARDS.map(({ code, title, desc, Icon }, i) => (
           <Reveal key={code} delay={i * 80}>
-            <article className="sweep group h-full rounded-[3px] border border-border bg-card p-5 transition-all duration-500 hover:-translate-y-1 hover:border-foreground/40">
+            <Link
+              to={`/customer/report?dari=${code}`}
+              className="sweep group block h-full rounded-[3px] border border-border bg-card p-5 transition-all duration-500 hover:-translate-y-1 hover:border-foreground/40 cursor-pointer"
+            >
               <div className="flex items-center justify-between">
                 <span className="flex h-9 w-9 items-center justify-center rounded-[3px] bg-foreground text-background">
                   <Icon className="h-4 w-4" />
@@ -54,7 +31,7 @@ export function TroubleshootCards() {
               </div>
               <p className="mt-4 text-sm font-semibold leading-tight">{title}</p>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">{desc}</p>
-            </article>
+            </Link>
           </Reveal>
         ))}
       </div>

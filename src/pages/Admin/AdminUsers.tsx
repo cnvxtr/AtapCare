@@ -10,6 +10,8 @@ import {
   Eye,
   EyeOff,
   MoreHorizontal,
+  Check,
+  ChevronDown,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import type { AppRole, UserStatus } from "@/lib/types";
@@ -38,6 +40,10 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "executive", label: "Executive" },
 ];
 
+// Tab Karyawan tidak boleh menawarkan role Pelanggan — user ber-role customer
+// otomatis pindah ke tab Pelanggan tanpa binding perusahaan/site/unit.
+const INTERNAL_ROLE_OPTIONS = ROLE_OPTIONS.filter((r) => r.value !== "customer");
+
 const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
   { value: "aktif", label: "Aktif" },
   { value: "nonaktif", label: "Nonaktif" },
@@ -52,6 +58,119 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
   executive: "bg-purple-100 text-purple-800",
 };
 
+const TRIGGER_CLS =
+  "w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring inline-flex items-center justify-between gap-2";
+
+// Opsi di menu: label tampil sebagai badge kotak warna per role (sama seperti
+// trigger & tabel) — teks badge sudah kontras dengan bg (ROLE_BADGE_COLORS).
+function roleOptionCls(selected: boolean) {
+  return `w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-[3px] text-xs font-medium transition cursor-pointer ${
+    selected ? "bg-accent text-foreground" : "hover:bg-accent/60"
+  }`;
+}
+
+function RolePrimarySelect({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: AppRole; label: string }[];
+  value: AppRole | "";
+  onChange: (v: AppRole | "") => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = options.find((o) => o.value === value)?.label;
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={TRIGGER_CLS}>
+          {label ? (
+            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${ROLE_BADGE_COLORS[value]}`}>
+              {label}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">Pilih role…</span>
+          )}
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="flex flex-col gap-1 p-1.5 min-w-[var(--radix-dropdown-menu-trigger-width)] bg-card border-border"
+      >
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => {
+              // Klik role yang sudah terpilih → batal pilih (kepencet bisa dibatalkan).
+              onChange(o.value === value ? "" : o.value);
+              setOpen(false);
+            }}
+            className={roleOptionCls(o.value === value)}
+          >
+            <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${ROLE_BADGE_COLORS[o.value]}`}>{o.label}</span>
+            {o.value === value && <Check className="h-3.5 w-3.5 shrink-0" />}
+          </button>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function RoleExtraSelect({
+  options,
+  primary,
+  selected,
+  onToggle,
+}: {
+  options: { value: AppRole; label: string }[];
+  primary: AppRole | "";
+  selected: AppRole[];
+  onToggle: (v: AppRole) => void;
+}) {
+  const chosen = options.filter((o) => selected.includes(o.value));
+  // Role Utama belum dipilih → trigger diganti tombol mati (syarat UI).
+  if (!primary) {
+    return (
+      <button type="button" disabled className={`${TRIGGER_CLS} opacity-50 cursor-not-allowed`}>
+        <span className="text-muted-foreground">Pilih Role Utama dulu</span>
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+      </button>
+    );
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className={TRIGGER_CLS}>
+          <span className="truncate text-muted-foreground">
+            {chosen.length ? chosen.map((o) => o.label).join(", ") : "Pilih role tambahan…"}
+          </span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        className="flex flex-col gap-1 p-1.5 min-w-[var(--radix-dropdown-menu-trigger-width)] bg-card border-border"
+      >
+        {options
+          .filter((o) => o.value !== primary)
+          .map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              onClick={() => onToggle(o.value)}
+              className={roleOptionCls(selected.includes(o.value))}
+            >
+              <span className={`px-2 py-0.5 rounded text-[11px] font-semibold ${ROLE_BADGE_COLORS[o.value]}`}>{o.label}</span>
+              {selected.includes(o.value) && <Check className="h-3.5 w-3.5 shrink-0" />}
+            </button>
+          ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 interface UserRow {
   id: string;
   email: string | null;
@@ -64,6 +183,9 @@ interface UserRow {
   must_change_password: boolean;
   last_login: string | null;
   active_tickets: number;
+  customer_id: string | null;
+  site_id: string | null;
+  unit_id: string | null;
 }
 
 const ITEMS_PER_PAGE = 10;
@@ -110,9 +232,23 @@ export function AdminUsers() {
   const [formRoles, setFormRoles] = useState<AppRole[]>([]);
   const [formPrimaryRole, setFormPrimaryRole] = useState<AppRole | "">("");
   const [formStatus, setFormStatus] = useState<UserStatus>("aktif");
+  const [formCustomerId, setFormCustomerId] = useState("");
+  const [formCompanyCode, setFormCompanyCode] = useState("");
+  const [formSiteId, setFormSiteId] = useState("");
+  const [formUnitId, setFormUnitId] = useState("");
+
+  type MdRow = { id: string; name: string; code?: string | null };
+  const [mdCustomers, setMdCustomers] = useState<MdRow[]>([]);
 
   useEffect(() => {
     loadUsers();
+    // Data perusahaan (nama + kode) untuk kolom tabel & lookup kode saat tambah pelanggan.
+    supabase
+      .from("customers")
+      .select("id, name, code")
+      .eq("is_deleted", false)
+      .order("name")
+      .then(({ data }) => setMdCustomers((data as MdRow[]) || []));
   }, []);
 
   // Segarkan saat halaman kembali fokus — data admin tidak basi antar-sesi.
@@ -131,14 +267,21 @@ export function AdminUsers() {
 
   async function loadUsers() {
     setLoading(true);
-    const { data: userData } = await supabase
+    const { data: userData, error: userErr } = await supabase
       .from("users")
       .select(
-        "id, email, username, name, wa_number, role, roles, status, must_change_password, last_login",
+        "id, email, username, name, wa_number, role, roles, status, must_change_password, last_login, customer_id, site_id, unit_id",
       )
       .eq("is_deleted", false)
       .order("name");
 
+    // Query gagal ≠ data kosong: tanpa toast ini, kolom yang belum ada di DB
+    // cuma bikin tabel "0" diam-diam (kejadian: users.site_id sebelum migrasi 81).
+    if (userErr) {
+      toast.error("Gagal memuat pengguna: " + userErr.message);
+      setLoading(false);
+      return;
+    }
     if (!userData) {
       setLoading(false);
       return;
@@ -171,6 +314,9 @@ export function AdminUsers() {
         must_change_password: u.must_change_password,
         last_login: u.last_login,
         active_tickets: u.role === "customer" ? countByReporter[u.id] || 0 : countByUser[u.id] || 0,
+        customer_id: u.customer_id,
+        site_id: u.site_id,
+        unit_id: u.unit_id,
       });
     }
     setUsers(rows);
@@ -187,16 +333,16 @@ export function AdminUsers() {
     setFormRoles([]);
     setFormPrimaryRole("");
     setFormStatus("aktif");
+    setFormCustomerId("");
+    setFormCompanyCode("");
+    setFormSiteId("");
+    setFormUnitId("");
     setEditingId(null);
   }
 
-  function togglePrimaryRole(r: AppRole) {
-    if (formPrimaryRole) {
-      if (formPrimaryRole === r) setFormPrimaryRole("");
-      return;
-    }
+  function pickPrimaryRole(r: AppRole | "") {
     setFormPrimaryRole(r);
-    setFormRoles((prev) => prev.filter((v) => v !== r));
+    setFormRoles((prev) => (r ? prev.filter((v) => v !== r) : prev));
   }
 
   function toggleRole(r: AppRole) {
@@ -220,6 +366,10 @@ export function AdminUsers() {
     setFormRoles(roles.filter((r) => r !== (u.role as AppRole)));
     setFormPrimaryRole((u.role as AppRole) || "");
     setFormStatus(u.status);
+    setFormCustomerId(u.customer_id || "");
+    setFormCompanyCode(mdCustomers.find((c) => c.id === u.customer_id)?.code || "");
+    setFormSiteId(u.site_id || "");
+    setFormUnitId(u.unit_id || "");
     setEditingId(u.id);
     setDialogOpen(true);
   }
@@ -238,7 +388,13 @@ export function AdminUsers() {
 
   async function handleSave() {
     if (!formName.trim() || !formUsername.trim()) return;
-    if (!formPrimaryRole) {
+    const isCustomer = userTab === "customer";
+    if (isCustomer) {
+      if (!formCustomerId) {
+        toast.error("Kode perusahaan tidak ditemukan");
+        return;
+      }
+    } else if (!formPrimaryRole) {
       toast.error("Pilih Role Utama");
       return;
     }
@@ -286,8 +442,8 @@ export function AdminUsers() {
 
     setSaving(true);
 
-    const allRoles = [formPrimaryRole, ...formRoles];
-    const primaryRole = formPrimaryRole;
+    const primaryRole: AppRole = isCustomer ? "customer" : (formPrimaryRole as AppRole);
+    const allRoles: AppRole[] = isCustomer ? ["customer"] : [formPrimaryRole as AppRole, ...formRoles];
     const payload = {
       name: formName.trim(),
       full_name: formName.trim(),
@@ -296,6 +452,9 @@ export function AdminUsers() {
       role: primaryRole,
       roles: allRoles.join(","),
       status: formStatus,
+      customer_id: formCustomerId || null,
+      site_id: formSiteId || null,
+      unit_id: formUnitId || null,
       updated_at: new Date().toISOString(),
     };
 
@@ -332,6 +491,9 @@ export function AdminUsers() {
         p_role: primaryRole,
         p_status: formStatus,
         p_roles: allRoles.join(","),
+        p_customer_id: formCustomerId || null,
+        p_site_id: formSiteId || null,
+        p_unit_id: formUnitId || null,
       });
       if (saveError || (saveResult as { error?: string } | null)?.error) {
         toast.error(
@@ -380,6 +542,9 @@ export function AdminUsers() {
             role: primaryRole,
             roles: allRoles.join(","),
             status: formStatus,
+            customer_id: formCustomerId || null,
+            site_id: formSiteId || null,
+            unit_id: formUnitId || null,
           }),
         });
         if (!res.ok) {
@@ -553,7 +718,8 @@ export function AdminUsers() {
               onClick={openAddDialog}
               className="h-9 px-4 rounded-[3px] bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition inline-flex items-center gap-1.5"
             >
-              <Plus className="h-3.5 w-3.5" /> Tambah Pengguna
+              <Plus className="h-3.5 w-3.5" />{" "}
+              {userTab === "internal" ? "Tambah Karyawan" : "Tambah Pelanggan"}
             </button>
           </div>
         </div>
@@ -570,13 +736,13 @@ export function AdminUsers() {
           <Users className="h-10 w-10 mb-2" />
           <p className="text-sm font-medium text-muted-foreground">Belum ada data</p>
           <p className="text-xs mt-1">
-            {searchQ ? "Coba kata kunci lain" : "Klik 'Tambah Pengguna' untuk menambahkan"}
+            {searchQ ? "Coba kata kunci lain" : `Klik '${userTab === "internal" ? "Tambah Karyawan" : "Tambah Pelanggan"}' untuk menambahkan`}
           </p>
         </div>
       ) : (
         <div className="rounded-lg border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
-            <div className="min-w-[640px]">
+            <div className="min-w-[760px]">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border">
@@ -589,6 +755,11 @@ export function AdminUsers() {
                     <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
                       Role
                     </th>
+                    {userTab === "customer" && (
+                      <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
+                        Perusahaan
+                      </th>
+                    )}
                     <th className="text-left px-4 py-3 text-[10px] font-mono uppercase tracking-wider text-muted-foreground">
                       Status
                     </th>
@@ -637,6 +808,16 @@ export function AdminUsers() {
                           ))}
                         </div>
                       </td>
+                      {userTab === "customer" && (
+                        <td className="px-4 py-3 text-xs text-muted-foreground">
+                          <div className="font-medium text-foreground">
+                            {mdCustomers.find((c) => c.id === u.customer_id)?.name || "—"}
+                          </div>
+                          <div className="text-[11px] font-mono">
+                            {mdCustomers.find((c) => c.id === u.customer_id)?.code || "—"}
+                          </div>
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <span
                           className={`text-[10px] font-medium px-2 py-0.5 rounded ${u.status === "aktif"
@@ -742,109 +923,125 @@ export function AdminUsers() {
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg bg-card max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-xl bg-card max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-4 pr-8">
             <DialogTitle className="text-foreground">
-              {editingId ? "Edit User" : "Tambah Pengguna Baru"}
+              {editingId
+                ? userTab === "customer" ? "Edit Pelanggan" : "Edit Karyawan"
+                : userTab === "customer" ? "Tambah Pelanggan Baru" : "Tambah Karyawan Baru"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pr-1">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Nama Lengkap</label>
-              <input
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
-                placeholder="Nama lengkap"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Username</label>
-              <input
-                value={formUsername}
-                onChange={(e) => setFormUsername(e.target.value)}
-                className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
-                placeholder="Username login"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>
-              <input
-                type="email"
-                value={formEmail}
-                onChange={(e) => setFormEmail(e.target.value)}
-                className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
-                placeholder="email@contoh.com"
-              />
-            </div>
-            {!editingId && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Password <span className="text-muted-foreground">(min. 6 karakter)</span>
-                </label>
-                <div className="relative">
-                  <input
-                    value={formPassword}
-                    onChange={(e) => setFormPassword(e.target.value)}
-                    type={showPw ? "text" : "password"}
-                    className="w-full h-9 px-3 pr-10 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
-                    placeholder="Min. 6 karakter"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPw(!showPw)}
-                    className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition"
-                  >
-                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Nama Lengkap</label>
+                <input
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                  placeholder="Nama lengkap"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Username</label>
+                <input
+                  value={formUsername}
+                  onChange={(e) => setFormUsername(e.target.value)}
+                  className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                  placeholder="Username login"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className={editingId ? "sm:col-span-2" : ""}>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Email</label>
+                <input
+                  type="email"
+                  value={formEmail}
+                  onChange={(e) => setFormEmail(e.target.value)}
+                  className="w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                  placeholder="email@contoh.com"
+                />
+              </div>
+              {!editingId && (
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Password <span className="text-muted-foreground">(min. 6 karakter)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      value={formPassword}
+                      onChange={(e) => setFormPassword(e.target.value)}
+                      type={showPw ? "text" : "password"}
+                      className="w-full h-9 px-3 pr-10 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                      placeholder="Min. 6 karakter"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw(!showPw)}
+                      className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground hover:text-foreground transition"
+                    >
+                      {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+            {userTab === "internal" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Role Utama
+                  </label>
+                  <div className="mt-1">
+                    <RolePrimarySelect
+                      options={INTERNAL_ROLE_OPTIONS}
+                      value={formPrimaryRole}
+                      onChange={pickPrimaryRole}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                    Role Tambahan <span className="text-muted-foreground">(opsional)</span>
+                  </label>
+                  <div className="mt-1">
+                    <RoleExtraSelect
+                      options={INTERNAL_ROLE_OPTIONS}
+                      primary={formPrimaryRole}
+                      selected={formRoles}
+                      onToggle={toggleRole}
+                    />
+                  </div>
                 </div>
               </div>
             )}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Role Utama <span className="text-red-500">*</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {ROLE_OPTIONS.map((r) => {
-                  const selected = formPrimaryRole === r.value;
-                  const blocked = !!formPrimaryRole && !selected;
-                  return (
-                    <button
-                      key={r.value}
-                      onClick={() => togglePrimaryRole(r.value)}
-                      disabled={blocked}
-                      className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${selected
-                        ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
-                        : blocked
-                          ? "border-border text-muted-foreground opacity-40 cursor-not-allowed"
-                          : "border-border text-muted-foreground hover:border-foreground/40"
-                        }`}
-                    >
-                      {r.label}
-                    </button>
-                  );
-                })}
+            {userTab === "customer" && (
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">
+                  Kode Perusahaan
+                </label>
+                <input
+                  value={formCompanyCode}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setFormCompanyCode(v);
+                    setFormCustomerId(
+                      mdCustomers.find(
+                        (c) => (c.code || "").toLowerCase() === v.trim().toLowerCase(),
+                      )?.id || "",
+                    );
+                  }}
+                  placeholder="mis. 33333"
+                  className="mt-1 w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring"
+                />
+                <p className={`text-[11px] mt-1 ${formCustomerId ? "text-green-600" : "text-muted-foreground"}`}>
+                  {formCustomerId
+                    ? mdCustomers.find((c) => c.id === formCustomerId)?.name
+                    : "Kode unik perusahaan (lihat Master Data). Site & Unit dipilih pelanggan saat lapor."}
+                </p>
               </div>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                Role Tambahan <span className="text-muted-foreground">(opsional)</span>
-              </label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {ROLE_OPTIONS.filter((r) => r.value !== formPrimaryRole).map((r) => (
-                  <button
-                    key={r.value}
-                    onClick={() => toggleRole(r.value)}
-                    className={`px-3 py-1.5 rounded-[3px] text-xs font-medium transition border ${formRoles.includes(r.value)
-                      ? `${ROLE_BADGE_COLORS[r.value]} border-transparent`
-                      : "border-border text-muted-foreground hover:border-foreground/40"
-                      }`}
-                  >
-                    {r.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            )}
             {editingId && (
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
@@ -905,13 +1102,15 @@ export function AdminUsers() {
                 !formName.trim() ||
                 !formEmail.trim() ||
                 !formUsername.trim() ||
-                !formPrimaryRole ||
+                (userTab === "customer" ? !formCustomerId : !formPrimaryRole) ||
                 (!editingId && !formPassword.trim())
               }
               className="px-5 py-2 rounded-[3px] bg-foreground text-background text-sm font-medium hover:opacity-90 transition disabled:opacity-50 inline-flex items-center gap-2"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              {editingId ? "Simpan" : "Tambah Pengguna"}
+              {editingId
+                ? "Simpan"
+                : userTab === "customer" ? "Tambah Pelanggan" : "Tambah Karyawan"}
             </button>
           </div>
         </DialogContent>

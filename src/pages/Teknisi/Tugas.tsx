@@ -11,15 +11,30 @@ import {
     ClipboardList, Wrench, Archive, AlertTriangle, UserPlus, FileText
 } from 'lucide-react'
 import { Badge } from '../../components/Badge'
-import CameraFileUpload from '../../components/CameraFileUpload'
 import { Combobox } from '../../components/ui/combobox'
+import CameraFileUpload from '../../components/CameraFileUpload'
+import ReviewConfirm, { type ReviewRow } from '../../components/ReviewConfirm'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, getAssignmentInfo, isScheduleOvertime, formatJadwal } from '../../components/TicketDrawer'
 import { uploadAttachment } from '../../services/photoService'
 import { recordGps, requestBackup, requestPending, setTicketCatalog } from '../../services/ticketService'
 import { problemCategoriesApi, rootCausesApi } from '../../services/master-data'
+import { notifyTicketCode } from '../../services/notifications'
 import { getCurrentPosition, type GeolocError } from '../../lib/geolocation'
 
 type TabType = 'detail' | 'timeline'
+
+// Value sintetis untuk opsi "Lainnya" di dropdown: teks bebas tidak jadi
+// nama katalog — masuk lewat field catatan (root_cause_note), sementara
+// id/nama yang disimpan menunjuk row resmi 'Lainnya' (seed migrasi 22).
+const LAINNYA = '__lainnya__'
+
+// Katalog id -> nama untuk label temuan awal/akhir. Dipanggil saat mount
+// dan ulang setelah simpan temuan (RPC bisa membuat entri katalog baru).
+const fetchCatalog = () =>
+    Promise.all([problemCategoriesApi.getAll(), rootCausesApi.getAll()]).then(([c, r]) => ({
+        categories: new Map(c.map(i => [i.id, i.name])),
+        roots: new Map(r.map(i => [i.id, i.name])),
+    }))
 
 const TABS = [
     { key: 'masuk', icon: ClipboardList, label: 'Masuk', color: 'text-muted-foreground', statuses: ['SCHEDULED', 'EN_ROUTE'] },
@@ -44,17 +59,17 @@ export default function TugasTeknisi() {
     const location = useLocation()
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
 
-    // Klik notifikasi di APK → drawer tiket auto-terbuka.
-    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    // Klik notifikasi (dalam app / dengar push) → drawer tiket auto-terbuka.
+    const notifyOpenCode = notifyTicketCode(location.state, location.search)
     useEffect(() => {
-        if (!notifyOpenTicket) return
-        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!notifyOpenCode) return
+        const t = tickets.find(x => x.code === notifyOpenCode)
         if (!t) return
         setSelectedTicket(t)
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [notifyOpenTicket])
+    }, [notifyOpenCode])
     const [activeDrawerTab, setActiveDrawerTab] = useState<TabType>('detail')
     const [activeSection, setActiveSection] = useState('masuk')
 
@@ -79,18 +94,19 @@ export default function TugasTeknisi() {
     const [lemburTarget, setLemburTarget] = useState<Ticket | null>(null)
     const [backupRequested, setBackupRequested] = useState<Set<string>>(new Set())
     const [backupSubmitting, setBackupSubmitting] = useState(false)
+    // Review sebelum submit: isi form ditampilkan lagi untuk dicek.
+    const [review, setReview] = useState<{ title: string; rows: ReviewRow[]; confirmLabel: string; run: () => void | Promise<void> } | null>(null)
 
-    // Katalog untuk dropdown & label temuan awal/akhir di drawer.
-    useEffect(() => {
-        Promise.all([problemCategoriesApi.getAll(), rootCausesApi.getAll()]).then(([c, r]) => {
-            setCatalogItems({
-                categories: new Map(c.map(i => [i.id, i.name])),
-                roots: new Map(r.map(i => [i.id, i.name])),
-            })
-        })
-    }, [])
+    useEffect(() => { fetchCatalog().then(setCatalogItems) }, [])
 
-    const rootOptions = useMemo(() => [...catalogItems.roots.entries()].map(([value, label]) => ({ value, label })), [catalogItems.roots])
+    // Opsi dropdown Temuan Akhir: katalog minus row 'Lainnya' (supaya tidak
+    // dobel dengan opsi sintetis), plus "Lainnya" selalu paling bawah.
+    const rootOptions = useMemo(() => [
+        ...[...catalogItems.roots.entries()]
+            .filter(([, name]) => name.toLowerCase() !== 'lainnya')
+            .map(([value, label]) => ({ value, label })),
+        { value: LAINNYA, label: 'Lainnya' },
+    ], [catalogItems.roots])
 
     const myTickets = useMemo(() =>
         tickets.filter(t => (t.assignedTo === user?.id || supportTickets.has(t.id)) && !['VOID', 'DUPLICATE', 'REJECTED'].includes(t.status)),
@@ -177,24 +193,29 @@ export default function TugasTeknisi() {
         }
     }
 
-    const handleComplete = async () => {
-        if (!selectedTicket) return
-        if (!completeNote.trim()) { toast.error('Catatan Hasil wajib diisi.'); return }
-        if (!completeRootCause) { toast.error('Temuan Akhir wajib diisi.'); return }
-        if (photos.length === 0) { toast.error('Foto & File Dokumentasi wajib diunggah.'); return }
+    // Eksekusi penyelesaian — dipanggil dari popup review, bukan langsung
+    // dari tombol modal.
+    const doComplete = async () => {
+        const ticket = selectedTicket
+        if (!ticket) return
         setSubmitting(true)
         try {
-            const paths = await Promise.all(photos.map((f) => uploadAttachment(f, selectedTicket.code)))
+            const paths = await Promise.all(photos.map((f) => uploadAttachment(f, ticket.code)))
             const parts = [`Selesai${completeNote ? ': ' + completeNote : ''}`]
             if (serialNumber.trim()) parts.push(`Serial Number: ${serialNumber.trim()}`)
             if (paths.length) parts.push(`Foto (${paths.length}):\n${paths.join('\n')}`)
             getCurrentPosition({ enableHighAccuracy: true, timeout: 8000 })
-                .then((pos) => { void recordGps(selectedTicket.id, pos.latitude, pos.longitude, 'end') })
+                .then((pos) => { void recordGps(ticket.id, pos.latitude, pos.longitude, 'end') })
                 .catch(() => {})
-            await handleStatusUpdate(selectedTicket.id, 'RESOLVED', parts.join(' | '))
+            await handleStatusUpdate(ticket.id, 'RESOLVED', parts.join(' | '))
             if (completeRootCause) {
-                const ok = await setTicketCatalog(selectedTicket.id, null, completeRootCause, completeRootNote.trim() || null)
-                if (!ok) toast.error('Temuan akhir gagal disimpan.')
+                // Lainnya → id/nama row resmi 'Lainnya', teks bebas jadi catatan.
+                const rootName = completeRootCause === LAINNYA ? 'Lainnya' : catalogItems.roots.get(completeRootCause)
+                if (rootName) {
+                    const ok = await setTicketCatalog(ticket.id, null, rootName, completeRootNote.trim() || null)
+                    if (!ok) toast.error('Temuan akhir gagal disimpan.')
+                    else fetchCatalog().then(setCatalogItems)
+                }
             }
         } catch {
             toast.error('Gagal mengunggah foto. Coba lagi.')
@@ -207,6 +228,25 @@ export default function TugasTeknisi() {
             setPhotos([])
             setShowCompleteModal(false)
         }
+    }
+
+    const handleComplete = () => {
+        if (!selectedTicket) return
+        if (!completeNote.trim()) { toast.error('Catatan Hasil wajib diisi.'); return }
+        if (!completeRootCause) { toast.error('Temuan Akhir wajib diisi.'); return }
+        if (completeRootCause === LAINNYA && !completeRootNote.trim()) { toast.error('Tulis temuan akhir (Lainnya).'); return }
+        if (photos.length === 0) { toast.error('Foto & File Dokumentasi wajib diunggah.'); return }
+        setReview({
+            title: 'Review Penyelesaian Tugas',
+            confirmLabel: 'Ya, Selesaikan',
+            rows: [
+                { label: 'Catatan Hasil', value: completeNote.trim(), multiline: true },
+                { label: 'Serial Number', value: serialNumber.trim() },
+                { label: 'Temuan Akhir', value: completeRootCause === LAINNYA ? completeRootNote.trim() : catalogItems.roots.get(completeRootCause) || '' },
+                { label: 'Foto & File', value: `${photos.length} berkas` },
+            ],
+            run: doComplete,
+        })
     }
 
     // Support (non-lead): minta pengalihan penanggung jawab ke PM. Bukan takeover
@@ -466,19 +506,13 @@ export default function TugasTeknisi() {
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
                                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Awal</p>
-                                    <p className="font-medium text-sm">{selectedTicket.categoryId ? catalogItems.categories.get(selectedTicket.categoryId) || '—' : '—'}</p>
+                                    <p className="font-medium text-sm whitespace-pre-wrap">{selectedTicket.categoryNote || (selectedTicket.categoryId ? catalogItems.categories.get(selectedTicket.categoryId) || '—' : '—')}</p>
                                 </div>
                                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
                                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Akhir</p>
-                                    <p className="font-medium text-sm">{selectedTicket.rootCauseId ? catalogItems.roots.get(selectedTicket.rootCauseId) || '—' : '—'}</p>
+                                    <p className="font-medium text-sm whitespace-pre-wrap">{selectedTicket.rootCauseNote || (selectedTicket.rootCauseId ? catalogItems.roots.get(selectedTicket.rootCauseId) || '—' : '—')}</p>
                                 </div>
                             </div>
-                            {selectedTicket.rootCauseNote && (
-                                <div className="bg-muted/60 p-4 rounded-lg border border-border mt-4">
-                                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Temuan Akhir</p>
-                                    <p className="text-sm text-foreground">{selectedTicket.rootCauseNote}</p>
-                                </div>
-                            )}
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}
@@ -497,6 +531,7 @@ export default function TugasTeknisi() {
                             </h3>
                             <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]); setPendingError('') }} className="p-3 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
                         </div>
+                        <label className="block text-xs font-medium mb-1.5">Alasan Pending</label>
                         <textarea value={pendingReason} onChange={e => { setPendingReason(e.target.value); setPendingError('') }}
                             placeholder="Alasan pending (wajib)..."
                             rows={3} className="input resize-none mb-4" />
@@ -522,12 +557,11 @@ export default function TugasTeknisi() {
                                 </div>
                             )}
                         </div>
-                        {pendingError && <p className="text-xs text-red-500 mb-3">{pendingError}</p>}
                         <div className="flex gap-3">
                             <button onClick={() => { setShowPendingModal(false); setPendingReason(''); setPendingPhotos([]); setPendingError('') }}
                                 disabled={pendingSubmitting}
                                 className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
-                            <button onClick={handlePending} disabled={pendingSubmitting}
+                            <button onClick={handlePending} disabled={pendingSubmitting || !pendingReason.trim() || pendingPhotos.length === 0}
                                 className="flex-1 min-h-[44px] bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{pendingSubmitting ? 'Memproses...' : 'Simpan'}</button>
                         </div>
                     </div>
@@ -562,11 +596,10 @@ export default function TugasTeknisi() {
                                     value={completeRootCause}
                                     onChange={setCompleteRootCause}
                                     placeholder="Pilih temuan akhir..."
-                                    emptyText="Tidak ada temuan akhir"
                                 />
                                 <input value={completeRootNote} onChange={e => setCompleteRootNote(e.target.value)}
                                     className="input mt-2"
-                                    placeholder="Catatan temuan akhir (opsional)" />
+                                    placeholder={completeRootCause === LAINNYA ? 'Tulis temuan akhir (wajib)...' : 'Catatan temuan akhir (opsional)'} />
                             </div>
                             <div>
                                 <CameraFileUpload label="Foto & File Dokumentasi" onFiles={(files) => setPhotos(prev => [...prev, ...files])} />
@@ -594,7 +627,7 @@ export default function TugasTeknisi() {
                             <button onClick={() => { setShowCompleteModal(false); setCompleteNote(''); setSerialNumber(''); setCompleteRootCause(''); setCompleteRootNote(''); setPhotos([]) }}
                                 disabled={submitting}
                                 className="flex-1 min-h-[44px] bg-muted rounded text-sm font-medium disabled:opacity-50">Batal</button>
-                            <button onClick={handleComplete} disabled={submitting || !completeNote.trim() || !completeRootCause || photos.length === 0}
+                            <button onClick={handleComplete} disabled={submitting || !completeNote.trim() || !completeRootCause || (completeRootCause === LAINNYA && !completeRootNote.trim()) || photos.length === 0}
                                 className="flex-1 min-h-[44px] bg-foreground text-primary-foreground rounded text-sm font-bold disabled:opacity-50">{submitting ? 'Memproses...' : 'Ya, Selesaikan'}</button>
                         </div>
                     </div>
@@ -629,6 +662,17 @@ export default function TugasTeknisi() {
                     </div>
                 </div>
             ), document.body)}
+
+            {review && (
+                <ReviewConfirm
+                    title={review.title}
+                    rows={review.rows}
+                    confirmLabel={review.confirmLabel}
+                    busy={submitting}
+                    onConfirm={() => { const r = review; void Promise.resolve(r.run()).finally(() => setReview(null)) }}
+                    onClose={() => setReview(null)}
+                />
+            )}
 
             </div>
     )

@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { stripDark } from '../lib/theme'
 import { setAuditActor } from '../services/master-data'
 
 interface UserProfile {
@@ -14,6 +15,8 @@ interface UserProfile {
     avatar_url?: string | null
     wa_number?: string | null
     customer_id?: string | null
+    site_id?: string | null
+    unit_id?: string | null
     status: string
     is_deleted?: boolean
 }
@@ -150,11 +153,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             setLastLoginTime(timeString)
             if (profile) setAuditActor(profile.full_name)
-            if (profile?.role === 'admin') navigate('/admin')
-            else if (profile?.role === 'teknisi') navigate('/tugas')
-            else if (profile?.role === 'customer') navigate('/customer')
-            else if (profile?.role === 'executive') navigate('/executive')
-            else navigate('/dashboard')
+            // Navigasi tujuan setelah login ditangani route /login lewat
+            // loginTarget (menghormati halaman asal / deep link notifikasi).
             return { error: null }
         }
         return { error: 'Login gagal' }
@@ -162,6 +162,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const logout = async () => {
         await supabase.auth.signOut()
+        stripDark()
         setUser(null)
         setAuditActor(null)
         setIsAuthenticated(false)

@@ -276,7 +276,7 @@ function usePhotoResolver(tokens: string[]): Record<string, string> {
 
 // Di Timeline & Activity, foto ditampilkan sebagai label yang bisa diklik (bukan <img> inline)
 // agar baris tetap ringan; foto penuh muncul lewat lightbox saat diklik.
-function DetailsText({ text }: { text?: string }) {
+export function DetailsText({ text }: { text?: string }) {
     const [preview, setPreview] = useState<{ images: string[]; index: number; titles?: string[] } | null>(null)
     const parts = useMemo(() => text?.split(FILE_TOKEN_RE) ?? [], [text])
     const tokens = parts.filter(isFileToken)
@@ -355,16 +355,19 @@ function sanitizeTimeline(action: string, details?: string, includeSupport?: boo
     return { action: a, details: d }
 }
 
-export function parseDescription(desc?: string): { jabatan?: string; waPelapor?: string; deskripsi: string } {
-    if (!desc) return { deskripsi: '-' }
-    const jabatan = desc.match(/^Jabatan:\s*(.+)$/m)?.[1]?.trim()
-    const waPelapor = desc.match(/^WA Pelapor:\s*(.+)$/m)?.[1]?.trim()
+// ponytail: `[ \t]` + `\S[^\n]*` sengaja — `\s*` dulu menyeberangi newline, jadi
+// baris "Jabatan: " yang kosong menelan baris "WA Pelapor:" di bawahnya.
+export function parseDescription(desc?: string): { jabatan?: string; waPelapor?: string; hasJabatan: boolean; deskripsi: string } {
+    if (!desc) return { hasJabatan: false, deskripsi: '-' }
+    const hasJabatan = /^Jabatan:/m.test(desc)
+    const jabatan = desc.match(/^Jabatan:[ \t]*(\S[^\n]*)/m)?.[1]?.trim()
+    const waPelapor = desc.match(/^WA Pelapor:[ \t]*(\S[^\n]*)/m)?.[1]?.trim()
     const deskripsi = desc
-        .replace(/^Jabatan:\s*.+\n?/m, '')
-        .replace(/^WA Pelapor:\s*.+\n?/m, '')
+        .replace(/^Jabatan:[^\n]*\n?/m, '')
+        .replace(/^WA Pelapor:[^\n]*\n?/m, '')
         .replace(/^\n+/, '')
         .trim() || '-'
-    return { jabatan, waPelapor, deskripsi }
+    return { jabatan, waPelapor, hasJabatan, deskripsi }
 }
 
 export function formatWIB(iso: string): string {
@@ -396,12 +399,12 @@ export function InfoCard({ label, value }: { label: string; value: string }) {
 }
 
 export function TicketDescription({ description }: { description?: string }) {
-    const { jabatan, waPelapor, deskripsi } = parseDescription(description)
+    const { jabatan, waPelapor, hasJabatan, deskripsi } = parseDescription(description)
     return (
         <div className="space-y-4">
-            {(jabatan || waPelapor) && (
+            {(hasJabatan || waPelapor) && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {jabatan && <InfoCard label="Jabatan" value={jabatan} />}
+                    {hasJabatan && <InfoCard label="Jabatan" value={jabatan || '-'} />}
                     {waPelapor && <InfoCard label="WA Pelapor" value={waPelapor} />}
                 </div>
             )}
@@ -412,32 +415,28 @@ export function TicketDescription({ description }: { description?: string }) {
 
 // Katalog Temuan Awal/Akhir ditampilkan sebagai kartu kecil; guard null agar
 // tiket tanpa katalog tidak menambah baris kosong di drawer.
-export function TicketCatalogCards({ categoryId, rootCauseId, rootCauseNote }: { categoryId?: string | null; rootCauseId?: string | null; rootCauseNote?: string | null }) {
+export function TicketCatalogCards({ categoryId, rootCauseId, rootCauseNote, categoryNote }: { categoryId?: string | null; rootCauseId?: string | null; rootCauseNote?: string | null; categoryNote?: string | null }) {
     const [categories, setCategories] = useState<Map<string, string>>(new Map())
     const [roots, setRoots] = useState<Map<string, string>>(new Map())
     useEffect(() => {
         problemCategoriesApi.getAll().then((c) => setCategories(new Map(c.map((i) => [i.id, i.name]))))
         rootCausesApi.getAll().then((r) => setRoots(new Map(r.map((i) => [i.id, i.name]))))
-    }, [])
-    if (!categoryId && !rootCauseId && !rootCauseNote) return null
+        // Refetch saat id berubah: entri katalog baru (mis. row 'Lainnya' yang
+        // sempat dihapus) bisa muncul lewat find-or-create.
+    }, [categoryId, rootCauseId])
+    if (!categoryId && !rootCauseId && !rootCauseNote && !categoryNote) return null
     return (
         <>
             <div className="grid grid-cols-2 gap-4">
                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Awal</p>
-                    <p className="font-medium text-sm">{categoryId ? categories.get(categoryId) || '—' : '—'}</p>
+                    <p className="font-medium text-sm whitespace-pre-wrap">{categoryNote || (categoryId ? categories.get(categoryId) || '—' : '—')}</p>
                 </div>
                 <div className="bg-muted/60 p-4 rounded-lg border border-border">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Temuan Akhir</p>
-                    <p className="font-medium text-sm">{rootCauseId ? roots.get(rootCauseId) || '—' : '—'}</p>
+                    <p className="font-medium text-sm whitespace-pre-wrap">{rootCauseNote || (rootCauseId ? roots.get(rootCauseId) || '—' : '—')}</p>
                 </div>
             </div>
-            {rootCauseNote && (
-                <div className="bg-muted/60 p-4 rounded-lg border border-border mt-4">
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Catatan Temuan Akhir</p>
-                    <p className="text-sm text-foreground">{rootCauseNote}</p>
-                </div>
-            )}
         </>
     )
 }
@@ -559,7 +558,7 @@ function PhotoGallery({ items, status }: { items: { timestamp: string; action: s
     const clientFilesReady = files.filter(p => p.isClient).map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
     const internalFilesReady = files.filter(p => !p.isClient).map((p) => ({ ...p, url: resolved[p.src] })).filter((p) => p.url)
 
-    const thumbs = (list: { url: string; src: string }[], open: (images: string[], titles: string[]) => void) => (
+    const thumbs = (list: { url: string; src: string }[], open: (images: string[], titles: string[], index: number) => void) => (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {list.map((p, i) => {
                 const name = p.src.split('/').pop() ?? 'file'
@@ -569,7 +568,7 @@ function PhotoGallery({ items, status }: { items: { timestamp: string; action: s
                         type="button"
                         onClick={() => {
                             const titles = list.map(r => (r.src.split('/').pop() ?? 'file'))
-                            open(list.map(r => r.url!), titles)
+                            open(list.map(r => r.url!), titles, i)
                         }}
                         className="aspect-square rounded-lg overflow-hidden border border-border bg-background hover:opacity-90 transition relative"
                         aria-label={`Lihat ${name}`}
@@ -612,7 +611,7 @@ function PhotoGallery({ items, status }: { items: { timestamp: string; action: s
                         <Image className="w-4 h-4 text-muted-foreground" />
                         <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Kendala Pelanggan</h4>
                     </div>
-                    {thumbs(clientReady, (images, titles) => setPreview({ images, index: 0, titles }))}
+                    {thumbs(clientReady, (images, titles, i) => setPreview({ images, index: i, titles }))}
                     {clientFilesReady.length > 0 && fileList(clientFilesReady)}
                 </div>
             )}
@@ -623,7 +622,7 @@ function PhotoGallery({ items, status }: { items: { timestamp: string; action: s
                         <h4 className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Dokumentasi</h4>
                     </div>
                     {internalReady.length > 0 && (
-                        <div className="mb-3">{thumbs(internalReady, (images, titles) => setPreview({ images, index: 0, titles }))}</div>
+                        <div className="mb-3">{thumbs(internalReady, (images, titles, i) => setPreview({ images, index: i, titles }))}</div>
                     )}
                     {internalFilesReady.length > 0 && fileList(internalFilesReady)}
                     {catatan && (

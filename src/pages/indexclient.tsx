@@ -126,7 +126,7 @@ export default function Landing() {
           <Reveal delay={300}>
             <div className="mt-8 flex justify-center w-full">
               <Link
-                to="/login"
+                to="/customer/report"
                 className="group inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg bg-foreground text-background font-medium hover:opacity-90 transition-all duration-300 text-sm shadow-sm"
               >
                 <span className="transition-all duration-300 group-hover:pr-1">Lapor Kendala</span>

@@ -43,6 +43,7 @@ export interface Ticket {
     categoryId?: string | null
     rootCauseId?: string | null
     rootCauseNote?: string | null
+    categoryNote?: string | null
     duplicateOf?: string | null
     updatedAt?: string
     pendingRequestedAt?: string | null
@@ -74,6 +75,7 @@ interface SupabaseTicketRow {
     category_id?: string | null
     root_cause_id?: string | null
     root_cause_note?: string | null
+    category_note?: string | null
     duplicate_of?: string | null
     created_by?: string
     created_by_user_id?: string | null
@@ -117,6 +119,7 @@ function mapTicketRow(t: SupabaseTicketRow): Ticket {
         categoryId: t.category_id,
         rootCauseId: t.root_cause_id,
         rootCauseNote: t.root_cause_note,
+        categoryNote: t.category_note,
         duplicateOf: t.duplicate_of ?? null,
         updatedAt: t.updated_at,
         pendingRequestedAt: t.pending_requested_at ?? null,

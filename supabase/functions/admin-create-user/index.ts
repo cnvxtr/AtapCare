@@ -61,13 +61,19 @@ Deno.serve(async (req) => {
       role?: string;
       roles?: string;
       status?: string;
+      customer_id?: string | null;
+      site_id?: string | null;
+      unit_id?: string | null;
     };
     try {
       body = await req.json();
     } catch {
       body = {};
     }
-    const { username, email, password, name, wa_number, role, roles, status } = body;
+    const {
+      username, email, password, name, wa_number, role, roles, status,
+      customer_id, site_id, unit_id,
+    } = body;
 
     if (typeof username !== "string" || !username.trim()) {
       return json({ error: "Username wajib diisi" }, 400);
@@ -77,6 +83,9 @@ Deno.serve(async (req) => {
     }
     if (typeof password !== "string" || password.length < 6) {
       return json({ error: "Password minimal 6 karakter" }, 400);
+    }
+    if (role === "customer" && !customer_id) {
+      return json({ error: "Pelanggan wajib terhubung ke perusahaan (kode perusahaan)" }, 400);
     }
 
     const finalEmail = email.trim();
@@ -124,6 +133,9 @@ Deno.serve(async (req) => {
       role: role || "teknisi",
       roles: roles || role || "teknisi",
       status: status || "aktif",
+      customer_id: customer_id || null,
+      site_id: site_id || null,
+      unit_id: unit_id || null,
       must_change_password: true,
       is_deleted: false,
       updated_at: new Date().toISOString(),

@@ -6,6 +6,7 @@ export * from "./ticketService";
 export * from "./ratings";
 export {
   exportStyledXlsx,
+  exportStyledPdf,
   todayStamp,
   type ExportCell,
 } from "@/lib/export";

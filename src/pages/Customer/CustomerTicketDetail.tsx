@@ -8,6 +8,8 @@ import {
   InfoCard,
   formatWIB,
   isImageFileByPath,
+  isFileToken,
+  DetailsText,
   parseDescription,
   extractAttachments,
   downloadFromUrl,
@@ -94,6 +96,7 @@ const CUSTOMER_LABELS: Record<string, string> = {
   'Pekerjaan dimulai': 'Pekerjaan dimulai',
   'Tugas diselesaikan': 'Pekerjaan selesai',
   'Tiket dijeda': 'Dijeda',
+  'Pengajuan pending disetujui PM': 'Tiket dijeda',
   'Tiket ditutup': 'Tiket ditutup',
   'Penugasan dibatalkan': 'Penugasan dibatalkan',
 }
@@ -192,6 +195,9 @@ export default function CustomerTicketDetail() {
     if (!ticket) return []
     const acts = [...ticket.activities]
       .filter(a => !a.action.startsWith('Foto keluhan')) // filter out photo activities
+      // Pengajuan teknisi & penolakan PM disembunyikan: pelanggan hanya melihat entri
+      // "Tiket dijeda" saat pengajuan disetujui PM (bukti dikaitkan ke entri itu).
+      .filter(a => a.action !== 'Pengajuan pending' && a.action !== 'Pengajuan pending ditolak PM')
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) // newest first
 
     return acts.map((act, idx) => {
@@ -221,6 +227,21 @@ export default function CustomerTicketDetail() {
         details = gpsCoords['end'] || undefined
       }
       const label = CUSTOMER_LABELS[rawAction] || rawAction
+      const isPending = rawAction === 'Pengajuan pending disetujui PM'
+
+      // Bukti pending dipetakan per-entri: ambil pengajuan teknisi terbaru yang
+      // mendahului entri persetujuan ini (aman untuk jeda berulang).
+      let pendingReason: string | undefined
+      let pendingAttachments: string | undefined
+      if (isPending) {
+        const req = ticket.activities
+          .filter(a => a.action === 'Pengajuan pending' && new Date(a.timestamp).getTime() <= new Date(act.timestamp).getTime())
+          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())[0]
+        if (req?.details) {
+          pendingReason = req.details.split(/\r?\nFoto:/)[0].replace(/^Ditunda:\s*/, '').trim() || undefined
+          pendingAttachments = req.details.split(/\r?\n/).filter(isFileToken).join('\n') || undefined
+        }
+      }
 
       return {
         name: label,
@@ -228,6 +249,9 @@ export default function CustomerTicketDetail() {
         isCompleted: ticket.status === 'CLOSED' ? true : idx > 0, // closed = semua langkah selesai; lainnya: entri terkini (idx 0) masih berlangsung
         details,
         isCompletion: rawAction === 'Tugas diselesaikan',
+        isPending,
+        pendingReason,
+        pendingAttachments,
       }
     })
   }, [ticket, gpsCoords])
@@ -394,27 +418,37 @@ export default function CustomerTicketDetail() {
             name: step.name,
             timestamp: step.timestamp,
             isCompleted: step.isCompleted,
-            details: step.details ? (
-              step.isCompletion && completionPhotoItems.length > 0 ? (
-                <div>
-                  {step.details && <p className="mb-2">{step.details}</p>}
-                  <div className="grid grid-cols-3 gap-1.5">
-                    {completionPhotoItems.map((p, i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setPreview({ photos: completionPhotoItems, index: i })}
-                        className="aspect-square rounded overflow-hidden border border-border hover:opacity-90 transition"
-                      >
-                        <img src={p.url} alt={`Foto hasil ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                      </button>
-                    ))}
+            details: (() => {
+              if (step.isPending) {
+                if (!step.pendingReason && !step.pendingAttachments) return undefined
+                return (
+                  <div>
+                    {step.pendingReason && <p className="mb-2 whitespace-pre-wrap">{step.pendingReason}</p>}
+                    {step.pendingAttachments && <DetailsText text={step.pendingAttachments} />}
                   </div>
-                </div>
-              ) : (
-                <p>{step.details}</p>
-              )
-            ) : undefined,
+                )
+              }
+              if (step.isCompletion && completionPhotoItems.length > 0) {
+                return (
+                  <div>
+                    {step.details && <p className="mb-2">{step.details}</p>}
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {completionPhotoItems.map((p, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setPreview({ photos: completionPhotoItems, index: i })}
+                          className="aspect-square rounded overflow-hidden border border-border hover:opacity-90 transition"
+                        >
+                          <img src={p.url} alt={`Foto hasil ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              }
+              return step.details ? <p>{step.details}</p> : undefined
+            })(),
           }))}
         />
       </div>

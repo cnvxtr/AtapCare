@@ -8,10 +8,15 @@ import { Toaster } from 'sonner'
 
 import './index.css'
 import App from './App.tsx'
-import { applyTheme } from './lib/theme'
+import { isNativePlatform } from './lib/platform'
 
-// Theme: default terang; dark mode hanya bila diaktifkan via toggle di header.
-applyTheme()
+// Daftarkan service worker sejak app dibuka (bukan hanya setelah login) supaya
+// PWA bisa di-install dan push siap; di APK native tidak perlu.
+if ('serviceWorker' in navigator && !isNativePlatform()) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => { })
+  })
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

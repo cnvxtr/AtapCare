@@ -241,7 +241,7 @@ export default function ExecutiveInbox() {
                                     <p className="font-medium text-sm">{liveTicket.site} - {liveTicket.unit}</p>
                                 </div>
                             </div>
-                            <TicketCatalogCards categoryId={liveTicket.categoryId} rootCauseId={liveTicket.rootCauseId} rootCauseNote={liveTicket.rootCauseNote} />
+                            <TicketCatalogCards categoryId={liveTicket.categoryId} rootCauseId={liveTicket.rootCauseId} rootCauseNote={liveTicket.rootCauseNote} categoryNote={liveTicket.categoryNote} />
                             <TicketDescription description={liveTicket.description} />
                             {liveTicket.rejectionReason && (
                                 <div className="bg-red-50/60 p-4 rounded-lg border border-red-200">

@@ -4,6 +4,8 @@ export interface ReportFilters {
   from?: string;
   to?: string;
   company?: string[];
+  site?: string[];
+  unit?: string[];
   status?: string[];
   priority?: string[];
 }
@@ -38,8 +40,8 @@ export const TICKET_REPORT_TABLE_HEADERS = [
   "Prioritas",
   "Status",
   "Teknisi",
-  "Tanggal Masuk",
-  "Tanggal Keluar",
+  "Jam Masuk",
+  "Jam Keluar",
 ];
 
 // Urutan kolom export tiket: deskripsi disisipkan, tabel layar tidak berubah.
@@ -57,8 +59,8 @@ export const TICKET_REPORT_HEADERS = [
   "Status",
   "Teknisi",
   "Teknisi Pendukung",
-  "Tanggal Masuk",
-  "Tanggal Keluar",
+  "Jam Masuk",
+  "Jam Keluar",
 ];
 
 // Indeks ulang kolom: dari urutan properti TicketReportRow (Object.values) ke
@@ -97,6 +99,22 @@ export async function getReportCompanies(): Promise<string[]> {
   ];
 }
 
+// Opsi filter Site & Unit (cascade: site by perusahaan, unit by perusahaan+site).
+async function distinctCol(
+  col: "site" | "unit",
+  companies?: string[],
+  sites?: string[],
+): Promise<string[]> {
+  let q = supabase.from("tickets").select(col).order(col);
+  if (companies?.length) q = q.in("company", companies);
+  if (sites?.length) q = q.in("site", sites);
+  const { data } = await q;
+  return [...new Set((data || []).map((r) => (r as Record<string, string>)[col]).filter(Boolean))];
+}
+export const getReportSites = (companies?: string[]) => distinctCol("site", companies);
+export const getReportUnits = (companies?: string[], sites?: string[]) =>
+  distinctCol("unit", companies, sites);
+
 async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
@@ -109,6 +127,8 @@ async function buildTicketQuery(filters: ReportFilters) {
   if (filters.status?.length) q = q.in("status", filters.status);
   if (filters.priority?.length) q = q.in("priority", filters.priority);
   if (filters.company?.length) q = q.in("company", filters.company);
+  if (filters.site?.length) q = q.in("site", filters.site);
+  if (filters.unit?.length) q = q.in("unit", filters.unit);
   return q;
 }
 
@@ -137,8 +157,8 @@ function toTicketRow(
   // RPC pembuatan tiket, sisakan keluhan dari pelapor / catatan helpdesk.
   const rawDesc = (t.description || "").trim();
   const problemDesc = rawDesc
-    .replace(/^Jabatan:\s*.+\n?/m, "")
-    .replace(/^WA Pelapor:\s*.+\n?/m, "")
+    .replace(/^Jabatan:[^\n]*\n?/m, "")
+    .replace(/^WA Pelapor:[^\n]*\n?/m, "")
     .replace(/^\n+/, "")
     .trim() || "—";
   const catName = Array.isArray(t.problem_categories)
@@ -269,6 +289,8 @@ export async function getRootCauseReport(
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
   if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
   if (filters.company?.length) q = q.in("company", filters.company);
+  if (filters.site?.length) q = q.in("site", filters.site);
+  if (filters.unit?.length) q = q.in("unit", filters.unit);
   q = q.in("status", ["CLOSED"]);
   const { data } = await q;
   const rows = data || [];

@@ -11,14 +11,21 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Combobox } from '../../components/ui/combobox'
 import MultiSelectFilter, { toggleFilter } from '../../components/MultiSelectFilter'
 import FieldError from '../../components/FieldError'
+import ReviewConfirm, { type ReviewRow } from '../../components/ReviewConfirm'
 import CameraFileUpload from '../../components/CameraFileUpload'
 import { PhoneInput } from '../../components/ui/input'
 import { getCustomers, getSites, getUnits, problemCategoriesApi, type Customer, type SiteRow, type UnitRow, type CatalogItem } from '../../services/master-data'
-import { setConfirmSent, setTicketCatalog } from '../../services/ticketService'
+import { setTicketCatalog } from '../../services/ticketService'
+import { notifyTicketCode } from '../../services/notifications'
 import { getPendingAlarm } from '../../lib/pendingAlarm'
 
 import { SEGMENTS } from '../../lib/constants'
 import { useIsMobile } from '../../lib/platform'
+
+// Value sintetis opsi "Lainnya" di dropdown temuan awal: teks bebas tidak
+// jadi nama katalog — masuk lewat catatan (category_note), id/nama yang
+// disimpan menunjuk row resmi 'Lainnya' (seed migrasi 22).
+const LAINNYA = '__lainnya__'
 
 // KOLOM KANBAN = grup segmen alur status (tanpa 'Semua')
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
@@ -38,19 +45,19 @@ export default function HPInbox() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
 
-    // Klik notifikasi di APK → drawer tiket auto-terbuka.
+    // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka.
     const location = useLocation()
-    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    const notifyOpenCode = notifyTicketCode(location.state, location.search)
     const navigate = useNavigate()
     useEffect(() => {
-        if (!notifyOpenTicket) return
-        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!notifyOpenCode) return
+        const t = tickets.find(x => x.code === notifyOpenCode)
         if (!t) return
         setSelectedTicket(t)
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [notifyOpenTicket])
+    }, [notifyOpenCode])
 
     // State Modals
     const [showVoidModal, setShowVoidModal] = useState(false)
@@ -70,6 +77,7 @@ export default function HPInbox() {
     const [remoteDuration, setRemoteDuration] = useState('')
     const [remoteResult, setRemoteResult] = useState<'success' | 'fail' | ''>('')
     const [remoteCategoryId, setRemoteCategoryId] = useState('')
+    const [remoteNote, setRemoteNote] = useState('')
     const [validationAction, setValidationAction] = useState<'close' | 'rework'>('close')
     const [reworkReason, setReworkReason] = useState('')
     const [reworkError, setReworkError] = useState('')
@@ -77,8 +85,11 @@ export default function HPInbox() {
     const [dupError, setDupError] = useState('')
     const [remoteError, setRemoteError] = useState('')
     const [escCategoryId, setEscCategoryId] = useState('')
+    const [escNote, setEscNote] = useState('')
     const [escPriority, setEscPriority] = useState<Priority | ''>('')
     const [escErrors, setEscErrors] = useState<{ category?: string; priority?: string }>({})
+    // Review sebelum submit: isi form ditampilkan lagi untuk dicek.
+    const [review, setReview] = useState<{ title: string; rows: ReviewRow[]; confirmLabel: string; run: () => void } | null>(null)
 
     // State Form Internal
     const [formData, setFormData] = useState({
@@ -95,6 +106,8 @@ export default function HPInbox() {
     const [mdCustomers, setMdCustomers] = useState<Customer[]>([])
     const [mdSites, setMdSites] = useState<SiteRow[]>([])
     const [mdUnits, setMdUnits] = useState<UnitRow[]>([])
+    // Katalog temuan awal: dropdown (katalog + sintetis "Lainnya"), juga
+    // buat prefill id tiket yang sudah pernah diisi.
     const [mdCategories, setMdCategories] = useState<CatalogItem[]>([])
     const [mdLoading, setMdLoading] = useState(true)
 
@@ -262,8 +275,14 @@ export default function HPInbox() {
     }
 
     const handleNewPathB = async () => {
-        toast.success("Template WA terkirim ke pelanggan! Tiket auto-close dalam 24 jam jika tidak ada balasan.")
-        if (newTicketId) await setConfirmSent(newTicketId)
+        const t = tickets.find(x => x.id === newTicketId)
+        const wa = formData.noWaPelapor
+        if (wa) {
+            window.open(waMeLink(wa, `Halo, Kami Atap Care. Kepada Yth ${formData.reporterName}, tiket ${t?.code ?? ''} telah selesai dikerjakan. Terima kasih atas laporannya.`), '_blank')
+        } else {
+            toast.info('Nomor WA pelapor tidak tersedia.')
+        }
+        if (newTicketId) await updateTicketStatus(newTicketId, 'CLOSED', 'Remote berhasil — kabar selesai dikirim via WA ke pelanggan.')
         closeCreateModal()
     }
 
@@ -319,37 +338,73 @@ export default function HPInbox() {
         }
     }
 
+    // Value dropdown dari id tiket: row 'Lainnya' dipetakan ke value sintetis.
+    const catValue = (id?: string | null) => {
+        const c = mdCategories.find(x => x.id === id)
+        return c ? (c.name.toLowerCase() === 'lainnya' ? LAINNYA : c.id) : ''
+    }
+    const categoryNameOf = (value: string) =>
+        value === LAINNYA ? 'Lainnya' : mdCategories.find(c => c.id === value)?.name || ''
+
     const handleRemoteSubmit = () => {
         const missing: string[] = []
         if (!remoteResult) missing.push('hasil remote')
         if (!remoteCategoryId) missing.push('temuan awal')
+        else if (remoteCategoryId === LAINNYA && !remoteNote.trim()) missing.push('catatan temuan (Lainnya)')
         if (!remoteDuration || Number(remoteDuration) <= 0) missing.push('durasi (menit)')
         if (!remoteNotes.trim()) missing.push('catatan')
         if (missing.length) { setRemoteError('Mohon diisi dulu: ' + missing.join(', ')); return }
         setRemoteError('')
-        setTicketCatalog(selectedTicket!.id, remoteCategoryId)
-        if (remoteResult === 'fail') {
-            updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', `Remote Gagal via ${remoteMedia} (${remoteDuration} menit). Catatan: ${remoteNotes}`)
-            setShowRemoteModal(false); setSelectedTicket(null)
-        } else if (selectedTicket!.status === 'WORKING') {
-            // Jalur reopen/rework: langsung tutup tanpa validasi ulang.
-            updateTicketStatus(selectedTicket!.id, 'CLOSED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
-            setShowRemoteModal(false); setSelectedTicket(null)
-        } else {
-            updateTicketStatus(selectedTicket!.id, 'RESOLVED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
-            setShowConfirmPath(true)
-        }
+        setReview({
+            title: 'Review Selesaikan Remote',
+            confirmLabel: 'Ya, Simpan',
+            rows: [
+                { label: 'Temuan Awal', value: remoteCategoryId === LAINNYA ? remoteNote.trim() : categoryNameOf(remoteCategoryId) },
+                { label: 'Hasil', value: remoteResult === 'fail' ? 'Gagal' : 'Berhasil' },
+                { label: 'Durasi (Menit)', value: remoteDuration },
+                { label: 'Catatan', value: remoteNotes.trim(), multiline: true },
+            ],
+            run: () => {
+                // ponytail: ganti Lainnya → kategori biasa tidak menghapus catatan
+                // lama (RPC COALESCE) — upgrade: param reset terpisah kalau perlu.
+                setTicketCatalog(selectedTicket!.id, categoryNameOf(remoteCategoryId), null, null,
+                    remoteCategoryId === LAINNYA ? remoteNote.trim() : null)
+                if (remoteResult === 'fail') {
+                    updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', `Remote Gagal via ${remoteMedia} (${remoteDuration} menit). Catatan: ${remoteNotes}`)
+                    setShowRemoteModal(false); setSelectedTicket(null)
+                } else if (selectedTicket!.status === 'WORKING') {
+                    // Jalur reopen/rework: langsung tutup tanpa validasi ulang.
+                    updateTicketStatus(selectedTicket!.id, 'CLOSED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
+                    setShowRemoteModal(false); setSelectedTicket(null)
+                } else {
+                    updateTicketStatus(selectedTicket!.id, 'RESOLVED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
+                    setShowConfirmPath(true)
+                }
+            },
+        })
     }
 
     const handleEscalate = () => {
         const errs: { category?: string; priority?: string } = {}
         if (!escCategoryId) errs.category = 'Pilih temuan awal'
+        else if (escCategoryId === LAINNYA && !escNote.trim()) errs.category = 'Isi catatan temuan (Lainnya)'
         if (!escPriority) errs.priority = 'Pilih prioritas'
         if (Object.keys(errs).length) { setEscErrors(errs); return }
         setEscErrors({})
-        setTicketCatalog(selectedTicket!.id, escCategoryId)
-        updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', 'Eskalasi ke PM', escPriority as Priority)
-        setShowEscalateModal(false); setSelectedTicket(null)
+        setReview({
+            title: 'Review Eskalasi ke PM',
+            confirmLabel: 'Ya, Eskalasi',
+            rows: [
+                { label: 'Temuan Awal', value: escCategoryId === LAINNYA ? escNote.trim() : categoryNameOf(escCategoryId) },
+                { label: 'Prioritas', value: escPriority },
+            ],
+            run: () => {
+                setTicketCatalog(selectedTicket!.id, categoryNameOf(escCategoryId), null, null,
+                    escCategoryId === LAINNYA ? escNote.trim() : null)
+                updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', 'Eskalasi ke PM', escPriority as Priority)
+                setShowEscalateModal(false); setSelectedTicket(null)
+            },
+        })
     }
 
     const handleReopen = () => {
@@ -365,8 +420,13 @@ export default function HPInbox() {
 
     const handleConfirmPathB = async () => {
         if (!selectedTicket) return
-        toast.success("Template WA terkirim ke pelanggan! Tiket auto-close dalam 24 jam jika tidak ada balasan.")
-        await setConfirmSent(selectedTicket.id)
+        const wa = parseDescription(selectedTicket.description).waPelapor
+        if (wa) {
+            window.open(waMeLink(wa, `Halo, Kami Atap Care. Kepada Yth ${selectedTicket.customer}, tiket ${selectedTicket.code} telah selesai dikerjakan. Terima kasih atas laporannya.`), '_blank')
+        } else {
+            toast.info('Nomor WA pelapor tidak tersedia.')
+        }
+        await updateTicketStatus(selectedTicket.id, 'CLOSED', 'Remote berhasil — kabar selesai dikirim via WA ke pelanggan.')
         setShowConfirmPath(false); setShowRemoteModal(false); setSelectedTicket(null)
     }
 
@@ -571,14 +631,14 @@ export default function HPInbox() {
                             )}
                             {liveTicket.status === 'OPEN' && (
                                 <>
-                                    <button onClick={() => { setEscCategoryId(liveTicket.categoryId || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
-                                    <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
+                                    <button onClick={() => { setEscCategoryId(catValue(liveTicket.categoryId)); setEscNote(liveTicket.categoryNote || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
+                                    <button onClick={() => { setRemoteCategoryId(catValue(liveTicket.categoryId)); setRemoteNote(liveTicket.categoryNote || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
                                 </>
                             )}
                             {(liveTicket.status === 'WORKING' && liveTicket.reworkFlag) && (
                                 <>
-                                    <button onClick={() => { setEscCategoryId(liveTicket.categoryId || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
-                                    <button onClick={() => { setRemoteCategoryId(liveTicket.categoryId || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
+                                    <button onClick={() => { setEscCategoryId(catValue(liveTicket.categoryId)); setEscNote(liveTicket.categoryNote || ''); setEscPriority(liveTicket.priority || ''); setEscErrors({}); setShowEscalateModal(true) }} className="w-full py-2.5 bg-foreground text-primary-foreground rounded-[3px] font-medium">Eskalasi ke PM</button>
+                                    <button onClick={() => { setRemoteCategoryId(catValue(liveTicket.categoryId)); setRemoteNote(liveTicket.categoryNote || ''); setRemoteDuration(''); setRemoteNotes(''); setRemoteResult(''); setRemoteError(''); setShowRemoteModal(true) }} className="w-full flex items-center justify-center gap-2 py-2.5 bg-card text-foreground border border-border rounded-[3px] font-bold hover:bg-muted transition">Selesaikan Remote</button>
                                 </>
                             )}
                             {liveTicket.status === 'RESOLVED' && (
@@ -616,7 +676,7 @@ export default function HPInbox() {
                                     <p className="font-medium text-sm">{liveTicket.site} - {liveTicket.unit}</p>
                                 </div>
                             </div>
-                            <TicketCatalogCards categoryId={liveTicket.categoryId} rootCauseId={liveTicket.rootCauseId} rootCauseNote={liveTicket.rootCauseNote} />
+                            <TicketCatalogCards categoryId={liveTicket.categoryId} rootCauseId={liveTicket.rootCauseId} rootCauseNote={liveTicket.rootCauseNote} categoryNote={liveTicket.categoryNote} />
                             <TicketDescription description={liveTicket.description} />
                             {liveTicket.rejectionReason && (
                                 <div className="bg-red-50/60 p-4 rounded-lg border border-red-200">
@@ -678,17 +738,34 @@ export default function HPInbox() {
             {showEscalateModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
-                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2"><Send className="w-5 h-5" /> Eskalasi ke PM</h3>
+                        <h3 className="text-lg font-bold mb-4 flex items-center justify-between gap-2">
+                            <span className="flex items-center gap-2"><Send className="w-5 h-5" /> Eskalasi ke PM</span>
+                            <button onClick={() => setShowEscalateModal(false)} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </h3>
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-semibold text-foreground">Temuan Awal</label>
-                                <Select value={escCategoryId} onValueChange={v => { setEscCategoryId(v); setEscErrors(prev => ({ ...prev, category: undefined })) }}>
-                                    <SelectTrigger className={`w-full mt-1 px-3 py-2 border ${escErrors.category ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}><SelectValue placeholder="Pilih temuan awal..." /></SelectTrigger>
+                                <Select value={escCategoryId} onValueChange={(v) => { setEscCategoryId(v); setEscErrors(prev => ({ ...prev, category: undefined })) }}>
+                                    <SelectTrigger className={`w-full mt-1 px-3 py-2 border rounded ${escErrors.category ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'}`}>
+                                        <SelectValue placeholder="Pilih temuan awal..." />
+                                    </SelectTrigger>
                                     <SelectContent className="z-[130] border-border bg-card text-foreground">
-                                        {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
+                                        {mdCategories.filter(c => c.name.toLowerCase() !== 'lainnya').map(c => (
+                                            <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>
+                                        ))}
+                                        <SelectItem value={LAINNYA} className="focus:bg-foreground focus:text-background">Lainnya</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 <FieldError msg={escErrors.category} />
+                                {escCategoryId === LAINNYA && (
+                                    <textarea
+                                        value={escNote}
+                                        onChange={e => { setEscNote(e.target.value); setEscErrors(prev => ({ ...prev, category: undefined })) }}
+                                        rows={2}
+                                        placeholder="Tulis temuan awal (tidak masuk katalog)..."
+                                        className={`w-full mt-2 px-3 py-2 border rounded resize-none ${escErrors.category ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'}`}
+                                    />
+                                )}
                             </div>
                             <div>
                                 <label className="text-xs font-semibold text-foreground">Prioritas</label>
@@ -700,8 +777,8 @@ export default function HPInbox() {
                                 <FieldError msg={escErrors.priority} />
                             </div>
                             <div className="flex gap-3 pt-2">
-                                <button onClick={() => setShowEscalateModal(false)} className="flex-1 py-2 bg-muted rounded font-medium">Batal</button>
-                                <button onClick={handleEscalate} className="flex-1 py-2 bg-foreground text-primary-foreground rounded font-bold">Lanjutkan Eskalasi</button>
+                                <button onClick={() => setShowEscalateModal(false)} className="flex-1 py-1.5 text-sm sm:py-2 sm:text-base bg-muted rounded font-medium">Batal</button>
+                                <button onClick={handleEscalate} className="flex-1 py-1.5 text-sm sm:py-2 sm:text-base bg-foreground text-primary-foreground rounded font-bold">Eskalasi</button>
                             </div>
                         </div>
                     </div>
@@ -715,11 +792,23 @@ export default function HPInbox() {
                             <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Temuan Awal</label>
                                 <Select value={remoteCategoryId} onValueChange={setRemoteCategoryId}>
-                                    <SelectTrigger className="w-full mt-1 px-3 py-2 border border-border focus:border-foreground rounded"><SelectValue placeholder="Pilih temuan awal..." /></SelectTrigger>
+                                    <SelectTrigger className="w-full mt-1 px-3 py-2 border border-border rounded"><SelectValue placeholder="Pilih temuan awal..." /></SelectTrigger>
                                     <SelectContent className="z-[130] border-border bg-card text-foreground">
-                                        {mdCategories.map(c => <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>)}
+                                        {mdCategories.filter(c => c.name.toLowerCase() !== 'lainnya').map(c => (
+                                            <SelectItem key={c.id} value={c.id} className="focus:bg-foreground focus:text-background">{c.name}</SelectItem>
+                                        ))}
+                                        <SelectItem value={LAINNYA} className="focus:bg-foreground focus:text-background">Lainnya</SelectItem>
                                     </SelectContent>
                                 </Select>
+                                {remoteCategoryId === LAINNYA && (
+                                    <textarea
+                                        value={remoteNote}
+                                        onChange={e => setRemoteNote(e.target.value)}
+                                        rows={2}
+                                        placeholder="Tulis temuan awal (tidak masuk katalog)..."
+                                        className="w-full mt-2 px-3 py-2 border border-border rounded resize-none"
+                                    />
+                                )}
                             </div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Durasi (Menit)</label><input type="number" value={remoteDuration} onChange={e => setRemoteDuration(e.target.value)} className="w-full mt-1 px-3 py-2 border border-border rounded" /></div>
                             <div><label className="text-xs font-semibold text-muted-foreground">Catatan</label><textarea value={remoteNotes} onChange={e => setRemoteNotes(e.target.value)} rows={3} className="w-full mt-1 px-3 py-2 border border-border rounded"></textarea></div>
@@ -929,7 +1018,7 @@ export default function HPInbox() {
                                             <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-800 mb-1.5">
                                                 <Info className="w-3.5 h-3.5" /> Catatan Internal (Hanya Helpdesk/PM/Admin)
                                             </label>
-                                            <textarea value={formData.catatanInternal} onChange={e => setFormData({ ...formData, catatanInternal: e.target.value })} rows={2} className="w-full px-3 py-2.5 bg-white/70 border border-amber-300 rounded-[3px] text-sm text-foreground outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 resize-none" />
+                                            <textarea value={formData.catatanInternal} onChange={e => setFormData({ ...formData, catatanInternal: e.target.value })} rows={2} className="w-full px-3 py-2.5 bg-card/70 border border-amber-300 rounded-[3px] text-sm text-foreground outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/10 resize-none" />
                                         </div>
                                     </section>
                                 </div>
@@ -1031,6 +1120,16 @@ export default function HPInbox() {
                     </div>
                 </div>
             ), document.body)}
+
+            {review && (
+                <ReviewConfirm
+                    title={review.title}
+                    rows={review.rows}
+                    confirmLabel={review.confirmLabel}
+                    onConfirm={() => { const r = review; r.run(); setReview(null) }}
+                    onClose={() => setReview(null)}
+                />
+            )}
         </div>
     )
 }

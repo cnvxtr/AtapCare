@@ -266,7 +266,7 @@ export default function HPDashboard() {
                                     <p className="font-medium text-sm">{selectedTicket.site} - {selectedTicket.unit}</p>
                                 </div>
                             </div>
-                            <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} />
+                            <TicketCatalogCards categoryId={selectedTicket.categoryId} rootCauseId={selectedTicket.rootCauseId} rootCauseNote={selectedTicket.rootCauseNote} categoryNote={selectedTicket.categoryNote} />
                             <TicketDescription description={selectedTicket.description} />
                         </div>
                     )}

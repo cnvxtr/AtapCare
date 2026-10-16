@@ -129,17 +129,21 @@ export async function getSupportMemberIds(ticketId: string): Promise<string[]> {
 }
 
 // Isi temuan awal/akhir tiket (RPC terpisah dari transisi status).
+// `categoryName`/`rootCauseName` = nama dari dropdown (katalog); teks bebas
+// "Lainnya" jangan dikirim sebagai nama — masuk lewat categoryNote/rootCauseNote.
 export async function setTicketCatalog(
   ticketId: string,
-  categoryId?: string | null,
-  rootCauseId?: string | null,
+  categoryName?: string | null,
+  rootCauseName?: string | null,
   rootCauseNote?: string | null,
+  categoryNote?: string | null,
 ): Promise<boolean> {
   const { error } = await supabase.rpc("set_ticket_catalog", {
     p_ticket_id: ticketId,
-    p_category_id: categoryId ?? null,
-    p_root_cause_id: rootCauseId ?? null,
+    p_category_name: categoryName ?? null,
+    p_root_cause_name: rootCauseName ?? null,
     p_root_cause_note: rootCauseNote ?? null,
+    p_category_note: categoryNote ?? null,
   });
   return !error;
 }
