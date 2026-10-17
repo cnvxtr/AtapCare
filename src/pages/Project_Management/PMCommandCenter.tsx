@@ -94,7 +94,7 @@ export default function PMCommandCenter() {
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [notifyOpenCode])
+    }, [notifyOpenCode, tickets])
     const [showAssignModal, setShowAssignModal] = useState(false)
     const [showReassignModal, setShowReassignModal] = useState(false)
     const [showPendingDecision, setShowPendingDecision] = useState(false)

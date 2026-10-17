@@ -57,7 +57,7 @@ export default function HPInbox() {
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [notifyOpenCode])
+    }, [notifyOpenCode, tickets])
 
     // State Modals
     const [showVoidModal, setShowVoidModal] = useState(false)

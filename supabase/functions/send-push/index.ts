@@ -125,12 +125,14 @@ Deno.serve(async (req) => {
     // Kode tiket: dari kolom ticket_id bila ada, kalau tidak dari teks notif
     // (kode ATC-YYYYMMDD-xxxx selalu disertakan di judul/pesan).
     let ticketCode = "";
+    let ticket: { code?: string; assigned_to?: string; status?: string; created_by?: string } | null = null;
     if (rec.ticket_id) {
-      const { data: ticket } = await supabase
+      const { data: t } = await supabase
         .from("tickets")
-        .select("code")
+        .select("code, assigned_to, status, created_by")
         .eq("id", rec.ticket_id)
         .single();
+      ticket = t;
       if (ticket?.code) ticketCode = ticket.code;
     }
     if (!ticketCode) {
@@ -138,13 +140,24 @@ Deno.serve(async (req) => {
       if (m) ticketCode = m[0];
     }
 
-    // Alamat tujuan diklik, sesuai role penerima.
-    const { data: owner } = await supabase
-      .from("users")
-      .select("role")
-      .eq("id", rec.user_id)
-      .single();
-    const deepLink = ticketDeepLink(owner?.role, ticketCode);
+    // Alamat tujuan diklik, sesuai role target notifikasi (bukan role aktif
+    // penerima) agar multi-role masuk ke halaman role yang benar.
+    let targetRole: string | null = rec.target_role || null;
+    if (!targetRole && ticket) {
+      if (ticket.assigned_to === rec.user_id) targetRole = "teknisi";
+      else if (ticket.created_by === rec.user_id) targetRole = "customer";
+      else if (ticket.status === "UNASSIGNED") targetRole = "pm";
+      else if (["NEW", "OPEN"].includes(ticket.status || "")) targetRole = "helpdesk";
+    }
+    if (!targetRole) {
+      const { data: owner } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", rec.user_id)
+        .single();
+      targetRole = owner?.role || null;
+    }
+    const deepLink = ticketDeepLink(targetRole, ticketCode);
 
     let bodyLines: string[] = [];
 

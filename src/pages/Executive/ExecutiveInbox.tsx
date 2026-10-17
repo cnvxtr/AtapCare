@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTickets, type Ticket } from '../../context/TicketContext'
+import { notifyTicketCode } from '../../services/notifications'
 import { Search, AlertTriangle, Table, LayoutGrid, User, Filter, Clock } from 'lucide-react'
 import { Badge, STATUS_COLORS } from '../../components/Badge'
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, TicketCatalogCards } from '../../components/TicketDrawer'
@@ -21,19 +22,19 @@ export default function ExecutiveInbox() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
 
-    // Klik notifikasi di APK → drawer tiket auto-terbuka.
+    // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka.
     const location = useLocation()
-    const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId
+    const notifyOpenCode = notifyTicketCode(location.state, location.search)
     const navigate = useNavigate()
     useEffect(() => {
-        if (!notifyOpenTicket) return
-        const t = tickets.find(x => x.id === notifyOpenTicket)
+        if (!notifyOpenCode) return
+        const t = tickets.find(x => x.code === notifyOpenCode)
         if (!t) return
         setSelectedTicket(t)
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [notifyOpenTicket])
+    }, [notifyOpenCode, tickets])
 
     useEffect(() => {
         const audio = new Audio('https://assets.mixkit.co/sfx/preview/mixkit-software-interface-start-2574.mp3')

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 import { App as CapacitorApp } from '@capacitor/app'
@@ -57,12 +57,34 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RoleGate({ roles, children }: { roles: string[]; children: React.ReactNode }) {
-  const { user } = useAuth()
-  if (user && roles.includes(user.role)) return <>{children}</>
-  if (user?.role === 'admin') return <Navigate to="/admin" replace />
-  if (user?.role === 'teknisi') return <Navigate to="/tugas" replace />
-  if (user?.role === 'customer') return <Navigate to="/customer" replace />
-  if (user?.role === 'executive') return <Navigate to="/executive" replace />
+  const { user, switchRole } = useAuth()
+  const switchingRef = useRef(false)
+  const userRoles = (user?.roles || user?.role || '').split(',').filter(Boolean)
+  const canAccess = !!user && roles.includes(user.role)
+  const hasRole = !!user && roles.some(r => userRoles.includes(r))
+  const targetRole = roles.find(r => userRoles.includes(r)) || roles[0]
+  const switching = !canAccess && hasRole
+
+  useEffect(() => {
+    if (user && !canAccess && hasRole && !switchingRef.current) {
+      switchingRef.current = true
+      void switchRole(targetRole).finally(() => { switchingRef.current = false })
+    }
+  }, [user, canAccess, hasRole, targetRole, switchRole])
+
+  if (!user) return null
+  if (switching) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-muted">
+        <div className="h-12 w-12 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" role="status" aria-label="Memuat" />
+      </div>
+    )
+  }
+  if (canAccess) return <>{children}</>
+  if (user.role === 'admin') return <Navigate to="/admin" replace />
+  if (user.role === 'teknisi') return <Navigate to="/tugas" replace />
+  if (user.role === 'customer') return <Navigate to="/customer" replace />
+  if (user.role === 'executive') return <Navigate to="/executive" replace />
   return <Navigate to="/dashboard" replace />
 }
 

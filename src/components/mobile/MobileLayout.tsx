@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { useAuth } from '../../context/AuthContext'
+import { useTickets } from '../../context/TicketContext'
 import { supabase } from '../../lib/supabase'
 import { Sun, Moon, Bell, ChevronDown, Check } from 'lucide-react'
 import {
@@ -63,6 +64,7 @@ export default function MobileLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const { user, switchRole } = useAuth()
+  const { tickets } = useTickets()
   const [showNotifSheet, setShowNotifSheet] = useState(false)
   const [showRoleSheet, setShowRoleSheet] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
@@ -151,22 +153,37 @@ export default function MobileLayout() {
 
   // Klik notif → buka halaman terkait. Staf → drawer tiket terbuka via kode tiket
   // (state router); customer → halaman detail penuh.
-  const handleNotifOpen = (n: NotificationRow) => {
+  const handleNotifOpen = async (n: NotificationRow) => {
     if (!user) return
     const code = ticketCodeFromNotif(n)
     setShowNotifSheet(false)
     markNotificationRead(n.id)
     setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     setNotifCount(c => Math.max(0, c - 1))
-    if (user.role === 'customer') {
+
+    const userRoles = (user.roles || user.role || '').split(',').filter(Boolean)
+    const ticket = code ? tickets.find(t => t.code === code) : undefined
+    let targetRole = n.target_role || null
+    if (!targetRole && ticket) {
+      if (ticket.assignedTo === user.id) targetRole = 'teknisi'
+      else if (ticket.status === 'UNASSIGNED') targetRole = 'pm'
+      else if (['NEW', 'OPEN'].includes(ticket.status)) targetRole = 'helpdesk'
+    }
+    if (!targetRole) targetRole = user.role
+    if (targetRole !== user.role && userRoles.includes(targetRole)) {
+      await switchRole(targetRole)
+    }
+    const role = targetRole
+
+    if (role === 'customer') {
       navigate(code ? `/customer/ticket/${code}` : roleHome('customer'))
       return
     }
     const dest =
-      user.role === 'admin' ? '/admin/reports' :
-      user.role === 'executive' ? '/executive/inbox' :
-      user.role === 'pm' ? '/command-center' :
-      user.role === 'teknisi' ? '/tugas' : '/inbox'
+      role === 'admin' ? '/admin/reports' :
+      role === 'executive' ? '/executive/inbox' :
+      role === 'pm' ? '/command-center' :
+      role === 'teknisi' ? '/tugas' : '/inbox'
     navigate(dest, { state: code ? { __openTicketCode: code } : undefined })
   }
 

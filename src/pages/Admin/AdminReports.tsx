@@ -22,6 +22,7 @@ import DateRangePicker from "@/components/DateRangePicker";
 import { isNativePlatform } from "@/lib/platform";
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, type DrawerTab } from "@/components/TicketDrawer";
 import { useTickets } from "@/context/TicketContext";
+import { notifyTicketCode } from "@/services/notifications";
 import {
   getTicketReport,
   getKpiReport,
@@ -100,21 +101,20 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [selectedTicket, setSelectedTicket] = useState<TicketReportRow | null>(null);
   const [activeDrawerTab, setActiveDrawerTab] = useState<DrawerTab>("detail");
 
-  // Klik notifikasi di APK → drawer tiket auto-terbuka (read-only untuk admin).
+  const [tickets, setTickets] = useState<TicketReportRow[]>([]);
+  // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka (read-only untuk admin).
   const location = useLocation();
-  const notifyOpenTicket = (location.state as { __openTicketId?: string } | null)?.__openTicketId;
+  const notifyOpenCode = notifyTicketCode(location.state, location.search);
   const navigate = useNavigate();
   useEffect(() => {
-    if (!notifyOpenTicket) return
-    const t = allTickets.find((x) => x.id === notifyOpenTicket)
+    if (!notifyOpenCode) return
+    const t = tickets.find((x) => x.code === notifyOpenCode)
     if (!t) return
-    setSelectedTicket(t as unknown as TicketReportRow)
+    setSelectedTicket(t)
     setActiveDrawerTab("detail")
     navigate(location.pathname, { replace: true, state: null })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notifyOpenTicket])
-
-  const [tickets, setTickets] = useState<TicketReportRow[]>([]);
+  }, [notifyOpenCode, tickets])
   const [kpis, setKpis] = useState<Array<Record<string, string | number>>>([]);
   const [rootCauses, setRootCauses] = useState<Array<Record<string, string | number>>>([]);
   const [audits, setAudits] = useState<Array<Record<string, string>>>([]);

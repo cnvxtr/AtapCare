@@ -73,7 +73,7 @@ export default function TugasTeknisi() {
         setActiveDrawerTab('detail')
         navigate(location.pathname, { replace: true, state: null })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [notifyOpenCode])
+    }, [notifyOpenCode, tickets])
     const [activeDrawerTab, setActiveDrawerTab] = useState<TabType>('detail')
     const [activeSection, setActiveSection] = useState('masuk')
 

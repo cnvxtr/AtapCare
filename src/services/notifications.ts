@@ -7,6 +7,7 @@ export interface NotificationRow {
   read: boolean;
   created_at: string;
   ticket_id?: string | null;
+  target_role?: string | null;
 }
 
 // 50 notif terbaru (read maupun belum). Notif yang sudah dibaca tetap tampil
@@ -14,7 +15,7 @@ export interface NotificationRow {
 export async function getMyNotifications(userId: string): Promise<NotificationRow[]> {
   const { data } = await supabase
     .from("notifications")
-    .select("id, title, message, read, created_at, ticket_id")
+    .select("id, title, message, read, created_at, ticket_id, target_role")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(50);
