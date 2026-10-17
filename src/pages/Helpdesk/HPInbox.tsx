@@ -707,7 +707,10 @@ export default function HPInbox() {
             {showVoidModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
-                        <h3 className="text-lg font-bold mb-4 text-red-600">VOID Tiket (Permanen)</h3>
+                        <h3 className="text-lg font-bold mb-4 text-red-600 flex items-center justify-between gap-2">
+                            <span>VOID Tiket (Permanen)</span>
+                            <button onClick={() => { setShowVoidModal(false); setVoidError('') }} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </h3>
                         <textarea value={voidReason} onChange={e => { setVoidReason(e.target.value); setVoidError('') }} placeholder="Alasan wajib..." rows={3} className={`w-full px-3 py-2 border ${voidError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}></textarea>
                         <FieldError msg={voidError} />
                         <div className="flex gap-3 mt-4">
@@ -720,7 +723,10 @@ export default function HPInbox() {
             {showDuplicateModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
-                        <h3 className="text-lg font-bold mb-4 text-amber-600">Tandai Duplikat</h3>
+                        <h3 className="text-lg font-bold mb-4 text-amber-600 flex items-center justify-between gap-2">
+                            <span>Tandai Duplikat</span>
+                            <button onClick={() => { setShowDuplicateModal(false); setDupError('') }} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </h3>
                         <Select value={duplicateTargetId} onValueChange={(v) => { setDuplicateTargetId(v); setDupError('') }}>
                             <SelectTrigger className={`w-full px-3 py-2 border ${dupError ? 'border-red-500 focus:border-red-500' : 'border-border focus:border-foreground'} rounded`}><SelectValue placeholder="Pilih Tiket Utama..." /></SelectTrigger>
                             <SelectContent className="z-[130] border-border bg-card text-foreground">
@@ -792,7 +798,10 @@ export default function HPInbox() {
             {showRemoteModal && !showConfirmPath && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
-                        <h3 className="text-lg font-bold mb-4">Selesaikan Remote</h3>
+                        <h3 className="text-lg font-bold mb-4 flex items-center justify-between gap-2">
+                            <span>Selesaikan Remote</span>
+                            <button onClick={() => { setShowRemoteModal(false); setRemoteError('') }} className="p-2 bg-foreground text-background rounded-[3px] hover:opacity-80 transition-opacity"><X className="w-5 h-5" /></button>
+                        </h3>
                         <div className="space-y-4">
                             <div>
                                 <label className="text-xs font-semibold text-muted-foreground">Temuan Awal</label>

@@ -534,8 +534,8 @@ export default function Login() {
 
       <div className={cn("relative overflow-hidden bg-white flex items-center justify-center p-6 md:p-10 h-dvh", LIGHT)}>
         <div className="w-full max-w-md max-h-full flex">
-          <div className="relative overflow-y-auto rounded-xl border border-border/60 bg-card shadow-xl w-full">
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
+            <div className="relative overflow-y-auto w-full lg:rounded-xl lg:border lg:border-border/60 lg:bg-card lg:shadow-xl">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none hidden lg:block" />
             <div className="relative z-10">
               <AnimatePresence mode="wait">
                 {view === "sign-in" ? (
