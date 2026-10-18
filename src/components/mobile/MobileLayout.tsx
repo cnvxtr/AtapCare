@@ -166,6 +166,7 @@ export default function MobileLayout() {
     let targetRole = n.target_role || null
     if (!targetRole && ticket) {
       if (ticket.assignedTo === user.id) targetRole = 'teknisi'
+      else if (userRoles.includes('customer') && /diterima|selesai|ditutup|dibatalkan|duplikat|perbaikan/i.test(n.title || '')) targetRole = 'customer'
       else if (ticket.status === 'UNASSIGNED') targetRole = 'pm'
       else if (['NEW', 'OPEN'].includes(ticket.status)) targetRole = 'helpdesk'
     }
