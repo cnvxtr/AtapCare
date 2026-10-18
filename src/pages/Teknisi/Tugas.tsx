@@ -38,9 +38,9 @@ const fetchCatalog = () =>
 
 const TABS = [
     { key: 'masuk', icon: ClipboardList, label: 'Masuk', color: 'text-muted-foreground', statuses: ['SCHEDULED', 'EN_ROUTE'] },
-    { key: 'dikerjakan', icon: Wrench, label: 'Dikerjakan', color: 'text-muted-foreground', statuses: ['WORKING', 'RESOLVED'] },
+    { key: 'dikerjakan', icon: Wrench, label: 'Dikerjakan', color: 'text-muted-foreground', statuses: ['WORKING'] },
     { key: 'pending', icon: Pause, label: 'Dijeda', color: 'text-muted-foreground', statuses: ['PENDING'] },
-    { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-muted-foreground', statuses: ['CLOSED'] },
+    { key: 'selesai', icon: Archive, label: 'Selesai', color: 'text-muted-foreground', statuses: ['RESOLVED', 'CLOSED'] },
 ]
 
 function gpsErrorMessage(err: GeolocError): string {
@@ -299,6 +299,10 @@ export default function TugasTeknisi() {
                         ) : ticket.status === 'PENDING' ? (
                             <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border">
                                 <Pause className="w-3 h-3" /> Disetujui
+                            </span>
+                        ) : ticket.status === 'RESOLVED' ? (
+                            <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                <Clock className="w-3 h-3" /> Menunggu validasi helpdesk
                             </span>
                         ) : null}
                     </div>

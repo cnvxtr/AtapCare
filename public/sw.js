@@ -36,7 +36,5 @@ self.addEventListener('notificationclick', (event) => {
   })())
 })
 
-// Handler fetch minimal: memenuhi syarat installability PWA (Chrome Android)
-// tanpa caching. ponytail: no-op pass-through; ganti dengan strategi cache
-// kalau nanti butuh mode offline.
-self.addEventListener('fetch', () => {})
+// ponytail: no fetch handler; Chrome PWA installability may require one,
+// reintroduce a pass-through handler if install prompt is needed.

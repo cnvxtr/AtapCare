@@ -247,7 +247,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             setSupportTickets(new Set())
         }
         setLoading(false)
-    }, [user])
+    }, [user?.id])
 
     useEffect(() => {
         if (!user) {
@@ -280,7 +280,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             supabase.removeChannel(channel)
             document.removeEventListener('visibilitychange', onFocus)
         }
-    }, [user, fetchTickets])
+    }, [user?.id, fetchTickets])
 
     const addTicket = async (data: AddTicketData): Promise<Ticket | null> => {
         if (!user) return null

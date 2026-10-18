@@ -130,78 +130,77 @@ export function AdminDashboard() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-      <div className="rounded-xl border border-border bg-card">
-        <div className="px-5 py-4">
-          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Wrench className="h-4 w-4" /> Leaderboard Teknisi ({bulanIni})
-          </h3>
-        </div>
-        {m.leaderboard.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Clock className="h-10 w-10 mb-2" />
-            <p className="text-sm font-medium">Belum ada data</p>
-            <p className="text-xs mt-1">Tidak ada tiket selesai pada periode ini</p>
+        <div className="rounded-xl border border-border bg-card">
+          <div className="px-5 py-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Wrench className="h-4 w-4" /> Leaderboard Teknisi ({bulanIni})
+            </h3>
           </div>
-        ) : (
-          <div className="divide-y divide-border max-h-[21rem] overflow-y-auto ">
-            {m.leaderboard.map((t, i) => (
-              <div key={t.name} className="flex items-center gap-4 px-5 py-3.5">
-                <div
-                  className={`h-8 w-8 grid place-items-center rounded-lg text-xs font-bold ${
-                    i === 0
-                      ? "bg-emerald-100 text-emerald-700"
-                      : i === 1
-                        ? "bg-muted text-foreground"
-                        : i === 2
-                          ? "bg-orange-100 text-orange-700"
-                          : "bg-muted text-muted-foreground"
-                  }`}
-                >
-                  {i + 1}
+          {m.leaderboard.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Clock className="h-10 w-10 mb-2" />
+              <p className="text-sm font-medium">Belum ada data</p>
+              <p className="text-xs mt-1">Tidak ada tiket selesai pada periode ini</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border max-h-[21rem] overflow-y-auto ">
+              {m.leaderboard.map((t, i) => (
+                <div key={t.name} className="flex items-center gap-4 px-5 py-3.5">
+                  <div
+                    className={`h-8 w-8 grid place-items-center rounded-lg text-xs font-bold ${i === 0
+                        ? "bg-emerald-100 text-emerald-700"
+                        : i === 1
+                          ? "bg-muted text-foreground"
+                          : i === 2
+                            ? "bg-orange-100 text-orange-700"
+                            : "bg-muted text-muted-foreground"
+                      }`}
+                  >
+                    {i + 1}
+                  </div>
+                  <p className="text-sm font-semibold text-foreground truncate flex-1">{t.name}</p>
+                  <span className="text-xs font-bold text-muted-foreground">{t.completed} tiket</span>
                 </div>
-                <p className="text-sm font-semibold text-foreground truncate flex-1">{t.name}</p>
-                <span className="text-xs font-bold text-muted-foreground">{t.completed} tiket</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <div className="rounded-xl border border-border bg-card">
+      <div className="rounded-xl border border-border bg-card mb-4 lg:mb-0">
         <div className="px-5 py-4">
           <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
             <Building2 className="h-4 w-4" /> Unit per Site
           </h3>
         </div>
-        {d.unitDist.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-            <Building2 className="h-10 w-10 mb-2" />
-            <p className="text-sm font-medium">Belum ada data</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border max-h-[24rem] overflow-y-auto ">
-            {d.unitDist.map((s, i) => (
-              <div key={s.name} className="flex items-center gap-3 px-5 py-3">
-                <span className={`w-6 text-xs font-bold ${i === 0 ? "text-emerald-600" : "text-muted-foreground"}`}>{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
-                    <span className="text-xs font-bold text-muted-foreground ml-2">{s.count}</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                    <motion.div
-                      className="h-full rounded-full bg-primary"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${Math.min(100, (s.count / (d.unitDist[0]?.count || 1)) * 100)}%` }}
-                      transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 * i }}
-                    />
+          {d.unitDist.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
+              <Building2 className="h-10 w-10 mb-2" />
+              <p className="text-sm font-medium">Belum ada data</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border max-h-[24rem] overflow-y-auto ">
+              {d.unitDist.map((s, i) => (
+                <div key={s.name} className="flex items-center gap-3 px-5 py-3">
+                  <span className={`w-6 text-xs font-bold ${i === 0 ? "text-emerald-600" : "text-muted-foreground"}`}>{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-sm font-medium text-foreground truncate">{s.name}</p>
+                      <span className="text-xs font-bold text-muted-foreground ml-2">{s.count}</span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <motion.div
+                        className="h-full rounded-full bg-primary"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${Math.min(100, (s.count / (d.unitDist[0]?.count || 1)) * 100)}%` }}
+                        transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 * i }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
