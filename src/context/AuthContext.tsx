@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, type ReactNode } from 'react'
+import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { stripDark } from '../lib/theme'
@@ -30,7 +31,11 @@ interface AuthContextType {
     register: (name: string, email: string, phone: string, password: string, companyCode?: string) => Promise<{ error: string | null; ok?: boolean }>
     logout: () => Promise<void>
     switchRole: (role: string) => Promise<{ error: string | null }>
+    applyRole: (role: string) => void
     refreshUser: () => Promise<void>
+    manualSwitching: boolean
+    setManualSwitching: (value: boolean) => void
+    manualSwitchRef: { current: boolean }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -52,6 +57,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null)
     const [lastLoginTime, setLastLoginTime] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
+    const [manualSwitching, setManualSwitching] = useState(false)
+    const manualSwitchRef = useRef(false)
     const navigate = useNavigate()
     // Selama proses daftar, abaikan event sesi buatan signUp (konfirmasi email
     // nonaktif → signUp langsung membuat sesi) agar tidak dianggap sudah login.
@@ -226,16 +233,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const switchRole = async (role: string) => {
         if (!user) return { error: 'Tidak ada sesi' }
-        const { data, error } = await supabase.rpc('switch_role', { p_role: role })
-        if (error) return { error: error.message }
-        const res = data as { ok?: boolean; error?: string } | null
-        if (res?.error) return { error: res.error }
-        const profile = await fetchUserProfile(user.id)
-        if (profile) {
-            setUser(profile)
-            setAuditActor(profile.full_name)
+        const target = role.trim()
+        // Optimistik: UI langsung mengikuti role tujuan, tidak menunggu fetch.
+        setUser((prev) => (prev ? { ...prev, role: target } : prev))
+        const { data, error } = await supabase.rpc('switch_role', { p_role: target })
+        if (error) {
+            // rollback ke role sebelumnya
+            setUser((prev) => (prev ? { ...prev, role: user.role } : prev))
+            return { error: error.message }
         }
+        const res = data as { ok?: boolean; error?: string } | null
+        if (res?.error) {
+            setUser((prev) => (prev ? { ...prev, role: user.role } : prev))
+            return { error: res.error }
+        }
+        // Jangan fetchUserProfile: bisa stale dan menimpa role.
         return { error: null }
+    }
+
+    const applyRole = (role: string) => {
+        const target = role.trim()
+        flushSync(() => {
+            setUser((prev) => (prev ? { ...prev, role: target } : prev))
+        })
     }
 
     if (loading) {
@@ -247,7 +267,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole, refreshUser }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole, applyRole, refreshUser, manualSwitching, setManualSwitching, manualSwitchRef }}>
             {children}
         </AuthContext.Provider>
     )

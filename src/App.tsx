@@ -57,23 +57,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 function RoleGate({ roles, children }: { roles: string[]; children: React.ReactNode }) {
-  const { user, switchRole } = useAuth()
+  const { user, switchRole, manualSwitching, manualSwitchRef } = useAuth()
   const switchingRef = useRef(false)
-  const userRoles = (user?.roles || user?.role || '').split(',').filter(Boolean)
+  const userRoles = (user?.roles || user?.role || '').split(',').map((s) => s.trim()).filter(Boolean)
   const canAccess = !!user && roles.includes(user.role)
   const hasRole = !!user && roles.some(r => userRoles.includes(r))
   const targetRole = roles.find(r => userRoles.includes(r)) || roles[0]
   const switching = !canAccess && hasRole
 
   useEffect(() => {
-    if (user && !canAccess && hasRole && !switchingRef.current) {
+    if (user && !canAccess && hasRole && !switchingRef.current && !manualSwitching && !(manualSwitchRef?.current)) {
       switchingRef.current = true
       void switchRole(targetRole).finally(() => { switchingRef.current = false })
     }
-  }, [user, canAccess, hasRole, targetRole, switchRole])
+  }, [user, canAccess, hasRole, targetRole, switchRole, manualSwitching, manualSwitchRef])
 
   if (!user) return null
   if (switching) {
+    // Saat ganti role manual, jangan tampilkan spinner/load di halaman lama;
+    // navigasi akan membawa ke halaman tujuan (role sudah optimistik berubah).
+    if (manualSwitching) return null
     return (
       <div className="flex h-screen items-center justify-center bg-muted">
         <div className="h-12 w-12 rounded-full border-2 border-foreground/20 border-t-foreground animate-spin" role="status" aria-label="Memuat" />

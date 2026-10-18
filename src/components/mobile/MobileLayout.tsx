@@ -63,11 +63,13 @@ function useSheetDismiss(onClose: () => void) {
 export default function MobileLayout() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { user, switchRole } = useAuth()
+  const { user, switchRole, applyRole, setManualSwitching, manualSwitchRef } = useAuth()
   const { tickets } = useTickets()
   const [showNotifSheet, setShowNotifSheet] = useState(false)
   const [showRoleSheet, setShowRoleSheet] = useState(false)
   const [switchingRole, setSwitchingRole] = useState(false)
+  const manualStartPathRef = useRef<string | null>(null)
+  const manualTargetRoleRef = useRef<string | null>(null)
   const [notifCount, setNotifCount] = useState(0)
   const [notifs, setNotifs] = useState<NotificationRow[]>([])
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
@@ -76,6 +78,22 @@ export default function MobileLayout() {
   // Halaman publik membuang class dark saat mount; terapkan ulang tema dari
   // simpanan begitu masuk shell (dark mode hanya hidup di dalam sistem).
   useEffect(() => { applyTheme() }, [])
+
+  useEffect(() => {
+    if (!manualSwitchRef?.current) return
+    const target = manualTargetRoleRef.current
+    const start = manualStartPathRef.current
+    const dest = target ? roleHome(target) : null
+    const landed =
+      (start !== null && location.pathname !== start) ||
+      (dest !== null && location.pathname === dest && user?.role === target)
+    if (landed) {
+      manualSwitchRef.current = false
+      setManualSwitching(false)
+      manualStartPathRef.current = null
+      manualTargetRoleRef.current = null
+    }
+  }, [location.pathname, user?.role, manualSwitchRef, setManualSwitching])
 
   const notifDismiss = useSheetDismiss(() => setShowNotifSheet(false))
   const roleDismiss = useSheetDismiss(() => setShowRoleSheet(false))
@@ -160,8 +178,7 @@ export default function MobileLayout() {
     markNotificationRead(n.id)
     setNotifs(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     setNotifCount(c => Math.max(0, c - 1))
-
-    const userRoles = (user.roles || user.role || '').split(',').filter(Boolean)
+    const userRoles = (user.roles || user.role || '').split(',').map((s) => s.trim()).filter(Boolean)
     const ticket = code ? tickets.find(t => t.code === code) : undefined
     let targetRole = n.target_role || null
     if (!targetRole && ticket) {
@@ -171,39 +188,76 @@ export default function MobileLayout() {
       else if (['NEW', 'OPEN'].includes(ticket.status)) targetRole = 'helpdesk'
     }
     if (!targetRole) targetRole = user.role
-    if (targetRole !== user.role && userRoles.includes(targetRole)) {
-      await switchRole(targetRole)
-    }
-    const role = targetRole
 
-    if (role === 'customer') {
-      navigate(code ? `/customer/ticket/${code}` : roleHome('customer'))
-      return
+    setManualSwitching(true)
+    if (manualSwitchRef) manualSwitchRef.current = true
+    manualStartPathRef.current = location.pathname
+    manualTargetRoleRef.current = targetRole
+    try {
+      if (targetRole !== user.role && userRoles.includes(targetRole)) {
+        await switchRole(targetRole)
+        applyRole(targetRole)
+      }
+      const role = targetRole
+
+      if (role === 'customer') {
+        navigate(code ? `/customer/ticket/${code}` : roleHome('customer'))
+        return
+      }
+      const dest =
+        role === 'admin' ? '/admin/reports' :
+        role === 'executive' ? '/executive/inbox' :
+        role === 'pm' ? '/command-center' :
+        role === 'teknisi' ? '/tugas' : '/inbox'
+      navigate(dest, { state: code ? { __openTicketCode: code } : undefined })
+    } finally {
+      setTimeout(() => {
+        if (manualSwitchRef?.current) {
+          manualSwitchRef.current = false
+          setManualSwitching(false)
+          manualStartPathRef.current = null
+          manualTargetRoleRef.current = null
+        }
+      }, 100)
     }
-    const dest =
-      role === 'admin' ? '/admin/reports' :
-      role === 'executive' ? '/executive/inbox' :
-      role === 'pm' ? '/command-center' :
-      role === 'teknisi' ? '/tugas' : '/inbox'
-    navigate(dest, { state: code ? { __openTicketCode: code } : undefined })
   }
 
   // Ganti Role — perilaku identik dengan sidebar web.
-  const roleList = (user?.roles || user?.role || '').split(',').filter(Boolean)
+  const roleList = (user?.roles || user?.role || '').split(',').map((s) => s.trim()).filter(Boolean)
   const canSwitchRole = roleList.length > 1
 
   const handleSwitchRole = async (r: string) => {
     if (!user || r === user.role || switchingRole) return
+    const prevRole = user.role
     setSwitchingRole(true)
-    const res = await switchRole(r)
-    setSwitchingRole(false)
-    if (res?.error) {
-      toast.error(res.error)
-      return
+    setManualSwitching(true)
+    if (manualSwitchRef) manualSwitchRef.current = true
+    manualStartPathRef.current = location.pathname
+    manualTargetRoleRef.current = r
+    try {
+      const resPromise = switchRole(r)
+      applyRole(r)
+      navigate(roleHome(r))
+      const res = await resPromise
+      if (res?.error) {
+        toast.error(res.error)
+        applyRole(prevRole)
+        navigate(roleHome(prevRole))
+        return
+      }
+      setShowRoleSheet(false)
+      toast.success(`Role berubah menjadi ${ROLE_LABELS[r] || r}`)
+    } finally {
+      setSwitchingRole(false)
+      setTimeout(() => {
+        if (manualSwitchRef?.current) {
+          manualSwitchRef.current = false
+          setManualSwitching(false)
+          manualStartPathRef.current = null
+          manualTargetRoleRef.current = null
+        }
+      }, 100)
     }
-    setShowRoleSheet(false)
-    toast.success(`Role berubah menjadi ${ROLE_LABELS[r] || r}`)
-    navigate(roleHome(r))
   }
 
   const toggleTheme = () => {
