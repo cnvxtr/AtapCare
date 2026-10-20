@@ -58,6 +58,7 @@ export async function exportStyledXlsx({
   baseName,
   bandTitle,
   filterBox,
+  highlightRows = [],
   priorityCols = [],
   statusCols = [],
 }: {
@@ -67,6 +68,7 @@ export async function exportStyledXlsx({
   baseName: string;
   bandTitle: string;
   filterBox?: string;
+  highlightRows?: number[];
   priorityCols?: number[];
   statusCols?: number[];
 }): Promise<void> {
@@ -161,7 +163,7 @@ export async function exportStyledXlsx({
       const cell = row.getCell(i + 1);
       cell.value = v;
       cell.border = thin();
-      cell.font = { name: "Arial", size: 10, color: { argb: ink } };
+      cell.font = { name: "Arial", size: 10, color: { argb: highlightRows.includes(idx) ? "A16207" : ink } };
       cell.alignment = { horizontal: "left", vertical: "middle" };
       if (idx % 2 === 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: zebra } };
     });
@@ -209,6 +211,7 @@ export async function exportStyledPdf({
   baseName,
   bandTitle,
   filterBox,
+  highlightRows = [],
   priorityCols = [],
   statusCols = [],
 }: {
@@ -218,6 +221,7 @@ export async function exportStyledPdf({
   baseName: string;
   bandTitle: string;
   filterBox?: string;
+  highlightRows?: number[];
   priorityCols?: number[];
   statusCols?: number[];
 }): Promise<void> {
@@ -330,6 +334,8 @@ export async function exportStyledPdf({
         data.cell.styles.textColor = [255, 255, 255];
         data.cell.styles.fontStyle = "bold";
         data.cell.styles.halign = "center";
+      } else if (highlightRows.includes(data.row.index)) {
+        data.cell.styles.textColor = [161, 98, 7];
       }
     },
   });

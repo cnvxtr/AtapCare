@@ -5,6 +5,7 @@ import { I18nProvider } from "react-aria-components";
 import type { DateRange } from "react-aria-components";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { RangeCalendar } from "@/components/ui/calendar-rac";
+import { useIsMobile } from "@/lib/platform";
 
 const fmt = (iso: string) =>
   new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
@@ -28,6 +29,7 @@ export default function DateRangePicker({
   onChange: (from?: string, to?: string) => void;
   className?: string;
 }) {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
 
   const value = useMemo<DateRange | null>(
@@ -39,7 +41,7 @@ export default function DateRangePicker({
     [from, to],
   );
 
-  const label = from && to ? `${fmt(from)} – ${fmt(to)}` : "Semua";
+  const label = from && to ? `${fmt(from)} – ${fmt(to)}` : (isMobile ? "Periode" : "Semua");
 
   const apply = (range: DateRange | null) => {
     if (range) {
@@ -58,7 +60,7 @@ export default function DateRangePicker({
           className={`inline-flex h-8 items-center gap-1.5 rounded border border-border bg-card px-2 text-[13px] text-foreground hover:bg-muted transition-colors ${className || ""}`}
         >
           <CalendarIcon className={`h-3.5 w-3.5 shrink-0 ${from && to ? "text-foreground" : "opacity-50"}`} />
-          <span className="hidden md:inline truncate max-w-[150px]">{label}</span>
+          <span className="inline truncate max-w-[150px]">{label}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="z-[130] w-auto bg-transparent border-transparent p-0">

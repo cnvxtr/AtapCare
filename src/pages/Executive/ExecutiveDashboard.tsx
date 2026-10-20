@@ -151,7 +151,7 @@ export default function ExecutiveDashboard() {
                                 <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                             ) : (
                                 displayTickets.map(ticket => (
-                                    <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
+                                    <tr key={ticket.id} className={`hover:bg-muted cursor-pointer ${ticket.source === 'internal' ? 'text-yellow-700' : ''}`} onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
                                         <td className="p-4 font-mono text-xs font-medium whitespace-nowrap">{ticket.code}</td>
                                         <td className="p-4 text-xs">{ticket.customer}</td>
                                         <td className="p-4 text-xs font-mono whitespace-nowrap">{parseDescription(ticket.description).waPelapor || '—'}</td>

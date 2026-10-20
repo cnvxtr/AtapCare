@@ -7,6 +7,7 @@ import { resolvePhotos } from '../services/photoService'
 import { getTicketGps, type GpsPoint } from '../services/ticketService'
 import { OrderTracking } from './ui/order-tracking'
 import { useIsMobile } from '../lib/platform'
+import { formatDuration } from '../lib/utils';
 import { Capacitor } from '@capacitor/core'
 import { Directory, Filesystem } from '@capacitor/filesystem'
 import { Share } from '@capacitor/share'
@@ -70,7 +71,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
         let mounted = true
         getTicketGps(code)
             .then((points) => { if (mounted) setGps(points) })
-            .catch(() => {})
+            .catch(() => { })
         return () => { mounted = false }
     }, [activeTab, code])
 
@@ -93,9 +94,14 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
                                 {resolvedAt ? `${formatWIB(createdAt)} - ${formatWIB(resolvedAt)}` : formatWIB(createdAt)}
                             </p>
                         </div>
-                        <button onClick={close} className="p-1.5 bg-foreground text-background rounded-[5px] hover:opacity-80 transition-opacity" aria-label="Tutup">
-                            <X className="w-4 h-4" />
-                        </button>
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                            <button onClick={close} className="p-1.5 bg-foreground text-background rounded-[5px] hover:opacity-80 transition-opacity" aria-label="Tutup">
+                                <X className="w-4 h-4" />
+                            </button>
+                            <p className="font-mono text-[10px] text-muted-foreground whitespace-nowrap mt-3">
+                                Durasi: {formatDuration(createdAt, ['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(status) ? (activities ?? []).slice().reverse().find(a => a.action === 'Tiket ditutup' || a.action === 'Tugas diselesaikan')?.timestamp : undefined)}
+                            </p>
+                        </div>
                     </div>
                 </div>
 

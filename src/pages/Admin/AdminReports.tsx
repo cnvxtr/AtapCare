@@ -14,12 +14,14 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Badge as ColorBadge } from "@/components/Badge";
+import { STATUS_LABELS } from "@/components/Badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileSpreadsheet, Loader2, Search } from "lucide-react";
+import { FileSpreadsheet, Loader2, Search, Download, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 import MultiSelectFilter from "@/components/MultiSelectFilter";
 import DateRangePicker from "@/components/DateRangePicker";
 import { isNativePlatform } from "@/lib/platform";
+import { useIsMobile } from "@/lib/platform";
 import TicketDrawer, { TicketTimeline, TicketDescription, AssignmentCard, type DrawerTab } from "@/components/TicketDrawer";
 import { useTickets } from "@/context/TicketContext";
 import { notifyTicketCode } from "@/services/notifications";
@@ -36,6 +38,7 @@ import {
   ROOTCAUSE_HEADERS,
   SERIAL_NUMBER_HEADERS,
   exportStyledXlsx,
+  exportStyledPdf,
   todayStamp,
   type ReportFilters,
   type TicketReportRow,
@@ -66,13 +69,13 @@ function datasetsFor(mode: "admin" | "helpdesk") {
 }
 
 const PRIORITY_COLS: Record<TabKey, number[]> = {
-  tickets: [7],
+  tickets: [8],
   kpi: [0],
   rootcause: [],
   sparepart: [],
 };
 const STATUS_COLS: Record<TabKey, number[]> = {
-  tickets: [8],
+  tickets: [9],
   kpi: [],
   rootcause: [],
   sparepart: [],
@@ -81,7 +84,7 @@ const STATUS_COLS: Record<TabKey, number[]> = {
 function FilterGroup({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
     <div className={`flex items-center gap-1.5 min-w-0 ${className || ""}`}>
-      <label className="text-xs text-muted-foreground whitespace-nowrap truncate">{label}</label>
+      <label className="text-xs text-muted-foreground whitespace-nowrap truncate hidden md:inline">{label}</label>
       {children}
     </div>
   );
@@ -89,6 +92,7 @@ function FilterGroup({ label, children, className }: { label: string; children: 
 
 export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) {
   const mode: "admin" | "helpdesk" = helpdesk ? "helpdesk" : "admin";
+  const isMobile = useIsMobile();
   const visibleDatasets = datasetsFor(mode);
   const [tab, setTab] = useState<TabKey>("tickets");
   const [filters, setFilters] = useState<ReportFilters>({});
@@ -96,6 +100,10 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [companies, setCompanies] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportConfirm, setExportConfirm] = useState<"xlsx" | "pdf" | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
   const [loadedKeys, setLoadedKeys] = useState<Partial<Record<TabKey, string>>>({});
   const { tickets: allTickets } = useTickets();
   const [selectedTicket, setSelectedTicket] = useState<TicketReportRow | null>(null);
@@ -120,6 +128,10 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [audits, setAudits] = useState<Array<Record<string, string>>>([]);
 
   useEffect(() => {
+    setPage(1);
+  }, [search, filters, tab]);
+
+  useEffect(() => {
     getReportCompanies().then(setCompanies);
   }, []);
 
@@ -128,7 +140,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     if (loadedKeys[tab] === filtersKey) return;
     setLoading(true);
     try {
-      if (tab === "tickets") setTickets(await getTicketReport({ ...filters, status: ["CLOSED"] }));
+      if (tab === "tickets") setTickets(await getTicketReport(filters));
       if (tab === "kpi")
         setKpis((await getKpiReport(filters)) as unknown as Array<Record<string, string | number>>);
       if (tab === "rootcause")
@@ -159,6 +171,34 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       r.some((c) => String(c ?? "").toLowerCase().includes(q)),
     );
   }, [activeRows, search]);
+  const visibleTicketIndices = useMemo(() => {
+    if (tab !== "tickets") return [] as number[];
+    const q = search.trim().toLowerCase();
+    const out: number[] = [];
+    for (let i = 0; i < tickets.length; i++) {
+      const row = Object.values(tickets[i]);
+      if (q && !row.some((c) => String(c ?? "").toLowerCase().includes(q))) continue;
+      out.push(i);
+    }
+    return out;
+  }, [tickets, search, tab]);
+  const paginatedRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return visibleRows.slice(start, start + pageSize);
+  }, [visibleRows, page, pageSize]);
+  const visibleInternalRows = useMemo(() => {
+    if (tab !== "tickets") return new Set<number>();
+    const q = search.trim().toLowerCase();
+    const set = new Set<number>();
+    let vi = 0;
+    for (const t of tickets) {
+      const row = Object.values(t);
+      if (q && !row.some((c) => String(c ?? "").toLowerCase().includes(q))) continue;
+      if (t.source === "internal") set.add(vi);
+      vi++;
+    }
+    return set;
+  }, [tickets, search, tab]);
 
   // Tabel layar memakai subset header (tanpa kolom deskripsi); export memakai
   // header penuh (termasuk Deskripsi Masalah/Hasil).
@@ -180,7 +220,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
 
   // Snapshot data saat klik, bukan saat proses berjalan, agar ganti tab di
   // tengah tidak mengekspor dataset yang salah.
-  function doExport() {
+  function doExport(format: "xlsx" | "pdf" = "xlsx") {
     if (exporting || visibleRows.length === 0) return;
     // Export tiket pakai urutan kolom sendiri (deskripsi disisipkan);
     // tabel layar tetap memakai urutan aslinya.
@@ -204,19 +244,43 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       tab === "tickets"
         ? STATUS_COLS[tab].map((c) => TICKET_EXPORT_INDEXES.indexOf(c) + 1)
         : STATUS_COLS[tab].map((c) => c + 1);
+    const filterBox = [
+      filters.company?.length ? `Perusahaan: ${filters.company.join(", ")}` : null,
+      filters.site?.length ? `Site: ${filters.site.join(", ")}` : null,
+      filters.unit?.length ? `Unit: ${filters.unit.join(", ")}` : null,
+      filters.priority?.length ? `Prioritas: ${filters.priority.join(", ")}` : null,
+      filters.status?.length ? `Status: ${filters.status.map((s) => STATUS_LABELS[s] || s).join(", ")}` : null,
+    ].filter(Boolean).join("\n") || undefined;
+    const highlightRows = tab === "tickets"
+      ? (() => {
+          const q = search.trim().toLowerCase();
+          const out: number[] = [];
+          let vi = 0;
+          for (const t of tickets) {
+            const row = Object.values(t);
+            if (q && !row.some((c) => String(c ?? "").toLowerCase().includes(q))) continue;
+            if (t.source === "internal") out.push(vi);
+            vi++;
+          }
+          return out;
+        })()
+      : [];
     setExporting(true);
-    if (!isNativePlatform()) toast.info(`Menyiapkan unduhan XLSX "${label}"…`);
-    exportStyledXlsx({
+    if (!isNativePlatform()) toast.info(`Menyiapkan unduhan ${format.toUpperCase()} "${label}"…`);
+    const exporter = format === "pdf" ? exportStyledPdf : exportStyledXlsx;
+    exporter({
       rows,
       headers,
       sheetName: label,
       baseName: name,
       bandTitle: `${label} — ${periodText}`,
+      filterBox,
+      highlightRows,
       priorityCols,
       statusCols,
     })
-      .then(() => { if (!isNativePlatform()) toast.success(`XLSX "${label}" berhasil diunduh (${rows.length} baris)`) })
-      .catch(() => toast.error("Gagal membuat file XLSX."))
+      .then(() => { if (!isNativePlatform()) toast.success(`${format.toUpperCase()} "${label}" berhasil diunduh (${rows.length} baris)`) })
+      .catch(() => toast.error(`Gagal membuat file ${format.toUpperCase()}.`))
       .finally(() => setExporting(false));
   }
 
@@ -229,7 +293,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     return { all: false, ...Object.fromEntries(arr.map((v) => [v, true])) };
   }
 
-  function toggleFilterValue(key: "company" | "priority", value: string) {
+  function toggleFilterValue(key: "company" | "priority" | "status", value: string) {
     setFilters((f) => {
       if (value === "all") return { ...f, [key]: undefined };
       const cur = (f[key] as string[] | undefined) ?? [];
@@ -279,20 +343,29 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
             {tab === "tickets" && (
               <div className="w-full md:w-auto flex flex-wrap gap-x-1.5 gap-y-2">
                 <FilterGroup label="Perusahaan" className="flex-1 md:flex-none">
-                  <MultiSelectFilter
-                    label="Semua"
-                    options={companies.map((c) => ({ value: c, label: c }))}
-                    selected={selectedRecord(filters.company)}
-                    onToggle={(v) => toggleFilterValue("company", v)}
-                    className={`${selectTriggerFilter} w-full md:w-auto max-md:min-w-[100px]`}
-                  />
+                    <MultiSelectFilter
+                      label={isMobile ? "Perusahaan" : "Semua"}
+                      options={companies.map((c) => ({ value: c, label: c }))}
+                      selected={selectedRecord(filters.company)}
+                      onToggle={(v) => toggleFilterValue("company", v)}
+                      className={`${selectTriggerFilter} w-full md:w-auto max-md:min-w-[100px]`}
+                    />
                 </FilterGroup>
                 <FilterGroup label="Prioritas" className="flex-1 md:flex-none">
                   <MultiSelectFilter
-                    label="Semua"
+                    label={isMobile ? "Prioritas" : "Semua"}
                     options={PRIORITY_OPTIONS}
                     selected={selectedRecord(filters.priority)}
                     onToggle={(v) => toggleFilterValue("priority", v)}
+                    className={`${selectTriggerFilterSm} w-full md:w-auto max-md:min-w-[90px]`}
+                  />
+                </FilterGroup>
+                <FilterGroup label="Status" className="flex-1 md:flex-none">
+                  <MultiSelectFilter
+                    label={isMobile ? "Status" : "Semua"}
+                    options={Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+                    selected={selectedRecord(filters.status)}
+                    onToggle={(v) => toggleFilterValue("status", v)}
                     className={`${selectTriggerFilterSm} w-full md:w-auto max-md:min-w-[90px]`}
                   />
                 </FilterGroup>
@@ -315,21 +388,40 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                       tiket
                     </Badge>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="relative">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={doExport}
+                      onClick={() => setExportOpen((o) => !o)}
                       disabled={visibleRows.length === 0 || exporting}
-                      className="bg-emerald-600 text-white border-emerald-700 hover:bg-emerald-700 hover:text-white rounded"
+                      className="rounded"
+                      aria-label="Unduh laporan"
                     >
-                      {exporting ? (
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <FileSpreadsheet className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      XLSX
+                      {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                     </Button>
+                    {exportOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+                        <div className="absolute right-0 mt-1 z-20 flex flex-col gap-0 rounded border border-border bg-card p-0 shadow-md min-w-[110px] overflow-hidden">
+                        <button
+                          type="button"
+                          disabled={exporting}
+                          onClick={() => { setExportOpen(false); setExportConfirm("xlsx"); }}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-none bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 w-full"
+                        >
+                          <FileSpreadsheet className="h-3.5 w-3.5" /> XLSX
+                        </button>
+                        <button
+                          type="button"
+                          disabled={exporting}
+                          onClick={() => { setExportOpen(false); setExportConfirm("pdf"); }}
+                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-none bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 w-full"
+                        >
+                          <FileText className="h-3.5 w-3.5" /> PDF
+                        </button>
+                      </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -346,8 +438,9 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                       : "Tidak ada data untuk filter ini."}
                   </p>
                 ) : (
-                  <div className="rounded-xl border border-border bg-card overflow-hidden">
-                    <div className="overflow-x-auto">
+                    <>
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                      <div className="overflow-x-auto">
                       <div className={twoCol ? "w-full" : "min-w-[900px]"}>
                       <Table>
                           <TableHeader>
@@ -363,19 +456,19 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                             </TableRow>
                           </TableHeader>
                         <TableBody className="divide-y divide-border">
-                          {visibleRows.map((r, i) => (
-                            <TableRow key={i} className="hover:bg-muted cursor-pointer" onClick={() => { if (tab === 'tickets') { setSelectedTicket(tickets[i]); setActiveDrawerTab('detail') } }}>
+                          {paginatedRows.map((r, i) => (
+                            <TableRow key={i} className={`hover:bg-muted cursor-pointer ${visibleInternalRows.has((page - 1) * pageSize + i) ? "text-yellow-700" : ""}`} onClick={() => { if (tab === 'tickets') { const ticketIndex = visibleTicketIndices[(page - 1) * pageSize + i]; if (ticketIndex !== undefined) setSelectedTicket(tickets[ticketIndex]); setActiveDrawerTab('detail') } }}>
                               {r.slice(0, activeHeaders.length).map((c, j) => (
                                 <TableCell
                                   key={j}
                                   className={`text-[10px] px-1.5 py-1.5 ${twoCol ? "text-center w-1/2" : ""}`}
                                 >
                                   {PRIORITY_COLS[tab].includes(j) ? (
-                                    <ColorBadge type="priority" value={String(c ?? "—")} />
+                                    <ColorBadge type="priority" value={String(c ?? "-")} />
                                   ) : STATUS_COLS[tab].includes(j) ? (
-                                    <ColorBadge type="status" value={String(c ?? "—")} />
+                                    <ColorBadge type="status" value={String(c ?? "-")} />
                                   ) : (
-                                    String(c ?? "—")
+                                    String(c ?? "-")
                                   )}
                                 </TableCell>
                               ))}
@@ -384,8 +477,18 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                         </TableBody>
                       </Table>
                       </div>
+                      </div>
                     </div>
-                  </div>
+                    <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
+                      <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1} aria-label="Sebelumnya">
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <span className="text-xs text-muted-foreground">{page} / {Math.max(1, Math.ceil(visibleRows.length / pageSize))}</span>
+                      <Button variant="outline" size="sm" onClick={() => setPage((p) => Math.min(Math.max(1, Math.ceil(visibleRows.length / pageSize)), p + 1))} disabled={page >= Math.max(1, Math.ceil(visibleRows.length / pageSize))} aria-label="Berikutnya">
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    </>
                 )}
               </CardContent>
             </Card>
@@ -432,6 +535,31 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
           </TicketDrawer>
         )
       })()}
+      {exportConfirm && (
+        <div className="fixed inset-0 z-[130] bg-black/60 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-lg p-5 w-full max-w-md space-y-3">
+            <h3 className="text-sm font-bold text-foreground">Konfirmasi Unduhan</h3>
+            <p className="text-xs text-muted-foreground">
+              Format: {exportConfirm.toUpperCase()} · Dataset: {datasetLabel} · Baris: {visibleRows.length}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {[
+                filters.from && filters.to ? `Periode: ${fmtIso(filters.from)} – ${fmtIso(filters.to)}` : "Periode: Semua",
+                filters.company?.length ? `Perusahaan: ${filters.company.join(", ")}` : "Perusahaan: Semua",
+                filters.priority?.length ? `Prioritas: ${filters.priority.join(", ")}` : "Prioritas: Semua",
+                filters.status?.length ? `Status: ${filters.status.map((s) => STATUS_LABELS[s] || s).join(", ")}` : "Status: Semua",
+              ].join(" | ")}
+            </p>
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" size="sm" onClick={() => setExportConfirm(null)} disabled={exporting}>Batal</Button>
+              <Button size="sm" onClick={() => { const f = exportConfirm; setExportConfirm(null); doExport(f); }} disabled={exporting} className={exportConfirm === "xlsx" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-red-600 text-white hover:bg-red-700"}>
+                {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+                Download
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

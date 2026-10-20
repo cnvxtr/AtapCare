@@ -540,7 +540,7 @@ export default function HPInbox() {
                                         {items.map(t => {
                                             const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             return (
-                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} bg-card`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
+                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${t.source === 'internal' ? 'border-l-4 border-l-orange-500' : ''} bg-card`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                 <div className="flex items-center justify-between gap-1 mb-1">
                                                     <span className={`font-mono text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.code}</span>
                                                 </div>
@@ -588,7 +588,7 @@ export default function HPInbox() {
                                     <tr><td colSpan={7} className="p-8 text-center text-muted-foreground">Tidak ada tiket yang cocok dengan filter.</td></tr>
                                 ) : (
                                     filteredTickets.map(ticket => (
-                                        <tr key={ticket.id} className="hover:bg-muted cursor-pointer" onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
+                                                <tr key={ticket.id} className={`hover:bg-muted cursor-pointer ${ticket.source === 'internal' ? 'text-yellow-700' : ''}`} onClick={() => { setSelectedTicket(ticket); setActiveDrawerTab('detail') }}>
                                             <td className="p-4 font-mono text-xs font-medium whitespace-nowrap">{ticket.code}</td>
                                             <td className="p-4 text-xs">{ticket.customer}</td>
                                             <td className="p-4 text-xs font-mono whitespace-nowrap">{parseDescription(ticket.description).waPelapor || '—'}</td>

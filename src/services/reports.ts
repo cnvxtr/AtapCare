@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { formatDuration } from "@/lib/utils";
 
 export interface ReportFilters {
   from?: string;
@@ -18,14 +19,17 @@ export interface TicketReportRow {
   unit: string;
   serial: string;
   category: string;
+  rootCause: string;
   priority: string;
   status: string;
   assignee: string;
+  timeRange: string;
+  duration: string;
+  problemDesc: string;
+  support: string;
   createdAt: string;
   closedAt: string;
-  problemDesc: string;
-  resultDesc: string;
-  support: string;
+  source: string;
 }
 
 // Tabel layar: tanpa kolom deskripsi (deskripsi hanya muncul di export).
@@ -37,11 +41,12 @@ export const TICKET_REPORT_TABLE_HEADERS = [
   "Unit",
   "Serial Number",
   "Temuan Awal",
+  "Temuan Akhir",
   "Prioritas",
   "Status",
   "Teknisi",
-  "Jam Masuk",
-  "Jam Keluar",
+  "Jam Masuk–Keluar",
+  "Durasi",
 ];
 
 // Urutan kolom export tiket: deskripsi disisipkan, tabel layar tidak berubah.
@@ -54,19 +59,19 @@ export const TICKET_REPORT_HEADERS = [
   "Serial Number",
   "Deskripsi Masalah",
   "Temuan Awal",
-  "Deskripsi Hasil",
+  "Temuan Akhir",
   "Prioritas",
   "Status",
   "Teknisi",
   "Teknisi Pendukung",
-  "Jam Masuk",
-  "Jam Keluar",
+  "Jam Masuk–Keluar",
+  "Durasi",
 ];
 
 // Indeks ulang kolom: dari urutan properti TicketReportRow (Object.values) ke
-// urutan export. problemDesc (12) → kolom 7, resultDesc (13) → kolom 9,
-// support (14) → kolom 13 (setelah Teknisi).
-export const TICKET_EXPORT_INDEXES = [0, 1, 2, 3, 4, 5, 12, 6, 13, 7, 8, 9, 14, 10, 11];
+// urutan export. problemDesc (12) → kolom 7, rootCause (7) → kolom 9,
+// support (13) → kolom 13 (setelah Teknisi), timeRange (11) → kolom 14.
+export const TICKET_EXPORT_INDEXES = [0, 1, 2, 3, 4, 5, 13, 6, 7, 8, 9, 10, 14, 11, 12];
 
 export const ROOTCAUSE_HEADERS = ["Temuan Akhir", "Total"];
 
@@ -78,6 +83,26 @@ function fmt(date: string | null): string {
   if (!date) return "—";
   const d = new Date(date);
   return `${String(d.getDate()).padStart(2, "0")} ${d.toLocaleString("id-ID", { month: "short" })} ${d.getFullYear()}, ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function fmtShort(date: string): string {
+  const d = new Date(date);
+  return `${d.getDate()} ${d.toLocaleString("id-ID", { month: "short" })}`;
+}
+
+function fmtTime(date: string): string {
+  const d = new Date(date);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatTimeRange(start: string, end?: string | null): string {
+  const y1 = new Date(start).getFullYear();
+  if (!end) return `${fmtShort(start)}, ${fmtTime(start)} ${y1} - —`;
+  const y2 = new Date(end).getFullYear();
+  if (y1 === y2) {
+    return `${fmtShort(start)}, ${fmtTime(start)} - ${fmtShort(end)}, ${fmtTime(end)} ${y2}`;
+  }
+  return `${fmtShort(start)} ${y1}, ${fmtTime(start)} - ${fmtShort(end)} ${y2}, ${fmtTime(end)}`;
 }
 
 // Terima 'YYYY-MM-DD' atau ISO penuh; potong ke bagian tanggal agar tidak crash
@@ -103,7 +128,7 @@ async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
-      "id, code, customer, company, site, unit, category, category_id, problem_categories(name), description, priority, status, assigned_to, rejection_reason, created_at, closed_at",
+      "id, code, customer, company, site, unit, category, category_id, problem_categories(name), root_cause_id, root_causes(name), description, priority, status, assigned_to, rejection_reason, created_at, closed_at, source",
     )
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
@@ -126,12 +151,15 @@ function toTicketRow(
     unit: string;
     category?: string | null;
     problem_categories?: { name?: string } | { name?: string }[] | null;
+    root_cause_id?: string | null;
+    root_causes?: { name?: string } | { name?: string }[] | null;
     description?: string | null;
     priority: string;
     status: string;
     created_at: string;
     closed_at?: string | null;
     assigned_to: string | null;
+    source?: string | null;
   },
   names?: Map<string, string>,
   serials?: Map<string, string>,
@@ -148,6 +176,9 @@ function toTicketRow(
   const catName = Array.isArray(t.problem_categories)
     ? t.problem_categories[0]?.name
     : t.problem_categories?.name;
+  const rootCauseName = Array.isArray(t.root_causes)
+    ? t.root_causes[0]?.name
+    : t.root_causes?.name;
   return {
     code: t.code,
     customer: t.customer,
@@ -158,16 +189,17 @@ function toTicketRow(
     // Temuan Awal dari relasi category_id, bukan kolom legacy `category`
     // (yang pernah diisi nama unit oleh RPC lama create_public_ticket).
     category: catName || "—",
-    priority: t.priority || "Low",
+    rootCause: rootCauseName || "—",
+    priority: t.priority || "—",
     status: t.status,
     assignee: t.assigned_to ? names?.get(t.assigned_to) ?? "—" : "—",
+    timeRange: formatTimeRange(t.created_at, t.closed_at),
+    duration: t.status === "CLOSED" ? formatDuration(t.created_at, t.closed_at) : "—",
+    problemDesc,
+    support: supportById?.get(t.id) ?? "—",
     createdAt: fmt(t.created_at),
     closedAt: t.closed_at ? fmt(t.closed_at) : "—",
-    problemDesc,
-    resultDesc: "—",
-    // sengaja di akhir object: posisi Object.values dipakai TICKET_EXPORT_INDEXES,
-    // ditambahkan di tengah akan menggeser mapping kolom tabel layar.
-    support: supportById?.get(t.id) ?? "—",
+    source: t.source || "public",
   };
 }
 
@@ -175,17 +207,6 @@ function toTicketRow(
 // atau catatan remote helpdesk ("Remote Berhasil …"). Ambil segmen "Selesai"
 // bila ada; selain itu segmen pertama (tanpa prefix "Catatan Internal:").
 // Segmen foto/serial number tidak boleh bocor ke laporan.
-function extractResultDesc(details?: string): string {
-  if (!details) return "—";
-  const d = details.replace(/^Catatan Internal:\s*/, "").trim();
-  const segments = d.split(" | ").map((s) => s.trim()).filter(Boolean);
-  if (segments.length === 0) return "—";
-  const resolved = segments.find((s) => /^Selesai\b/.test(s));
-  const first = resolved ?? segments[0];
-  if (/^Foto \(|^Serial Number:/.test(first)) return "—";
-  return first.replace(/^Selesai:\s*/, "").replace(/^Selesai\b/, "").trim() || "—";
-}
-
 export async function getTicketReport(filters: ReportFilters): Promise<TicketReportRow[]> {
   const [res, usersRes, serials] = await Promise.all([
     buildTicketQuery(filters),
@@ -194,25 +215,16 @@ export async function getTicketReport(filters: ReportFilters): Promise<TicketRep
   ]);
   const names = new Map((usersRes.data || []).map((u) => [u.id, u.full_name]));
   const raw = res.data || [];
-  const resultById = new Map<string, string>();
   const supportById = new Map<string, string>();
   const ids = raw.map((t) => t.id).filter(Boolean);
   if (ids.length) {
-    const [acts, supports] = await Promise.all([
-      supabase
-        .from("activities")
-        .select("ticket_id, created_at, action, details")
-        .in("ticket_id", ids)
-        .in("action", ["Tugas diselesaikan", "Tiket dibuat dengan status Selesai"])
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("ticket_assignments")
-        .select("ticket_id, user_id")
-        .in("ticket_id", ids)
-        .eq("role", "teknisi"),
-    ]);
+    const { data: supports } = await supabase
+      .from("ticket_assignments")
+      .select("ticket_id, user_id")
+      .in("ticket_id", ids)
+      .eq("role", "teknisi");
     const supportNamesByTicket = new Map<string, string[]>();
-    for (const a of supports?.data || []) {
+    for (const a of supports || []) {
       const name = names.get(a.user_id);
       if (!name) continue;
       const list = supportNamesByTicket.get(a.ticket_id) || [];
@@ -222,13 +234,8 @@ export async function getTicketReport(filters: ReportFilters): Promise<TicketRep
     for (const [ticketId, list] of supportNamesByTicket) {
       supportById.set(ticketId, list.join(", "));
     }
-    const latestByTicket = new Map<string, { created_at: string; details?: string }>();
-    for (const a of acts?.data || []) {
-      if (!latestByTicket.has(a.ticket_id)) latestByTicket.set(a.ticket_id, a);
-    }
-    for (const [ticketId, a] of latestByTicket) resultById.set(ticketId, extractResultDesc(a.details));
   }
-  return raw.map((t) => ({ ...toTicketRow(t, names, serials, supportById), resultDesc: resultById.get(t.id) ?? "—" }));
+  return raw.map((t) => toTicketRow(t, names, serials, supportById));
 }
 
 // ponytail: relasi tiket→unit lewat kecocokan nama (site|unit), bukan FK —
@@ -253,7 +260,7 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
   const tickets = data || [];
   const rows: Record<string, string | number>[] = [];
   for (const p of ["Critical", "Medium", "Low"]) {
-    const group = tickets.filter((t) => (t.priority || "Low") === p && t.status === "CLOSED");
+    const group = tickets.filter((t) => t.priority === p && t.status === "CLOSED");
     if (group.length === 0) continue;
     rows.push({
       priority: p,
