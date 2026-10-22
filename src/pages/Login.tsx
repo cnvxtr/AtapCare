@@ -18,13 +18,9 @@ import { cn } from "@/lib/utils";
 import logo from "../assets/logo2.png";
 import Logo from "../components/Logo";
 
-// Pin token tema light di panel kanan agar kartu selalu putih walau dark mode aktif
-// (dipakai ulang oleh halaman ResetPassword agar tampilannya konsisten)
 export const LIGHT =
   "[--background:0_0%_98.5%] [--foreground:0_0%_14.5%] [--card:0_0%_100%] [--card-foreground:0_0%_14.5%] [--primary:0_0%_14.5%] [--primary-foreground:0_0%_98.5%] [--secondary:0_0%_95.5%] [--secondary-foreground:0_0%_14.5%] [--muted:0_0%_95.5%] [--muted-foreground:0_0%_48%] [--accent:0_0%_93%] [--accent-foreground:0_0%_14.5%] [--border:0_0%_72%] [--ring:0_0%_14.5%] [--destructive:27_24.5%_57.7%] [--destructive-foreground:0_0%_98.5%]";
 
-// Blok brand Atap Care di kartu auth utk layar < lg (mobile & tablet):
-// logo + wordmark, menggantikan judul "Selamat Datang Kembali" di layar kecil.
 function AuthBrand() {
   return (
     <div className="flex flex-col items-center gap-1 lg:hidden">
@@ -35,7 +31,6 @@ function AuthBrand() {
   );
 }
 
-/* ---------------- Schemas ---------------- */
 
 const signInSchema = z.object({
   username: z.string().min(2, "Username atau email minimal 2 karakter"),
@@ -43,7 +38,6 @@ const signInSchema = z.object({
 });
 
 const signUpSchema = z.object({
-  // Nama Pengguna = username (kunci login, unik); full_name menyalinnya di DB
   name: z.string().regex(/^[a-z0-9_]{3,20}$/, "Nama pengguna: 3–20 karakter, huruf kecil/angka/underscore"),
   email: z.string().email("Format email tidak valid"),
   phone: z.string().regex(/^\d{8,12}$/, "Nomor telepon tidak valid"),
@@ -57,7 +51,6 @@ const signUpSchema = z.object({
 type SignInValues = z.infer<typeof signInSchema>;
 type SignUpValues = z.infer<typeof signUpSchema>;
 
-/* ---------------- Shared ---------------- */
 
 function AuthError({ message }: { message: string | null }) {
   if (!message) return null;
@@ -105,7 +98,6 @@ const viewMotion = {
   transition: { duration: 0.3, ease: "easeInOut" as const },
 };
 
-/* ---------------- Sign In ---------------- */
 
 function SignInView({
   onSignUp,
@@ -211,7 +203,6 @@ function SignInView({
   );
 }
 
-/* ---------------- Sign Up ---------------- */
 
 function SignUpView({
   onSignIn,
@@ -241,7 +232,6 @@ function SignUpView({
   const nameField = register("name");
   const latestCheck = useRef("");
 
-  // ponytail: cek ketersediaan live ala Instagram — debounce 500ms, hasil basi dibuang
   useEffect(() => {
     const u = (uname || "").trim();
     if (!/^[a-z0-9_]{3,20}$/.test(u)) {
@@ -402,7 +392,6 @@ function SignUpView({
   );
 }
 
-/* ---------------- Lupa Kata Sandi ---------------- */
 
 function ForgotView({ onBack }: { onBack: () => void }) {
   const [email, setEmail] = useState("");
@@ -420,18 +409,14 @@ function ForgotView({ onBack }: { onBack: () => void }) {
       return;
     }
     setBusy(true);
-    // Di app (Capacitor) `window.location.origin` adalah https://localhost yang
-    // tak bisa dibuka dari email → pakai VITE_WEB_URL bila diisi saat deploy.
     const base =
       isNativePlatform() && import.meta.env.VITE_WEB_URL
         ? import.meta.env.VITE_WEB_URL
         : window.location.origin;
-    // Diam saja untuk email tak terdaftar (anti-enumeration)
     await supabase.auth.resetPasswordForEmail(value, {
       redirectTo: `${base}/reset-password`,
     });
     setBusy(false);
-    // Pesan generik apa pun hasilnya — jangan bocorkan akun mana yang terdaftar
     setSent(true);
   };
 
@@ -495,7 +480,6 @@ function ForgotView({ onBack }: { onBack: () => void }) {
   );
 }
 
-/* ---------------- Page ---------------- */
 
 export default function Login() {
   useEffect(() => stripDark(), [])

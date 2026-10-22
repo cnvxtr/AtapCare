@@ -48,8 +48,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    // Bawa tujuan asli (pathname + search) supaya setelah login kembali ke
-    // halaman itu — bukan ke dashboard — termasuk query mis. ?dari=TS-02.
     return <Navigate to="/login" state={{ from: location }} replace />
   }
 
@@ -74,8 +72,6 @@ function RoleGate({ roles, children }: { roles: string[]; children: React.ReactN
 
   if (!user) return null
   if (switching) {
-    // Saat ganti role manual, jangan tampilkan spinner/load di halaman lama;
-    // navigasi akan membawa ke halaman tujuan (role sudah optimistik berubah).
     if (manualSwitching) return null
     return (
       <div className="flex h-screen items-center justify-center bg-muted">
@@ -106,12 +102,8 @@ function AppRoutes() {
   const navigate = useNavigate()
   const location = useLocation()
 
-  // Navigasi SPA tidak me-reset scroll secara otomatis; pastikan tiap ganti
-  // rute (mis. dari footer Landing ke Kebijakan Privasi) mulai dari atas.
   useEffect(() => { window.scrollTo(0, 0) }, [location.pathname])
 
-  // Tombol/gestur back Android: mundur 1 langkah jika bisa, baru keluar aplikasi
-  // saat berada di root. Ini cegah "swipe back langsung keluar app" (bug #4).
   useEffect(() => {
     if (!isNativePlatform()) return
     document.documentElement.classList.add('native')
@@ -127,7 +119,6 @@ function AppRoutes() {
     window.scrollTo(0, 0)
   }, [location.pathname])
 
-  // Klik notifikasi push browser: service worker mengirim url tujuan → pindah.
   useEffect(() => {
     if (!('serviceWorker' in navigator)) return
     const onMessage = (e: MessageEvent) => {
@@ -138,7 +129,6 @@ function AppRoutes() {
     return () => navigator.serviceWorker.removeEventListener('message', onMessage)
   }, [navigate])
 
-  // Klik notifikasi APK: deep link atapcare://open?to=<path> → pindah (termasuk cold start).
   useEffect(() => {
     if (!isNativePlatform()) return
     const toPath = (url?: string | null) => {
@@ -157,9 +147,6 @@ function AppRoutes() {
       if (p) navigate(p)
     })
     return () => { sub.then(s => s.remove()) }
-    // ponytail: jalan sekali. `navigate` berubah identitas tiap ganti pathname di
-    // react-router v7, jadi deps [navigate] membuat efek re-run → getLaunchUrl
-    // mengembalikan URL launch asli lagi → balik ke tiket + drawer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -187,8 +174,6 @@ function AppRoutes() {
     : user?.role === 'executive' ? '/executive'
     : '/dashboard'
 
-  // Tujuan asli sebelum dilempar ke /login (ProtectedRoute menyimpannya di
-  // state.from) — utamakan itu daripada dashboard by role.
   const loginFrom = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from
   const loginTarget = loginFrom?.pathname
     ? { pathname: loginFrom.pathname, search: loginFrom.search || '' }
@@ -196,8 +181,6 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* GERBANG 1: Portal Publik. Sudah login → dashboard (termasuk saat app
-          dibuka dari ikon PWA/APK); tamu → Landing (web) atau Login (native). */}
       <Route
         path="/"
         element={isAuthenticated
@@ -206,16 +189,13 @@ function AppRoutes() {
       />
       <Route path="/privacy" element={<Privacy />} />
       <Route path="/terms" element={<Terms />} />
-      {/* Publik & tanpa guard isAuthenticated: saat link recovery dibuka, sesi memang sudah aktif */}
       <Route path="/reset-password" element={<ResetPassword />} />
 
-      {/* GERBANG 2: Login Karyawan */}
       <Route
         path="/login"
         element={isAuthenticated ? <Navigate to={loginTarget} replace /> : <Login />}
       />
 
-      {/* GERBANG 2: Halaman Terproteksi */}
       <Route
         element={
           <ProtectedRoute>
@@ -248,7 +228,6 @@ function AppRoutes() {
         <Route path="/profile" element={<Profile />} />
       </Route>
 
-      {/* Fallback: tampilkan 404 */}
       <Route path="*" element={<NotFound />} />
     </Routes>
   )

@@ -9,9 +9,6 @@ import { uploadAttachment } from '../services/photoService'
 export type TicketStatus = 'NEW' | 'OPEN' | 'UNASSIGNED' | 'SCHEDULED' | 'EN_ROUTE' | 'WORKING' | 'PENDING' | 'RESOLVED' | 'CLOSED' | 'VOID' | 'DUPLICATE' | 'REJECTED'
 export type Priority = 'Critical' | 'Medium' | 'Low'
 
-// Toast realtime ke teknisi: keputusan PM atas pengajuan pending-nya. Deteksi
-// lewat transisi `pending_requested_at` per tiket milik teknisi (snapshot ref
-// sekali pakai), BUKAN lewat string action — jadi tidak re-toast tiap fetch.
 
 interface TicketActivity {
     id: string
@@ -171,9 +168,6 @@ interface TicketContextType {
 
 const TicketContext = createContext<TicketContextType | undefined>(undefined)
 
-// Snapshot nilai pending per tiket milik teknisi — buat deteksi transisi
-// (sedang menunggu keputusan PM → disetujui/ditolak) sekali pakai via ref,
-// biar toast realtime tidak re-trigger tiap fetch / noise realtime.
 type PendingSnapshot = Record<string, { status: string; pendingRequestedAt: string | null }>
 
 export const TicketProvider = ({ children }: { children: ReactNode }) => {
@@ -203,10 +197,6 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
                 }
             }
 
-            // Keputusan PM (approve/reject kepengajuan pending) → toast realtime ke
-            // teknisi pemilik tiket. Snapshot transisi sekali pakai via ref, jadi tidak
-            // re-toast tiap fetch/realtime noise. Submisi pending oleh teknisi sendiri
-            // tetap senyap (tidak ada transition dari prev yang ditolak).
             if (user?.id) {
                 for (const r of rows) {
                     if (r.assigned_to !== user.id) continue
@@ -214,8 +204,6 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
                     if (!prev) continue
                     const now = current[r.id]
                     if (prev.pendingRequestedAt) {
-                        // Approve & reject sama-sama menghapus flag (migrasi 68); pembeda
-                        // hanya status akhir: PENDING = disetujui, tetap WORKING/EN_ROUTE = ditolak.
                         if (now.status === 'PENDING') {
                             toast.success('Pengajuan pending disetujui PM', {
                                 description: `${r.code}: tiket dialihkan ke status pending.`,
@@ -226,7 +214,6 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
                             })
                         }
                     } else if (!now.pendingRequestedAt && prev.status === 'PENDING' && now.status === 'WORKING') {
-                        // Veto PM (PENDING → WORKING) satu-satunya jalur keluar PENDING.
                         toast.error('Pengajuan pending di-veto PM (lanjutkan kerja)', {
                             description: `${r.code}: tiket kembali ke status dikerjakan.`,
                         })
@@ -238,8 +225,6 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             setTickets(rows.map((r) => mapTicketRow(r)))
         }
 
-        // Membership support (telig sebagai support, bukan lead) — ikut refresh
-        // di tiap fetch agar selaras dengan Realtime ticket_assignments.
         if (user) {
             const { data: assignments } = await supabase
                 .from('ticket_assignments')
@@ -290,7 +275,6 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         const code = generateTicketCode()
 
         const initialStatus = data.initialStatus || 'NEW'
-        // Prioritas NULL saat dibuat; diisi helpdesk saat validasi (status DIPROSES).
         const initialPriority = data.priority
 
         let details: string | undefined = data.catatanInternal ? `Catatan Internal: ${data.catatanInternal}` : undefined
@@ -387,8 +371,6 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
 
     const getTicketCount = (status: TicketStatus) => tickets.filter(t => t.status === status).length
 
-    // Penugasan langsung (Opsi B): assign/reassign ke teknisi → SCHEDULED; unassign → UNASSIGNED.
-    // Satu fungsi berbagi untuk semua pemanggil (Helpdesk, PM, bulk assign) agar tidak terpecah.
     const assignTicket = async (
         id: string,
         technicianId: string | null,

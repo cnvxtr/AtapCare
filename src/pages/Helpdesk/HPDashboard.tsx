@@ -25,11 +25,9 @@ export default function HPDashboard() {
     const [actionError, setActionError] = useState('')
     const [duplicateTargetId, setDuplicateTargetId] = useState('')
 
-    // Rolling bulan kalender: otomatis geser ke bulan baru tiap tanggal 1, tanpa reset manual
     const monthStart = new Date(); monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0)
     const periodLabel = monthStart.toLocaleString('id-ID', { month: 'long', year: 'numeric' })
 
-    // Distribusi status SAAT INI (real-time, semua tiket — bukan per periode)
     const statusData = [
         { name: 'Baru', value: tickets.filter(t => t.status === 'NEW').length, color: '#d4d4d4' },
         { name: 'Diproses', value: tickets.filter(t => t.status === 'OPEN').length, color: '#a3a3a3' },
@@ -40,7 +38,6 @@ export default function HPDashboard() {
         { name: 'Tutup', value: tickets.filter(t => t.status === 'CLOSED').length, color: '#171717' },
     ]
 
-    // Trend mingguan bulan berjalan: masuk (createdAt) vs selesai (closedAt) — historis, tidak hilang
     const trendData = (() => {
         const y = new Date().getFullYear(), m = new Date().getMonth()
         const days = new Date(y, m + 1, 0).getDate()
@@ -59,11 +56,10 @@ export default function HPDashboard() {
         })
     })()
 
-    // TABEL OPERASIONAL: tiket aktif (final: Tutup/Void/Digabung) semua periode, 10 terbaru — real-time
     const displayTickets = tickets
         .filter(t => !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        .slice(0, 10) // Tampilkan 10 teratas
+        .slice(0, 10)
 
     const avgFrt = tickets.filter(t => t.frtMinutes != null).reduce((s, t) => s + (t.frtMinutes ?? 0), 0) / (tickets.filter(t => t.frtMinutes != null).length || 1)
 
@@ -86,7 +82,6 @@ export default function HPDashboard() {
     return (
         <>
         <div className="space-y-6">
-            {/* 1. KPI Cards (state real-time, tidak difilter periode) */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="group relative rounded-2xl border border-border bg-card p-5 overflow-hidden hover:border-foreground/30 transition">
                     <div className="absolute -top-10 -right-10 h-24 w-24 rounded-full bg-foreground/[0.03] blur-2xl group-hover:bg-foreground/[0.08] transition" />
@@ -133,7 +128,6 @@ export default function HPDashboard() {
                 </div>
             </div>
 
-            {/* 3. Grafik (2 Kolom) */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
                 <div className="bg-card border border-border rounded-2xl p-4 sm:p-6 transition-all w-full">
                     <div className="flex items-start justify-between mb-6">
@@ -169,7 +163,6 @@ export default function HPDashboard() {
                 </div>
             </div>
 
-            {/* Tabel Operasional (Tier 2) */}
             <div className="rounded-2xl border border-border bg-card">
                 <div className="p-4 border-b border-border flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <h3 className="font-display font-bold text-foreground">10 Tiket Aktif Terbaru</h3>
@@ -218,7 +211,6 @@ export default function HPDashboard() {
             </div>
         </div>
 
-            {/* DRAWER DETAIL DASHBOARD */}
             {selectedTicket && (
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}
@@ -274,7 +266,6 @@ export default function HPDashboard() {
                 </TicketDrawer>
             )}
 
-            {/* MODAL VOID / DUPLICATE */}
             {actionModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => { setActionModal(null); setActionInput(''); setDuplicateTargetId(''); setActionError('') }}>
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>

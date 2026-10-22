@@ -70,8 +70,6 @@ DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
 export {
   Dialog,
-  DialogPortal,
-  DialogOverlay,
   DialogClose,
   DialogContent,
   DialogHeader,

@@ -39,7 +39,6 @@ const PAGE_TITLES: Record<string, string> = {
 const roleHome = (r?: string) =>
   r === 'admin' ? '/admin' : r === 'teknisi' ? '/tugas' : r === 'customer' ? '/customer' : r === 'executive' ? '/executive' : '/dashboard'
 
-// ponytail: drag-down manual tanpa lib; ambang 90px, hanya aktif dari area kepala sheet.
 function useSheetDismiss(onClose: () => void) {
   const [dy, setDy] = useState(0)
   const startY = useRef<number | null>(null)
@@ -75,8 +74,6 @@ export default function MobileLayout() {
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
 
-  // Halaman publik membuang class dark saat mount; terapkan ulang tema dari
-  // simpanan begitu masuk shell (dark mode hanya hidup di dalam sistem).
   useEffect(() => { applyTheme() }, [])
 
   useEffect(() => {
@@ -98,9 +95,6 @@ export default function MobileLayout() {
   const notifDismiss = useSheetDismiss(() => setShowNotifSheet(false))
   const roleDismiss = useSheetDismiss(() => setShowRoleSheet(false))
 
-  // Kunci scroll halaman saat sheet/modal terbuka (notif, role).
-  // html + body sekaligus: di sebagian WebView/Chrome Android, overflow:hidden
-  // pada body saja tidak menahan scroll dokumen (viewport = html).
   const anySheetOpen = showNotifSheet || showRoleSheet
   useEffect(() => {
     const root = document.documentElement
@@ -115,7 +109,6 @@ export default function MobileLayout() {
     }
   }, [anySheetOpen])
 
-  // Nonce untuk remount Outlet saat pull-to-refresh: refetch tanpa reload halaman.
   const [refreshNonce, setRefreshNonce] = useState(0)
 
   const prevNotifIds = useRef<string[]>([])
@@ -136,8 +129,6 @@ export default function MobileLayout() {
     }
     refresh()
     const t = setInterval(refresh, 30_000)
-    // Realtime: notifikasi baru langsung memicu refresh (chime/badge instan),
-    // tanpa menunggu 30 dtk. Polling tetap ada sebagai jaring pengaman.
     const ch = supabase
       .channel('realtime-notifications')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => refresh())
@@ -169,8 +160,6 @@ export default function MobileLayout() {
     }
   }
 
-  // Klik notif → buka halaman terkait. Staf → drawer tiket terbuka via kode tiket
-  // (state router); customer → halaman detail penuh.
   const handleNotifOpen = async (n: NotificationRow) => {
     if (!user) return
     const code = ticketCodeFromNotif(n)
@@ -222,7 +211,6 @@ export default function MobileLayout() {
     }
   }
 
-  // Ganti Role — perilaku identik dengan sidebar web.
   const roleList = (user?.roles || user?.role || '').split(',').map((s) => s.trim()).filter(Boolean)
   const canSwitchRole = roleList.length > 1
 
@@ -273,7 +261,6 @@ export default function MobileLayout() {
     setNotifs(prev => prev.map(n => ({ ...n, read: true })))
   }
 
-  // Klik lonceng = buka sheet + tandai semua terbaca (badge hilang), notif tetap tampil.
   const handleBellOpen = () => {
     setShowNotifSheet(true)
     handleMarkAllRead()
@@ -299,11 +286,9 @@ export default function MobileLayout() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      {/* Top Bar */}
       <header className="sticky top-0 z-40 h-16 flex items-center justify-between px-5 border-b border-border bg-background/80 backdrop-blur-xl">
         <h1 className="text-lg font-display font-bold tracking-tight truncate">{pageTitle}</h1>
         <div className="flex items-center gap-1">
-          {/* Ganti Role — hanya untuk multi-role */}
           {canSwitchRole && user && (
             <button
               onClick={() => setShowRoleSheet(true)}
@@ -314,7 +299,6 @@ export default function MobileLayout() {
             </button>
           )}
 
-          {/* Dark Mode Toggle */}
           <button
             onClick={toggleTheme}
             className="h-11 w-11 grid place-items-center rounded-xl hover:bg-accent transition-colors"
@@ -322,7 +306,6 @@ export default function MobileLayout() {
             {isDark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </button>
 
-          {/* Notifikasi */}
           <button
             onClick={handleBellOpen}
             className="relative h-11 w-11 grid place-items-center rounded-xl hover:bg-accent transition-colors"
@@ -337,7 +320,6 @@ export default function MobileLayout() {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="flex-1 px-4 py-3 pb-[calc(3.5rem+env(safe-area-inset-bottom))]">
         <PullToRefresh onRefresh={() => setRefreshNonce((n) => n + 1)}>
           <ErrorBoundary>
@@ -346,10 +328,8 @@ export default function MobileLayout() {
         </PullToRefresh>
       </main>
 
-      {/* Bottom Tabs */}
       <BottomTabs role={user?.role || 'helpdesk'} />
 
-      {/* Notification Bottom Sheet */}
       {showNotifSheet && createPortal(
         <>
           <div className="fixed inset-0 z-[55] bg-black/40 fade-in" onClick={() => setShowNotifSheet(false)} onTouchMove={(e) => e.preventDefault()} />
@@ -362,7 +342,6 @@ export default function MobileLayout() {
             >
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
             </div>
-            {/* Header */}
             <div className="px-5 pb-3 border-b border-border flex items-center justify-between">
               <span className="text-sm font-semibold text-foreground">Notifikasi</span>
               {notifs.length > 0 && (
@@ -374,7 +353,6 @@ export default function MobileLayout() {
                 </button>
               )}
             </div>
-            {/* List */}
             <div className="flex-1 overflow-y-auto overscroll-contain">
               {notifs.length === 0 ? (
                 <div className="px-5 py-12 text-center text-sm text-muted-foreground">
@@ -420,7 +398,6 @@ export default function MobileLayout() {
         document.body
       )}
 
-      {/* Role Switcher Bottom Sheet */}
       {showRoleSheet && createPortal(
         <>
           <div className="fixed inset-0 z-[55] bg-black/40 fade-in" onClick={() => setShowRoleSheet(false)} onTouchMove={(e) => e.preventDefault()} />

@@ -7,12 +7,6 @@ import { useAuth } from '../../context/AuthContext'
 import { useTickets, type Ticket } from '../../context/TicketContext'
 import { supabase } from '../../lib/supabase'
 
-// Popup rating global untuk customer: muncul otomatis di halaman mana pun saat
-// tiket jadi CLOSED & belum dirating (data dari useTickets yang Realtime), tanpa
-// harus klik tiket dulu.
-// - Halaman non-detail: "Nanti Saja" menahan popup sampai reload / sampai buka detail.
-// - Halaman detail: popup hanya untuk tiket yang dibuka, sebagai reminder. Dismiss
-//   hanya menahan pada kunjungan itu (location.key); buka ulang → reminder kembali.
 export default function RatingWatcher() {
   const { user } = useAuth()
   const { tickets } = useTickets()

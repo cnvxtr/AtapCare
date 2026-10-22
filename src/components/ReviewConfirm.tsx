@@ -3,9 +3,6 @@ import { Check, X } from 'lucide-react'
 
 export type ReviewRow = { label: string; value: string; multiline?: boolean }
 
-// Konfirmasi terakhir sebelum submit: tampilkan isi form apa adanya supaya
-// salah ketik ketahuan sebelum tersimpan (temuan tidak bisa diedit lagi
-// lewat UI). Baris yang valuenya kosong otomatis tidak ditampilkan.
 export default function ReviewConfirm({
     title, rows, confirmLabel, onConfirm, onClose, busy = false,
 }: {

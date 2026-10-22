@@ -16,7 +16,6 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
   }, [])
 
   useEffect(() => {
-    // Ponytail: bar jelas duluan, logo tetap tampil sampai seluruh splash hilang.
     const timer = setTimeout(() => setPhase('out'), 2700)
     return () => clearTimeout(timer)
   }, [])
@@ -35,7 +34,6 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
         exit={{ opacity: 0 }}
         transition={{ duration: 0.4 }}
       >
-        {/* Center: Logo + App Name horizontal */}
         <motion.div
           className="flex items-center gap-3"
           initial={{ opacity: 0, scale: 0.85 }}
@@ -52,7 +50,6 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           </h1>
         </motion.div>
 
-        {/* Loading bar — hanya bar ini yang hilang saat penuh */}
         <motion.div
           className="mt-8 h-0.5 w-32 rounded-full bg-neutral-200 overflow-hidden"
           initial={{ opacity: 0 }}
@@ -67,7 +64,6 @@ export default function SplashScreen({ onFinish }: SplashScreenProps) {
           />
         </motion.div>
 
-        {/* Company Name — fixed at bottom center */}
         <motion.p
           className="absolute bottom-8 text-[10px] uppercase tracking-[0.2em] text-neutral-400 font-medium"
           initial={{ opacity: 0, y: 8 }}

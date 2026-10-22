@@ -2,10 +2,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { useEffect, useRef } from "react";
 
-// Jendela jadwal: 24 jam penuh (BR 3.2.2). Lembur di luar jam operasional
-// 08.00-17.00 tetap ditandai isScheduleOvertime di layar konfirmasi.
-const HOURS = Array.from({ length: 24 }, (_, i) => i) // 00..23
-const MINUTES = Array.from({ length: 60 }, (_, i) => i)   // 00..59 (bebas 1 menit)
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const MINUTES = Array.from({ length: 60 }, (_, i) => i)
 
 const WEEKDAYS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
 const MONTHS = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"]
@@ -23,11 +21,9 @@ interface SchedulePickerProps {
   onConfirm: () => void
 }
 
-const ITEM_H = 32 // tinggi item tetap (h-8) agar wrap scroll presisi
-const COPIES = 3 // list dirender 3x: salinan tengah jadi area aktif, pinggir untuk efek loop
+const ITEM_H = 32
+const COPIES = 3
 
-// Kolom gulir ala set alarm: pilih lewat klik. (Auto-pilih & penanda tengah
-// dihapus atas permintaan user — scroll polos, seleksi manual via klik.)
 function WheelColumn({
   label,
   values,
@@ -45,14 +41,12 @@ function WheelColumn({
   const n = values.length
   const copy = ITEM_H * n
 
-  // Mulai di salinan tengah supaya scroll awal sudah "di dalam loop".
   useEffect(() => {
     const el = ref.current
     if (!el) return
     if (el.scrollTop === 0) el.scrollTop = copy
   }, [copy])
 
-  // Nilai terpilih selalu di tengah (gunakan item di salinan tengah).
   useEffect(() => {
     const el = ref.current
     if (!el) return
@@ -65,7 +59,6 @@ function WheelColumn({
     el.scrollTo({ top: copy + idx * ITEM_H - el.clientHeight / 2 + ITEM_H / 2, behavior: "smooth" })
   }, [selected, values, format, copy])
 
-  // Loop tak terbatas: mendekati ujung → lompat satu salinan (instan).
   const handleScroll = () => {
     const el = ref.current
     if (!el) return
@@ -114,11 +107,11 @@ export default function SchedulePicker({ date, time, onDate, onTime, onConfirm }
   const complete = !!date && hourDone && minDone
 
   const handleHour = (h: number) => {
-    if (pHour === pad(h)) { onTime(minDone ? `:${pMin}` : ""); return } // ulang klik jam terpilih → lepas jam saja
+    if (pHour === pad(h)) { onTime(minDone ? `:${pMin}` : ""); return }
     onTime(`${pad(h)}:${minDone ? pMin : ""}`)
   }
   const handleMin = (m: number) => {
-    if (pMin === pad(m)) { onTime(hourDone ? `${pHour}:` : ""); return } // ulang klik menit terpilih → lepas menit saja
+    if (pMin === pad(m)) { onTime(hourDone ? `${pHour}:` : ""); return }
     onTime(`${hourDone ? pHour : ""}:${pad(m)}`)
   }
 

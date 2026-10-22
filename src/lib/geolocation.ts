@@ -9,10 +9,6 @@ export interface GeolocError extends Error {
   code?: number
 }
 
-// Posisi pertama via watchPosition. Chrome desktop kadang memicu callback error
-// (bahkan code 1 "User denied") SEBELUM posisi jaringan menyusul pada panggilan
-// yang sama — karena itu jangan menyerah di error pertama: simpan error terakhir
-// dan tetap tunggu sampai ada posisi nyata atau timeout keras.
 function watchFirstPosition(opts: {
   enableHighAccuracy: boolean
   timeout: number
@@ -72,7 +68,6 @@ export async function getCurrentPosition(opts?: {
   timeout?: number
 }): Promise<GeolocPos> {
   if (isNativePlatform()) {
-    // Dynamic import — plugin hanya tersedia di Capacitor build.
     const { Geolocation } = await import('@capacitor/geolocation')
     let perm = await Geolocation.checkPermissions()
     if (perm.location !== 'granted' && perm.coarseLocation !== 'granted') {
@@ -100,8 +95,6 @@ export async function getCurrentPosition(opts?: {
   } catch (first) {
     const e = first as GeolocError
     console.error('Geolocation gagal (percobaan 1), mencoba ulang:', e.code, e.message)
-    // Fallback: lokasi jaringan tanpa high accuracy — biasanya tersedia di
-    // desktop walau fix GPS presisi tidak pernah datang.
     return watchFirstPosition({ enableHighAccuracy: false, timeout: 15000, maximumAge: 60000 })
   }
 }

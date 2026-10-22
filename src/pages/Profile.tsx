@@ -19,21 +19,17 @@ const FIELD_LABELS: Record<string, string> = { fullName: 'Nama Lengkap', usernam
 export default function Profile() {
   const { user, logout, refreshUser } = useAuth()
 
-  // Profile edit state
   const [fullName, setFullName] = useState(user?.full_name || '')
   const [username, setUsername] = useState(user?.username || '')
   const [waNumber, setWaNumber] = useState(user?.wa_number || '')
   const [saving, setSaving] = useState(false)
   const initRef = useRef({ fullName: user?.full_name || '', username: user?.username || '', waNumber: user?.wa_number || '' })
 
-  // Confirm save
   const [showConfirmSave, setShowConfirmSave] = useState(false)
   const [pendingChanges, setPendingChanges] = useState<ProfileField[]>([])
 
-  // Confirm logout
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
 
-  // Password state
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -42,22 +38,18 @@ export default function Profile() {
   const [showNewPw, setShowNewPw] = useState(false)
   const [showConfirmPw, setShowConfirmPw] = useState(false)
 
-  // Avatar state
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [showAvatarPreview, setShowAvatarPreview] = useState(false)
   const [showAvatarDeleteConfirm, setShowAvatarDeleteConfirm] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Activities state
   const [activities, setActivities] = useState<ActivityRow[]>([])
   const [activityFilter, setActivityFilter] = useState<FilterKey>('all')
 
-  // Load activities (raw from both tables)
   useEffect(() => {
     if (!user) return
     const load = async () => {
       const rows: ActivityRow[] = []
-      // ticket activities
       const { data: ticketData } = await supabase
         .from('activities')
         .select('id, user_name, action, created_at')
@@ -73,7 +65,6 @@ export default function Profile() {
           created_at: r.created_at,
         })
       }
-      // admin audit logs
       if (user.role === 'admin') {
         const { data: auditData } = await supabase
           .from('audit_logs')
@@ -98,7 +89,6 @@ export default function Profile() {
     load().catch(() => setActivities([]))
   }, [user])
 
-  // Filtered activities
   const filteredActivities = useMemo(() => {
     if (activityFilter === 'all') return activities
     const now = new Date()
@@ -115,7 +105,6 @@ export default function Profile() {
     return activities.filter(a => a.created_at >= iso)
   }, [activities, activityFilter])
 
-  // Resolve avatar URL
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
   useEffect(() => {
     resolveAvatarUrl(user?.avatar_url).then(setResolvedAvatar)
@@ -176,7 +165,6 @@ export default function Profile() {
     if (newPassword !== confirmPassword) { toast.error('Konfirmasi password tidak cocok.'); return }
 
     setChangingPassword(true)
-    // Verify current password
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: user?.email || '',
       password: currentPassword,
@@ -186,7 +174,6 @@ export default function Profile() {
       toast.error('Password lama salah.')
       return
     }
-    // Update password
     const { error } = await supabase.auth.updateUser({ password: newPassword })
     setChangingPassword(false)
     if (error) {
@@ -209,16 +196,13 @@ export default function Profile() {
     setAvatarUploading(true)
 
     try {
-      // Kompres ke JPEG blob lalu upload dengan progres nyata.
       const compressed = await compressImageToBlob(file, 400, 0.8)
       const path = `${user.id}/avatar.jpg`
 
       await uploadAvatar(path, compressed)
 
-      // Signed URL (diperbarui otomatis saat halaman di-reload di bawah)
       await supabase.storage.from('avatars').createSignedUrl(path, 3600 * 24 * 365)
 
-      // Update users table
       const { error: updateError } = await supabase.from('users').update({ avatar_url: path }).eq('id', user.id)
 
       if (updateError) {
@@ -263,10 +247,8 @@ export default function Profile() {
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
       <h1 className="text-2xl font-display font-bold tracking-tight">Profil {roleLabel}</h1>
 
-      {/* Avatar Card */}
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center gap-5">
-          {/* Belum ada foto: klik langsung pilih foto (tanpa menu) */}
           {!user?.avatar_url ? (
             <button
               onClick={() => fileInputRef.current?.click()}
@@ -339,7 +321,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Informasi Akun */}
       <div className="rounded-lg border border-border bg-card p-6 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <User className="h-4 w-4 text-muted-foreground" />
@@ -368,7 +349,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Ganti Kata Sandi */}
       <div className="rounded-lg border border-border bg-card p-6 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <Lock className="h-4 w-4 text-muted-foreground" />
@@ -396,7 +376,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Aktivitas Terbaru */}
       <div className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -438,7 +417,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Keluar */}
       <button
         onClick={() => setShowLogoutConfirm(true)}
         className="w-full rounded-lg border border-red-200 bg-card p-4 flex items-center gap-3 text-red-500 hover:bg-red-50 transition cursor-pointer"
@@ -447,7 +425,6 @@ export default function Profile() {
         <span className="text-sm font-semibold">Keluar</span>
       </button>
 
-      {/* MODAL PREVIEW FOTO PROFIL */}
       {showAvatarPreview && createPortal((
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowAvatarPreview(false)}>
           <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -462,7 +439,6 @@ export default function Profile() {
         </div>
       ), document.body)}
 
-      {/* MODAL KONFIRMASI HAPUS FOTO */}
       {showAvatarDeleteConfirm && createPortal((
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowAvatarDeleteConfirm(false)}>
           <div className="bg-card border border-border w-full max-w-sm rounded-lg shadow-2xl p-6 text-center" onClick={(e) => e.stopPropagation()}>
@@ -485,7 +461,6 @@ export default function Profile() {
         </div>
       ), document.body)}
 
-      {/* MODAL KONFIRMASI KELUAR */}
       {showLogoutConfirm && createPortal((
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in">
           <div className="bg-card border border-border w-full max-w-sm rounded-lg shadow-2xl p-6 text-center" onClick={(e) => e.stopPropagation()}>
@@ -508,7 +483,6 @@ export default function Profile() {
         </div>
       ), document.body)}
 
-      {/* MODAL KONFIRMASI SIMPAN */}
       {showConfirmSave && createPortal((
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowConfirmSave(false)}>
           <div className="bg-card border border-border w-full max-w-sm rounded-lg shadow-2xl p-6" onClick={e => e.stopPropagation()}>

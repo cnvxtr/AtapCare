@@ -59,7 +59,6 @@ const DATASETS: Array<{ key: TabKey; label: string }> = [
   { key: "sparepart", label: "Serial Number" },
 ];
 
-// Per-role dataset: admin semua; helpdesk & executive tiket + serial number.
 function datasetsFor(mode: "admin" | "helpdesk") {
   return DATASETS.filter((d) =>
     mode === "admin" ? true : d.key === "tickets" || d.key === "sparepart",
@@ -77,7 +76,6 @@ const STATUS_COLS: Record<TabKey, number[]> = {
   sparepart: [],
 };
 
-// Posisi properti Priority/Status di TicketReportRow, dipakai untuk export.
 const TICKET_PRIORITY_PROP = 8;
 const TICKET_STATUS_PROP = 9;
 
@@ -109,7 +107,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [activeDrawerTab, setActiveDrawerTab] = useState<DrawerTab>("detail");
 
   const [tickets, setTickets] = useState<TicketReportRow[]>([]);
-  // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka (read-only untuk admin).
   const location = useLocation();
   const notifyOpenCode = notifyTicketCode(location.state, location.search);
   const navigate = useNavigate();
@@ -196,8 +193,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     return set;
   }, [tickets, search, tab]);
 
-  // Tabel layar memakai subset header (tanpa kolom deskripsi); export memakai
-  // header penuh (termasuk Deskripsi Masalah/Hasil).
   const activeHeaders: string[] =
     tab === "tickets"
       ? TICKET_REPORT_TABLE_HEADERS
@@ -216,12 +211,8 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const baseName = `atapcare-${tab}-${stamp}`;
   const datasetLabel = DATASETS.find((d) => d.key === tab)?.label || tab;
 
-  // Snapshot data saat klik, bukan saat proses berjalan, agar ganti tab di
-  // tengah tidak mengekspor dataset yang salah.
   function doExport(format: "xlsx" | "pdf" = "xlsx") {
     if (exporting || visibleRows.length === 0) return;
-    // Export tiket pakai urutan kolom sendiri (deskripsi disisipkan);
-    // tabel layar tetap memakai urutan aslinya.
     const rows =
       tab === "tickets"
         ? visibleRows.map((r, i) => [i + 1, ...TICKET_EXPORT_INDEXES.map((idx) => r[idx])])
@@ -233,7 +224,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       filters.from && filters.to
         ? `${fmtIso(filters.from)} – ${fmtIso(filters.to)}`
         : "Semua Periode";
-    // Kolom prioritas/status ikut bergeser di export tiket.
     const priorityCols =
       tab === "tickets"
         ? [TICKET_EXPORT_INDEXES.indexOf(TICKET_PRIORITY_PROP) + 2]
@@ -302,7 +292,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
 
   return (
     <div className="space-y-4">
-      {/* ─── Tab Dataset ─────────────────────────────────────────── */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="space-y-4">
         <div className={`bg-card p-1 rounded-xl border border-border grid gap-1 ${mode === "admin" ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2"}`}>
           {visibleDatasets.map((d) => (
@@ -320,7 +309,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
           ))}
         </div>
 
-      {/* ─── Baris Filter ────────────────────────────────────────── */}
       <Card>
         <CardContent className="px-2.5 py-3">
           <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">

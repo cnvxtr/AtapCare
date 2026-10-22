@@ -56,5 +56,3 @@ export function Badge({ type, value, className = '', small, label }: BadgeProps)
     </span>
   )
 }
-
-export default Badge

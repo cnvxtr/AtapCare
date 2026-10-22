@@ -124,6 +124,4 @@ export {
   SelectTrigger,
   SelectContent,
   SelectItem,
-  SelectScrollUpButton,
-  SelectScrollDownButton,
 };

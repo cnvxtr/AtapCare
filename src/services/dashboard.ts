@@ -74,19 +74,16 @@ export async function getAdminMonthlyData(): Promise<AdminMonthlyData> {
   const closedIds = new Set(closed.map((t) => t.id));
   const counts = new Map<string, number>();
   for (const t of closed) {
-    if (!t.assigned_to) continue; // tiket tanpa penugasan bukan bagian leaderboard teknisi
+    if (!t.assigned_to) continue;
     const name = userNameById.get(t.assigned_to) || "Teknisi";
     counts.set(name, (counts.get(name) || 0) + 1);
   }
-  // Pendukung (role 'teknisi') ikut dihitung sebagai 1 tiket per tiket CLOSED
-  // periode ini; gabung ke skor yang sama dengan lead.
   for (const a of assignmentsRes.data || []) {
     if (a.role !== "teknisi" || !closedIds.has(a.ticket_id)) continue;
     const name = userNameById.get(a.user_id) || "Teknisi";
     counts.set(name, (counts.get(name) || 0) + 1);
   }
 
-  // Union nama lead + pendukung: teknisi yang hanya jadi pendukung tetap muncul.
   const leaderboard = Array.from(counts.entries()).map(([name, completed]) => ({
     name,
     completed,

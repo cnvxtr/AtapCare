@@ -39,7 +39,6 @@ export interface CatalogItem {
 
 type CatalogTable = "problem_categories" | "root_causes";
 
-// CRUD katalog (Temuan Awal & Temuan Akhir) — satu pola untuk dua tabel.
 function catalogCrud(table: CatalogTable) {
   return {
     getAll: async (includeDeleted = false): Promise<CatalogItem[]> => {
@@ -149,9 +148,6 @@ export async function updateCustomer(id: string, input: NewCustomer): Promise<bo
   return true;
 }
 
-// Hapus permanen. Site/Unit/mapping ikut hilang via FK ON DELETE CASCADE;
-// regions.customer_id SET NULL jadi region dihapus eksplisit.
-// ponytail: bukan satu transaksi (2 statement terpisah); ulangi bila gagal.
 export async function deleteCustomer(id: string): Promise<boolean> {
   const { error } = await supabase.from("sites").delete().eq("customer_id", id);
   if (error) return false;
@@ -212,12 +208,6 @@ export async function deleteUnit(id: string): Promise<boolean> {
   return true;
 }
 
-// BR-75D guard: unit/site/customer dengan tiket aktif tidak boleh dihapus.
-// Tiket menyimpan nama (string), bukan FK, dan `tickets.customer` berisi nama
-// pelapor (bukan nama perusahaan) — jadi guard customer diturunkan dari site
-// yang dimiliki customer (tickets.site cocok dengan sites.name).
-// ponytail: pencocokan berbasis nama; upgrade sebenarnya = kolom FK unit_id di
-// tickets yang diisi saat pembuatan tiket.
 export async function countActiveTicketsFor(
   type: "customer" | "site" | "unit",
   id: string,
@@ -246,8 +236,6 @@ export async function countActiveTicketsFor(
   return count || 0;
 }
 
-// Actor audit diset saat login (lihat AuthContext). Fallback 'Admin' agar
-// service tetap aman dipakai di luar konteks sesi (mis. seed/script).
 let currentActor: string | null = null;
 export function setAuditActor(name: string | null) {
   currentActor = name;

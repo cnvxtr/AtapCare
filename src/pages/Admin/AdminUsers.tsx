@@ -40,8 +40,6 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "executive", label: "Executive" },
 ];
 
-// Tab Karyawan tidak boleh menawarkan role Pelanggan — user ber-role customer
-// otomatis pindah ke tab Pelanggan tanpa binding perusahaan/site/unit.
 const INTERNAL_ROLE_OPTIONS = ROLE_OPTIONS.filter((r) => r.value !== "customer");
 
 const STATUS_OPTIONS: { value: UserStatus; label: string }[] = [
@@ -61,8 +59,6 @@ const ROLE_BADGE_COLORS: Record<string, string> = {
 const TRIGGER_CLS =
   "w-full h-9 px-3 rounded-[3px] border border-border bg-muted text-sm text-foreground outline-none focus:border-ring inline-flex items-center justify-between gap-2";
 
-// Opsi di menu: label tampil sebagai badge kotak warna per role (sama seperti
-// trigger & tabel) — teks badge sudah kontras dengan bg (ROLE_BADGE_COLORS).
 function roleOptionCls(selected: boolean) {
   return `w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-[3px] text-xs font-medium transition cursor-pointer ${
     selected ? "bg-accent text-foreground" : "hover:bg-accent/60"
@@ -103,7 +99,6 @@ function RolePrimarySelect({
             key={o.value}
             type="button"
             onClick={() => {
-              // Klik role yang sudah terpilih → batal pilih (kepencet bisa dibatalkan).
               onChange(o.value === value ? "" : o.value);
               setOpen(false);
             }}
@@ -130,7 +125,6 @@ function RoleExtraSelect({
   onToggle: (v: AppRole) => void;
 }) {
   const chosen = options.filter((o) => selected.includes(o.value));
-  // Role Utama belum dipilih → trigger diganti tombol mati (syarat UI).
   if (!primary) {
     return (
       <button type="button" disabled className={`${TRIGGER_CLS} opacity-50 cursor-not-allowed`}>
@@ -193,8 +187,6 @@ const ITEMS_PER_PAGE = 10;
 async function getAuthHeaders(): Promise<Record<string, string> | null> {
   const { VITE_SUPABASE_ANON_KEY } = import.meta.env;
   let { data: sessionData } = await supabase.auth.getSession();
-  // Token tinggal kedaluwarsa (≤60 dtk) → refresh dulu; kalau telat, edge
-  // function menolak dengan "Unauthorized". Satu guard melindungi semua call.
   const expAt = sessionData.session?.expires_at;
   if (sessionData.session && expAt && Date.now() >= (expAt - 60) * 1000) {
     const { data: refreshed } = await supabase.auth.refreshSession();
@@ -242,7 +234,6 @@ export function AdminUsers() {
 
   useEffect(() => {
     loadUsers();
-    // Data perusahaan (nama + kode) untuk kolom tabel & lookup kode saat tambah pelanggan.
     supabase
       .from("customers")
       .select("id, name, code")
@@ -251,7 +242,6 @@ export function AdminUsers() {
       .then(({ data }) => setMdCustomers((data as MdRow[]) || []));
   }, []);
 
-  // Segarkan saat halaman kembali fokus — data admin tidak basi antar-sesi.
   useEffect(() => {
     const onShow = () => {
       if (document.visibilityState === "visible") loadUsers();
@@ -274,8 +264,6 @@ export function AdminUsers() {
       .eq("is_deleted", false)
       .order("name");
 
-    // Query gagal ≠ data kosong: tanpa toast ini, kolom yang belum ada di DB
-    // cuma bikin tabel "0" diam-diam (kejadian: users.site_id sebelum migrasi 81).
     if (userErr) {
       toast.error("Gagal memuat pengguna: " + userErr.message);
       setLoading(false);
@@ -290,8 +278,6 @@ export function AdminUsers() {
       .from("tickets")
       .select("assigned_to, created_by_user_id")
       .in("status", ["NEW", "OPEN", "UNASSIGNED", "SCHEDULED", "EN_ROUTE", "WORKING", "PENDING"]);
-    // ponytail: dua semantik "tiket aktif" — karyawan = tiket yg DITUGASKAN (assigned_to),
-    // pelanggan = tiket yang DIBUAT akun tsb (created_by_user_id). Hitung dua-duanya sekali.
     const countByUser: Record<string, number> = {};
     const countByReporter: Record<string, number> = {};
     for (const t of activeRows || []) {
@@ -458,8 +444,6 @@ export function AdminUsers() {
     };
 
     if (editingId) {
-      // RLS users hanya mengizinkan self-update last_login; tulis user lain
-      // lewat RPC SECURITY DEFINER (validasi caller role=admin).
       const existing = users.find((u) => u.id === editingId);
       if (existing && existing.email !== email) {
         const { VITE_SUPABASE_URL } = import.meta.env;
@@ -647,7 +631,6 @@ export function AdminUsers() {
       return false;
     }
 
-    // must_change_password di-set oleh edge function (service client, bypass RLS).
 
     await supabase.from("audit_logs").insert({
       actor_name: "Admin",

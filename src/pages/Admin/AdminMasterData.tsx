@@ -388,7 +388,6 @@ export function AdminMasterData() {
     item: CatalogItem;
   } | null>(null);
 
-  // ─── Tab Master Data: Pohon Aset / Temuan Awal / Temuan Akhir ───
   const [tab, setTab] = useState<MasterTab>("assets");
   const [cats, setCats] = useState<CatalogItem[]>([]);
   const [roots, setRoots] = useState<CatalogItem[]>([]);
@@ -466,7 +465,6 @@ export function AdminMasterData() {
   const [formSerialNumber, setFormSerialNumber] = useState("");
   const [formType, setFormType] = useState("");
 
-  // Wizard Perusahaan → Site → Unit
   const [wizStep, setWizStep] = useState<WizardStep>(1);
   const [wizEditLabel, setWizEditLabel] = useState<"customer" | "site" | "unit">("customer");
   const [wizCustomerName, setWizCustomerName] = useState("");
@@ -488,7 +486,6 @@ export function AdminMasterData() {
     loadAll();
   }, []);
 
-  // Segarkan saat halaman kembali fokus — data master tidak basi antar-sesi.
   useEffect(() => {
     const onShow = () => {
       if (document.visibilityState === "visible") loadAll();
@@ -501,7 +498,6 @@ export function AdminMasterData() {
     };
   }, []);
 
-  // Lazy-load katalog saat tab pertama kali dibuka.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (tab === "categories" && cats.length === 0) loadCatalog("problem_categories");
@@ -535,7 +531,6 @@ export function AdminMasterData() {
     setEditingId(null);
   }
 
-  // ─── Wizard Perusahaan → Site → Unit ──────────────────────────
 
   function clearSiteFields() {
     setWizSiteName("");
@@ -907,7 +902,6 @@ export function AdminMasterData() {
     });
   }
 
-  // ─── Derived ────────────────────────────────────────────────
 
   const hasWizardSite =
     formMode === "customer"
@@ -957,7 +951,6 @@ export function AdminMasterData() {
 
   return (
     <div className="space-y-4">
-      {/* ─── Tab Master Data ───────────────────────────────────── */}
       <div className="bg-card p-1 rounded-xl border border-border grid grid-cols-3 gap-1">
         {MASTER_TABS.map((t) => (
           <button
@@ -974,10 +967,8 @@ export function AdminMasterData() {
         ))}
       </div>
 
-      {/* ─── Pohon Aset (Perusahaan → Site → Unit) ───────────────── */}
       {tab === "assets" && (
         <>
-      {/* ─── Header: search + add ─────────────────────────────── */}
 <div className="bg-card p-4 rounded-xl border border-border">
   <div className="flex items-center justify-between flex-wrap gap-2">
     <div className="relative flex-1 min-w-0">
@@ -1001,7 +992,6 @@ export function AdminMasterData() {
         </div>
       </div>
 
-      {/* ─── Card gabungan: Titik Aktif + TreeTable ────────────── */}
       <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
         <div className="flex items-center justify-end gap-2 px-4 py-3 border-b border-border">
           <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-muted text-foreground text-xs font-mono uppercase tracking-widest border border-border shadow-sm">
@@ -1063,7 +1053,6 @@ export function AdminMasterData() {
                     });
                   return (
                     <Fragment key={c.id}>
-                      {/* Level 1 — Perusahaan */}
                       <tr
                         className={`border-b border-border bg-card hover:bg-accent/60 transition ${c.is_deleted ? "opacity-50" : ""}`}
                       >
@@ -1111,7 +1100,6 @@ export function AdminMasterData() {
                             .filter((u) => !q || m(u.name) || m(u.serial_number || "") || m(u.type || ""));
                           return (
                             <Fragment key={site.id}>
-                              {/* Level 2 — Site */}
                               <tr
                                 className={`border-b border-border bg-muted/40 hover:bg-accent transition ${site.is_deleted ? "opacity-50" : ""}`}
                               >
@@ -1164,7 +1152,6 @@ export function AdminMasterData() {
                                     key={unit.id}
                                     className={`border-b border-border bg-card hover:bg-accent/60 transition ${unit.is_deleted ? "opacity-50" : ""}`}
                                   >
-                                    {/* Level 3 — Unit */}
                                     <td className="py-2.5 pl-16 pr-2">
                                       <div className="flex items-center gap-1.5">
                                         <span className="w-6 block shrink-0" />
@@ -1258,7 +1245,6 @@ export function AdminMasterData() {
       </>
       )}
 
-      {/* ─── Katalog: Temuan Awal & Temuan Akhir ──────────── */}
       {tab === "categories" && (
         <CatalogPanel
           items={cats}
@@ -1298,7 +1284,6 @@ export function AdminMasterData() {
         />
       )}
 
-      {/* ─── Dialog Katalog (tambah/edit nama) ─────────────────── */}
       <Dialog open={!!catDialog} onOpenChange={(o) => !o && setCatDialog(null)}>
         <DialogContent className="sm:max-w-md bg-card p-5 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-6">
@@ -1335,7 +1320,6 @@ export function AdminMasterData() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Dialog Konfirmasi Hapus (permanen) ─────────────────── */}
       <Dialog open={!!pendingDelete} onOpenChange={(o) => !o && !deleting && setPendingDelete(null)}>
         <DialogContent className="sm:max-w-md bg-card p-5 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-6">
@@ -1375,7 +1359,6 @@ export function AdminMasterData() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Dialog Konfirmasi Arsip Katalog (Temuan Awal/Akhir) ── */}
       <Dialog
         open={!!pendingArchive}
         onOpenChange={(o) => !o && setPendingArchive(null)}
@@ -1405,7 +1388,6 @@ export function AdminMasterData() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── Centered Modal (add/edit) ─────────────────────────── */}
       <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DialogContent className="sm:max-w-md bg-card p-5 max-h-[90vh] overflow-y-auto">
           <DialogHeader className="mb-6">

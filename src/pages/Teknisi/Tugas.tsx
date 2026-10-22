@@ -23,13 +23,8 @@ import { getCurrentPosition, type GeolocError } from '../../lib/geolocation'
 
 type TabType = 'detail' | 'timeline'
 
-// Value sintetis untuk opsi "Lainnya" di dropdown: teks bebas tidak jadi
-// nama katalog — masuk lewat field catatan (root_cause_note), sementara
-// id/nama yang disimpan menunjuk row resmi 'Lainnya' (seed migrasi 22).
 const LAINNYA = '__lainnya__'
 
-// Katalog id -> nama untuk label temuan awal/akhir. Dipanggil saat mount
-// dan ulang setelah simpan temuan (RPC bisa membuat entri katalog baru).
 const fetchCatalog = () =>
     Promise.all([problemCategoriesApi.getAll(), rootCausesApi.getAll()]).then(([c, r]) => ({
         categories: new Map(c.map(i => [i.id, i.name])),
@@ -58,12 +53,8 @@ export default function TugasTeknisi() {
     const navigate = useNavigate()
     const location = useLocation()
     const [selectedTicketSnap, setSelectedTicketSnap] = useState<Ticket | null>(null)
-    // Drawer baca data live: updateTicketStatus/refreshTickets mengganti array `tickets`,
-    // tapi snapshot tetap basi → footer tak berubah dari "Mulai Perjalanan" ke "Mulai
-    // Kerja". Pola sama seperti HPInbox `liveTicket` (alias `selectedTicket`).
     const selectedTicket = selectedTicketSnap ? (tickets.find(t => t.id === selectedTicketSnap.id) ?? selectedTicketSnap) : null
 
-    // Klik notifikasi (dalam app / dengar push) → drawer tiket auto-terbuka.
     const notifyOpenCode = notifyTicketCode(location.state, location.search)
     useEffect(() => {
         if (!notifyOpenCode) return
@@ -98,13 +89,10 @@ export default function TugasTeknisi() {
     const [lemburTarget, setLemburTarget] = useState<Ticket | null>(null)
     const [backupRequested, setBackupRequested] = useState<Set<string>>(new Set())
     const [backupSubmitting, setBackupSubmitting] = useState(false)
-    // Review sebelum submit: isi form ditampilkan lagi untuk dicek.
     const [review, setReview] = useState<{ title: string; rows: ReviewRow[]; confirmLabel: string; run: () => void | Promise<void> } | null>(null)
 
     useEffect(() => { fetchCatalog().then(setCatalogItems) }, [])
 
-    // Opsi dropdown Temuan Akhir: katalog minus row 'Lainnya' (supaya tidak
-    // dobel dengan opsi sintetis), plus "Lainnya" selalu paling bawah.
     const rootOptions = useMemo(() => [
         ...[...catalogItems.roots.entries()]
             .filter(([, name]) => name.toLowerCase() !== 'lainnya')
@@ -121,9 +109,6 @@ export default function TugasTeknisi() {
         const byStatus: Record<string, Ticket[]> = {}
         for (const s of ['SCHEDULED', 'EN_ROUTE', 'WORKING', 'PENDING', 'RESOLVED', 'CLOSED']) byStatus[s] = []
         for (const t of myTickets) {
-            // ponytail: tiket yang menunggu ACC PM tampil di tab "Dijeda" walau statusnya
-            // masih EN_ROUTE/WORKING — kerjanya toh sudah terkunci. Balik sendiri kalau ditolak
-            // (pendingRequestedAt bersih) atau tetap di sini kalau disetujui (jadi PENDING).
             const s = t.pendingRequestedAt && (t.status === 'EN_ROUTE' || t.status === 'WORKING') ? 'PENDING' : t.status
             if (byStatus[s]) byStatus[s].push(t)
         }
@@ -133,10 +118,6 @@ export default function TugasTeknisi() {
         return byStatus
     }, [myTickets])
 
-    // Tahap 1 dari 2: mulai perjalanan → EN_ROUTE ("Teknisi dalam perjalanan").
-    // Peringatan lembur (BR 3.2.2) dikaitkan ke sini, bukan ke tombol terima — alur
-    // accept dihapus karena mubazir: status SCHEDULED sudah menunjukkan "ditugaskan",
-    // dan kunci jadwal menahan perjalanan/kerja sampai jamnya tiba.
     const handleMulaiPerjalanan = (ticket: Ticket) => {
         const { jadwal } = getAssignmentInfo(ticket.activities)
         if (isScheduleOvertime(jadwal)) {
@@ -147,8 +128,6 @@ export default function TugasTeknisi() {
         }
     }
 
-    // keepOpen=true untuk transisi SCHEDULED→EN_ROUTE agar drawer tidak menutup saat
-    // alur perjalanan → Mulai Kerja dikerjakan dalam satu layar (poin revisi 5).
     const handleStatusUpdate = async (id: string, status: string, note: string, keepOpen = false) => {
         setIsLoading(id)
         await updateTicketStatus(id, status as TicketStatus, note)
@@ -201,8 +180,6 @@ export default function TugasTeknisi() {
         }
     }
 
-    // Eksekusi penyelesaian — dipanggil dari popup review, bukan langsung
-    // dari tombol modal.
     const doComplete = async () => {
         const ticket = selectedTicket
         if (!ticket) return
@@ -217,7 +194,6 @@ export default function TugasTeknisi() {
                 .catch(() => {})
             await handleStatusUpdate(ticket.id, 'RESOLVED', parts.join(' | '))
             if (completeRootCause) {
-                // Lainnya → id/nama row resmi 'Lainnya', teks bebas jadi catatan.
                 const rootName = completeRootCause === LAINNYA ? 'Lainnya' : catalogItems.roots.get(completeRootCause)
                 if (rootName) {
                     const ok = await setTicketCatalog(ticket.id, null, rootName, completeRootNote.trim() || null)
@@ -257,8 +233,6 @@ export default function TugasTeknisi() {
         })
     }
 
-    // Support (non-lead): minta pengalihan penanggung jawab ke PM. Bukan takeover
-    // langsung — PM yang reassign via Command Center (assign_ticket, PM-only).
     const handleRequestBackup = async () => {
         if (!selectedTicket) return
         setBackupSubmitting(true)
@@ -317,11 +291,6 @@ export default function TugasTeknisi() {
 
     const incomingCount = (grouped['SCHEDULED']?.length || 0) + (grouped['EN_ROUTE']?.length || 0)
 
-    // Status waktu jadwal tiket yang sedang dibuka di drawer: sebelum jadwal tidak ada
-    // aksi (hanya hint), perjalanan & mulai kerja dikunci sampai jamnya tiba.
-    // ponytail: `now` di-tick 30 detik saat drawer terbuka; stalenya ≤30 detik, cukup
-    // untuk kunci jadwal (dan tombol otomatis terbuka saat jamnya lewat). Naikkan
-    // frekuensi hanya kalau presisi menit mulai terasa.
     const [now, setNow] = useState(() => Date.now())
     useEffect(() => {
         if (!selectedTicket) return
@@ -395,7 +364,6 @@ export default function TugasTeknisi() {
                         </motion.div>
                     </AnimatePresence>
 
-            {/* Offcanvas Drawer */}
             {selectedTicket && (
                 <TicketDrawer
                     onClose={() => setSelectedTicketSnap(null)}
@@ -533,7 +501,6 @@ export default function TugasTeknisi() {
                 </TicketDrawer>
             )}
 
-            {/* Pending Modal */}
             {showPendingModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowPendingModal(false)}>
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
@@ -580,7 +547,6 @@ export default function TugasTeknisi() {
                 </div>
             ), document.body)}
 
-            {/* Complete Modal */}
             {showCompleteModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowCompleteModal(false)}>
                     <div className="bg-card w-full max-w-lg rounded-lg border-2 border-border p-6 shadow-2xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -646,7 +612,6 @@ export default function TugasTeknisi() {
                 </div>
             ), document.body)}
 
-            {/* Lembur Modal */}
             {showLemburModal && lemburTarget && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in" onClick={() => setShowLemburModal(false)}>
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>

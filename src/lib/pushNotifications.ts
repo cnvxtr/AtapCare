@@ -4,7 +4,6 @@ import { supabase } from '@/lib/supabase'
 
 const VAPID_PUBLIC_KEY = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined
 
-// Key VAPID yang terakhir dipakai, untuk mendeteksi rotasi key (lihat doSubscribe).
 const VAPID_STORAGE_KEY = 'atap_vapid_key'
 
 function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
@@ -16,9 +15,6 @@ function urlBase64ToUint8Array(base64: string): Uint8Array<ArrayBuffer> {
   return arr
 }
 
-// Daftar SW + minta izin + subscribe push. Non-blocking: semua
-// kegagalan diabaikan — fitur mewah, bukan blocker. Dipanggil sekali saat login.
-// Native (APK): daftar ke FCM via plugin Capacitor. Browser: Web Push VAPID.
 export async function registerPush(userId: string): Promise<void> {
   if (Capacitor.isNativePlatform()) {
     await registerNative(userId)
@@ -35,9 +31,6 @@ export async function registerPush(userId: string): Promise<void> {
   void doSubscribe(userId)
 }
 
-// Native: minta izin, tidak perlu SW. Saat app terbuka, banner/chime sudah
-// ditangani realtime polling (MainLayout/MobileLayout) — push plugin hanya
-// untuk kondisi background/killed. Tap notif → buka URL (deep link data.url).
 async function registerNative(userId: string): Promise<void> {
   try {
     if ((await PushNotifications.checkPermissions()).receive !== 'granted') {
@@ -56,19 +49,14 @@ async function registerNative(userId: string): Promise<void> {
       const url = n.notification.data?.url
       if (typeof url === 'string' && url.startsWith('/')) location.href = url
     })
-  } catch { /* push tak tersedia — abaikan */ }
+  } catch {  }
 }
 
 async function doSubscribe(userId: string): Promise<void> {
   try {
     const reg = await navigator.serviceWorker.register('/sw.js')
     await navigator.serviceWorker.ready
-    // Pakai subscription yang masih ada — jangan unsubscribe lalu subscribe ulang
-    // tiap login: browser sering memberi endpoint baru sehingga baris menumpuk di DB.
     let sub = await reg.pushManager.getSubscription()
-    // Rotasi VAPID: subscription lama terikat key lama → push service menolak kiriman
-    // dengan key baru (403). Detek lewat localStorage; bila beda, unsubscribe lalu
-    // subscribe ulang SEKALI dengan key sekarang.
     const storedVapid = localStorage.getItem(VAPID_STORAGE_KEY)
     if (sub && storedVapid && storedVapid !== VAPID_PUBLIC_KEY) {
       await sub.unsubscribe()
@@ -83,7 +71,6 @@ async function doSubscribe(userId: string): Promise<void> {
     localStorage.setItem(VAPID_STORAGE_KEY, VAPID_PUBLIC_KEY!)
     await upsertSubscription(userId, sub)
 
-    // Kunci berubah / endpoint kadaluarsa: resubscribe otomatis.
     navigator.serviceWorker.addEventListener('pushsubscriptionchange', async () => {
       const newSub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
@@ -91,7 +78,7 @@ async function doSubscribe(userId: string): Promise<void> {
       })
       await upsertSubscription(userId, newSub)
     })
-  } catch { /* push tak tersedia (mis. HTTP, browser lama) — abaikan */ }
+  } catch {  }
 }
 
 async function upsertSubscription(userId: string, sub: PushSubscription): Promise<void> {
@@ -103,8 +90,6 @@ async function upsertSubscription(userId: string, sub: PushSubscription): Promis
   )
 }
 
-// Chime khas saat app TERBUKA & ada notif baru (banner OS tetap dari service
-// worker push — tanpa duplikat). Saat app tertutup, suara = nada sistem default.
 let audioCtx: AudioContext | null = null
 export function playChime(): void {
   try {
@@ -112,7 +97,7 @@ export function playChime(): void {
     audioCtx = audioCtx || new Ctx()
     if (audioCtx.state === 'suspended') void audioCtx.resume()
     const t = audioCtx.currentTime
-    const notes = [880, 1174.66] // A5 → D6, urutan naik singkat
+    const notes = [880, 1174.66]
     for (let i = 0; i < notes.length; i++) {
       const osc = audioCtx.createOscillator()
       const gain = audioCtx.createGain()
@@ -127,5 +112,5 @@ export function playChime(): void {
       osc.start(start)
       osc.stop(start + 0.25)
     }
-  } catch { /* audio gagal — abaikan */ }
+  } catch {  }
 }

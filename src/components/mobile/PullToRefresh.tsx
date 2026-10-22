@@ -30,8 +30,6 @@ export default function PullToRefresh({
   const startY = useRef<number | null>(null)
   const [dist, setDist] = useState(0)
 
-  // Web (desktop & mobile browser): pull-to-refresh native Chrome/Edge,
-  // bukan kustom. Tetap di halaman terakhir karena route URL-driven.
   if (!isNativePlatform()) return <>{children}</>
 
   const onTouchStart = (e: React.TouchEvent) => {
@@ -64,8 +62,6 @@ export default function PullToRefresh({
       if (onRefresh) {
         Promise.resolve(onRefresh()).finally(finish)
       } else {
-        // ponytail: tanpa callback tidak reload (hindari balik ke splash);
-        // pasang onRefresh bila perlu refetch data.
         setTimeout(finish, 1000)
       }
     } else {

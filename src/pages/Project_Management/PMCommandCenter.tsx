@@ -19,18 +19,15 @@ import { notifyTicketCode } from '../../services/notifications'
 import { SEGMENTS } from '../../lib/constants'
 import { useIsMobile } from '../../lib/platform'
 
-// SEGMEN STATUS FLOW TIKET (persis helpdesk)
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 const ALL_STATUSES = [...new Set(KANBAN_COLUMNS.flatMap(c => c.statuses || []))]
 
-// Tampilan jam parsial dari SchedulePicker ("05:" → "05:--", ":30" → "--:30", "" → placeholder)
 const displayTime = (t: string) => {
     if (!t) return ''
     const [h, m] = t.split(':')
     return `${h || '--'}:${m || '--'} WIB`
 }
 
-// Bukti pengajuan pending yang dilihat PM: alasan (parse benar) + thumbnail foto/file dari teknisi.
 function PendingEvidence({ details }: { details?: string }) {
     const [urls, setUrls] = useState<Record<string, string>>({})
     const [preview, setPreview] = useState<{ images: string[]; index: number } | null>(null)
@@ -78,11 +75,9 @@ export default function PMCommandCenter() {
     const [prioritySel, setPrioritySel] = useState<Record<string, boolean>>({ all: true })
     const [searchTerm, setSearchTerm] = useState('')
 
-    // State untuk Drawer & Modals
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
 
-    // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka.
     const location = useLocation()
     const notifyOpenCode = notifyTicketCode(location.state, location.search)
     const navigate = useNavigate()
@@ -111,7 +106,6 @@ export default function PMCommandCenter() {
     const [backupReq, setBackupReq] = useState<BackupRequest | null>(null)
     const [backupBusy, setBackupBusy] = useState(false)
 
-    // State Form
     const [selectedTech, setSelectedTech] = useState('')
     const [supportSel, setSupportSel] = useState<string[]>([])
     const [scheduleDate, setScheduleDate] = useState('')
@@ -167,7 +161,6 @@ export default function PMCommandCenter() {
     const needPending = tickets.filter(t => t.status === 'PENDING').length
     const pendingAlarmCount = tickets.filter(t => t.status === 'PENDING' && getPendingAlarm(t.updatedAt)).length
 
-    // Beban kerja per teknisi (lead): tiket aktif yang masih berjalan.
     const workload = useMemo(() => {
         const map = new Map<string, number>()
         for (const t of tickets) {
@@ -178,7 +171,6 @@ export default function PMCommandCenter() {
         return map
     }, [tickets])
 
-    // Trafik ringan: 0-2 hijau, 3-4 kuning, 5+ merah (BR beban kerja).
     const WorkloadBadge = ({ count, selected }: { count: number; selected?: boolean }) => {
         const dot = count >= 5 ? 'bg-red-500' : count >= 3 ? 'bg-yellow-500' : 'bg-green-500'
         const text = selected ? 'text-white' : count >= 5 ? 'text-red-600' : count >= 3 ? 'text-yellow-600' : 'text-green-600'
@@ -205,7 +197,6 @@ export default function PMCommandCenter() {
     const activeSegmentStatuses = SEGMENTS.find(s => s.key === activeSegment)?.statuses || null
     const listTickets = activeSegmentStatuses ? baseTickets.filter(t => activeSegmentStatuses.includes(t.status)) : baseTickets
 
-    // --- ACTION HANDLERS ---
     const doAssign = () => {
         if (!confirmAssign || !selectedTicket) return
         assignTicket(selectedTicket.id, confirmAssign.teknisiId, confirmAssign.teknisi, `Jadwal: ${confirmAssign.scheduleDate} ${confirmAssign.scheduleTime}`, confirmAssign.supportIds)
@@ -223,7 +214,6 @@ export default function PMCommandCenter() {
         }
         if (Object.keys(errs).length) { setAssignErrors(errs); return }
         setAssignErrors({})
-        // Cek Lembur (BR 3.2.2): akhir pekan ATAU jam di luar jam operasional 08.00-17.00 WIB.
         const isOvertime = isScheduleOvertime(`${scheduleDate}T${scheduleTime}`)
         setConfirmAssign({
             teknisi: technicians.find(t => t.id === selectedTech)?.name || 'Teknisi',
@@ -235,8 +225,6 @@ export default function PMCommandCenter() {
         })
     }
 
-    // Prefill form ganti teknisi dari data penugasan saat ini (lead + support + jadwal),
-    // biar PM tinggal mengubah yang perlu diubah.
     const openReassignModal = () => {
         const t = selectedTicket
         if (!t) return
@@ -332,7 +320,6 @@ export default function PMCommandCenter() {
 
     return (
         <div className={`space-y-6 flex flex-col ${viewMode === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
-            {/* HEADER */}
             <div className="flex justify-end gap-4 flex-wrap">
                 <div className="flex gap-2 flex-wrap">
                     <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
@@ -347,7 +334,6 @@ export default function PMCommandCenter() {
                 </div>
             </div>
 
-            {/* BOX FILTER: Pencarian, View, Prioritas */}
             <div className="bg-card p-4 rounded-xl border border-border">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
@@ -381,7 +367,6 @@ export default function PMCommandCenter() {
                 </div>
             </div>
 
-            {/* BOX 2: Status Flow (hanya di mode Tabel) */}
             {viewMode === 'list' && (
                 <div className="bg-card p-4 rounded-xl border border-border">
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -404,7 +389,6 @@ export default function PMCommandCenter() {
                 </div>
             )}
 
-            {/* KANBAN / LIST */}
             {viewMode === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
                     <div className={`flex gap-2 flex-1 min-h-0 ${isMobile ? 'overflow-x-auto snap-x snap-mandatory pb-2' : 'overflow-x-auto'}`}>
@@ -498,9 +482,6 @@ export default function PMCommandCenter() {
                 </div>
             )}
 
-            {/* ========================================== */}
-            {/* TIER 3: OFFCANVAS DETAIL DRAWER */}
-            {/* ========================================== */}
             {selectedTicket && (
                 <TicketDrawer
                     onClose={() => { setSelectedTicket(null); setBackupReq(null) }}
@@ -596,11 +577,7 @@ export default function PMCommandCenter() {
                 </TicketDrawer>
             )}
 
-            {/* ========================================== */}
-            {/* MODALS */}
-            {/* ========================================== */}
 
-            {/* 1. MODAL TUGASKAN */}
             {showAssignModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
@@ -692,7 +669,6 @@ export default function PMCommandCenter() {
                 </div>
             ), document.body)}
 
-            {/* 1b. MODAL KONFIRMASI PENUGASAN */}
             {confirmAssign && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
@@ -735,7 +711,6 @@ export default function PMCommandCenter() {
                 </div>
             ), document.body)}
 
-            {/* 2. MODAL GANTI TEKNISI */}
             {showReassignModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto">
@@ -833,7 +808,6 @@ export default function PMCommandCenter() {
                 </div>
             ), document.body)}
 
-            {/* 3. MODAL JADWAL PELAKSANAAN (dibuka dari Tugaskan/Ganti Teknisi) */}
             {scheduleModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[140] flex items-center justify-center p-4 fade-in" onClick={() => setScheduleModal(null)}>
                     <div className="bg-card w-[640px] max-w-full rounded-lg border-2 border-border p-6 max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -862,7 +836,6 @@ export default function PMCommandCenter() {
                 </div>
             ), document.body)}
 
-            {/* 4. MODAL PROSES PENGAJUAN PENDING */}
             {showPendingDecision && selectedTicket && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
@@ -910,7 +883,6 @@ export default function PMCommandCenter() {
                 </div>
             ), document.body)}
 
-            {/* 4. MODAL VETO PENDING (Lanjutkan Kerja) */}
             {showVetoResume && selectedTicket && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">

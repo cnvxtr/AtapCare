@@ -1,10 +1,5 @@
 import { supabase } from "@/lib/supabase";
 
-// Data rating tiket untuk admin (leaderboard helpdesk + detail).
-// rating/review ada di tabel tickets. Atribusi helpdesk diambil dari tabel
-// activities (action 'Tiket divalidasi', utk NEW→OPEN) agar retroaktif —
-// helpdesk yang memvalidasi tercatat untuk semua tiket, bukan hanya yang
-// divalidasi setelah migration 61.
 
 export interface RatingRow {
   id: string;
@@ -22,10 +17,10 @@ export interface RatingRow {
 export interface HelpdeskScore {
   userId: string | null;
   name: string;
-  total: number;       // jumlah tiket yang dirating
-  totalStars: number;  // jumlah total bintang (sum semua rating)
-  avg: number;         // rata-rata bintang
-  validated: number;   // jumlah tiket yang divalidasi helpdesk ini
+  total: number;
+  totalStars: number;
+  avg: number;
+  validated: number;
 }
 
 interface ValidateActivity {
@@ -35,7 +30,6 @@ interface ValidateActivity {
   created_at: string;
 }
 
-// Semua aktivitas validasi (NEW→OPEN), untuk atribusi & hitung jumlah validasi.
 async function getValidateActivities(): Promise<ValidateActivity[]> {
   const { data, error } = await supabase
     .from("activities")
@@ -68,12 +62,9 @@ async function getRatingTickets(): Promise<RatingRow[]> {
   }));
 }
 
-// Leaderboard per user id helpdesk (bukan per nama) agar nama sama terpisah.
 function buildSeedHelpdeskLeaderboard(rows: RatingRow[]): HelpdeskScore[] {
   const map = new Map<string, HelpdeskScore>();
   for (const r of rows) {
-    // Tanpa atribusi user → satu bucket "Tanpa atribusi" agar tdk salah menggabung
-    // per nama (bisa dua orang berbeda dengan nama sama).
     const key = r.helpdeskUserId ?? "__no_attribution__";
     let s = map.get(key);
     if (!s) {
@@ -93,7 +84,6 @@ export async function getRatings(): Promise<{ rows: RatingRow[]; leaderboard: He
   const rows = await getRatingTickets();
   const acts = await getValidateActivities();
 
-  // Atribusi: helpdesk yang memvalidasi tiap tiket (activity pertama per tiket).
   const helpdeskByTicket = new Map<string, { userId: string | null; name: string }>();
   const validatedByUser = new Map<string, number>();
   for (const a of acts) {

@@ -101,14 +101,13 @@ const CUSTOMER_LABELS: Record<string, string> = {
   'Penugasan dibatalkan': 'Penugasan dibatalkan',
 }
 
-// Semua lampiran (foto + file non-gambar) dari detail aktivitas, dipisah per asal.
 function splitAttachments(activities: { details?: string }[]): { client: string[]; internal: string[] } {
   const all = extractAttachments(activities)
   const client: string[] = []
   const internal: string[] = []
   const seen = new Set<string>()
   for (const a of all) {
-    if (seen.has(a.src)) continue // de-duplikasi: path bisa muncul di >1 aktivitas
+    if (seen.has(a.src)) continue
     seen.add(a.src)
     if (a.isClient) client.push(a.src)
     else internal.push(a.src)
@@ -127,7 +126,6 @@ export default function CustomerTicketDetail() {
   const [rootCauseMap, setRootCauseMap] = useState<Map<string, string>>(new Map())
   const [preview, setPreview] = useState<{ photos: { src: string; url: string }[]; index: number } | null>(null)
   const [gpsCoords, setGpsCoords] = useState<Record<string, string>>({})
-  // "Lainnya" menyimpan teks asli di rootCauseNote; nama katalog hanya fallback.
   const rootCauseLabel = ticket?.rootCauseNote?.trim() || (ticket?.rootCauseId ? rootCauseMap.get(ticket.rootCauseId) : undefined)
 
   useEffect(() => {
@@ -139,10 +137,7 @@ export default function CustomerTicketDetail() {
     return () => { active = false }
   }, [ticket?.rootCauseId])
 
-  // Popup rating kini global via RatingWatcher (muncul di halaman mana pun saat
-  // tiket CLOSED & belum dirating); halaman ini hanya menampilkan hasil rating.
 
-  // Fetch GPS coords for timeline location details
   useEffect(() => {
     if (!ticketCode) return
     let active = true
@@ -157,7 +152,6 @@ export default function CustomerTicketDetail() {
     return () => { active = false }
   }, [ticketCode])
 
-  // Lampiran: foto & file, dipisah per asal (pelanggan vs teknisi)
   const { clientTokens, internalTokens } = useMemo(() => {
     if (!ticket) return { clientTokens: [], internalTokens: [] }
     const { client, internal } = splitAttachments(ticket.activities)
@@ -179,7 +173,6 @@ export default function CustomerTicketDetail() {
     () => internalTokens.filter(t => !isImageFileByPath(t)).map(src => ({ src, url: internalResolved[src] })).filter(x => x.url),
     [internalTokens, internalResolved])
 
-  // Extract completion activity photos (for riwayat status "Pekerjaan selesai" step)
   const completionPhotos = useMemo(() => {
     if (!ticket || !['RESOLVED', 'CLOSED'].includes(ticket.status)) return []
     const completionAct = [...ticket.activities].reverse().find(a => a.action === 'Tugas diselesaikan')
@@ -192,23 +185,18 @@ export default function CustomerTicketDetail() {
   const completionPhotoResolved = usePhotoResolver(completionPhotos)
   const completionPhotoItems = useMemo(() => completionPhotos.map(src => ({ src, url: completionPhotoResolved[src] })).filter(x => x.url), [completionPhotos, completionPhotoResolved])
 
-  // Build timeline data (reverse chronological, filtered & simplified)
   const timelineSteps = useMemo(() => {
     if (!ticket) return []
     const acts = [...ticket.activities]
-      .filter(a => !a.action.startsWith('Foto keluhan')) // filter out photo activities
-      // Pengajuan teknisi & penolakan PM disembunyikan: pelanggan hanya melihat entri
-      // "Tiket dijeda" saat pengajuan disetujui PM (bukti dikaitkan ke entri itu).
+      .filter(a => !a.action.startsWith('Foto keluhan'))
       .filter(a => a.action !== 'Pengajuan pending' && a.action !== 'Pengajuan pending ditolak PM')
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()) // newest first
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
     return acts.map((act, idx) => {
       let rawAction = act.action.startsWith('Tiket ditugaskan ke') ? 'Tiket ditugaskan ke teknisi' : act.action
 
-      // Clean details: remove raw photo paths, extract useful info
       let details: string | undefined
       if (act.action === 'Temuan awal / akhir diperbarui' || act.action.startsWith('Kategori / akar masalah')) {
-        // ponytail: label tunggal tanpa isi temuan — isi detail tidak ditampilkan ke pelanggan
         const d = act.details ?? ''
         const hasEarly = /^Kategori:\s*\S/m.test(d)
         const hasRoot = /^Akar masalah:\s*\S/m.test(d)
@@ -231,8 +219,6 @@ export default function CustomerTicketDetail() {
       const label = CUSTOMER_LABELS[rawAction] || rawAction
       const isPending = rawAction === 'Pengajuan pending disetujui PM'
 
-      // Bukti pending dipetakan per-entri: ambil pengajuan teknisi terbaru yang
-      // mendahului entri persetujuan ini (aman untuk jeda berulang).
       let pendingReason: string | undefined
       let pendingAttachments: string | undefined
       if (isPending) {
@@ -248,7 +234,7 @@ export default function CustomerTicketDetail() {
       return {
         name: label,
         timestamp: formatWIB(act.timestamp),
-        isCompleted: ticket.status === 'CLOSED' ? true : idx > 0, // closed = semua langkah selesai; lainnya: entri terkini (idx 0) masih berlangsung
+        isCompleted: ticket.status === 'CLOSED' ? true : idx > 0,
         details,
         isCompletion: rawAction === 'Tugas diselesaikan',
         isPending,
@@ -273,7 +259,6 @@ export default function CustomerTicketDetail() {
         <ArrowLeft className="h-4 w-4" /> Kembali
       </button>
 
-      {/* Header */}
       <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center gap-3 mb-2 flex-wrap">
           <h1 className="text-xl font-display font-bold font-mono">{ticket.code}</h1>
@@ -288,9 +273,7 @@ export default function CustomerTicketDetail() {
         </p>
       </div>
 
-      {/* Satu box besar: Info + Deskripsi + Foto + Hasil */}
       <div className="bg-card border border-border rounded-lg p-6 space-y-6">
-        {/* Grid 2×2 — labels di dalam box (InfoCard style) */}
         {(() => {
           const { waPelapor, deskripsi } = parseDescription(ticket.description)
           return (
@@ -306,7 +289,6 @@ export default function CustomerTicketDetail() {
           )
         })()}
 
-        {/* Lampiran Kendala Pelanggan */}
         {(clientPhotoItems.length > 0 || clientFileItems.length > 0) && (
           <div className="bg-muted/60 border border-border rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
@@ -350,7 +332,6 @@ export default function CustomerTicketDetail() {
           </div>
         )}
 
-        {/* Hasil Pekerjaan (RESOLVED/CLOSED) */}
         {['RESOLVED', 'CLOSED'].includes(ticket.status) && (
           <div className="border-t border-border pt-6">
             <p className="text-sm font-semibold text-foreground mb-3">Hasil Pekerjaan</p>
@@ -412,7 +393,6 @@ export default function CustomerTicketDetail() {
         )}
       </div>
 
-      {/* Riwayat Status — card terpisah */}
       <div className="bg-card border border-border rounded-lg p-6">
         <p className="text-sm font-semibold text-foreground mb-4">Riwayat Status</p>
         <OrderTracking
@@ -455,7 +435,6 @@ export default function CustomerTicketDetail() {
         />
       </div>
 
-      {/* Penilaian */}
       {existingRating !== null && (
         <div className="bg-card border border-border rounded-lg p-6">
           <h2 className="font-display font-bold mb-3 flex items-center gap-2">

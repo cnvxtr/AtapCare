@@ -9,8 +9,6 @@ import { buttonVariants } from "@/components/ui/button";
 
 type CalendarProps = React.ComponentProps<typeof DayPicker>;
 
-// Calendar react-day-picker (v10), diberi gaya token tema project
-// (monochrome industrial). Basis: originui/shadcn, tanpa syntax Tailwind v4.
 function Calendar({
   className,
   classNames,

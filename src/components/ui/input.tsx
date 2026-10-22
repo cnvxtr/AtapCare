@@ -23,14 +23,11 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
 )
 Input.displayName = "Input"
 
-// Nomor telepon Indonesia: UI selalu menampilkan prefix +62, nilai = digit
-// nasional tanpa awalan 0/62. Format tersimpan di DB: "62xxxxxxxxxx".
 // eslint-disable-next-line react-refresh/only-export-components
 export function normalizePhone(raw: string | null | undefined): string {
   return (raw || "").replace(/\D/g, "").replace(/^62/, "").replace(/^0+/, "")
 }
 
-// ponytail: simpan seragam "62xxx"; kalau nanti perlu E.164 penuh (+), tinggal ganti di sini
 // eslint-disable-next-line react-refresh/only-export-components
 export const toStoredPhone = (raw: string | null | undefined): string =>
   normalizePhone(raw) ? `62${normalizePhone(raw)}` : ""

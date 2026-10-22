@@ -74,29 +74,19 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-x-clip flex flex-col">
 
-      {/* ========================================== */}
-      {/* LAYER BACKGROUND PREMIUM (MONOCHROME)      */}
-      {/* ========================================== */}
-      {/* 1. Base Grid Pattern */}
       <div className="fixed inset-0 grid-bg opacity-30 pointer-events-none z-0" />
 
-      {/* 2. Noise Texture (Film Grain) */}
       <div className="fixed inset-0 noise-overlay pointer-events-none z-0" />
 
-      {/* 3. Ambient Glow 1 (Top Left) - Memberikan kedalaman tanpa warna */}
       <div className="fixed -top-32 -left-32 w-[600px] h-[600px] bg-muted rounded-full blur-[120px] opacity-70 pointer-events-none z-0" />
 
-      {/* 4. Ambient Glow 2 (Bottom Right) - Menyeimbangkan komposisi */}
       <div className="fixed -bottom-32 -right-32 w-[700px] h-[700px] bg-border rounded-full blur-[150px] opacity-60 pointer-events-none z-0" />
 
-      {/* KONTEN UTAMA (z-10 agar di atas background)*/}
 
       <SiteHeader />
 
-      {/* HERO SECTION */}
       <main id="beranda" className="relative flex-1 min-h-[calc(100vh-4rem)] scroll-mt-16 flex flex-col items-center justify-center px-6 py-20 text-center overflow-hidden">
 
-        {/* LAYARAN BACKGROUND HERO */}
 
         <div className="absolute inset-0 hero-blob z-0" />
         <div className="absolute inset-0 hero-mesh z-0" />
@@ -139,7 +129,6 @@ export default function Landing() {
 
       <TroubleshootCards />
 
-      {/* ALUR LAYANAN SECTION */}
       <section id="alur" className="relative z-10 px-6 py-16 max-w-5xl mx-auto w-full scroll-mt-16">
         <h2 className={ZONE_TITLE}>
           Alur Layanan
@@ -166,7 +155,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* INFO & FAQ SECTION */}
       <section id="info" className="relative z-10 px-6 pb-20 max-w-5xl mx-auto w-full scroll-mt-16">
         <div className="grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-4">
           <div className="space-y-4">

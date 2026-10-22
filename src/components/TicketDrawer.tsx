@@ -47,7 +47,6 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
         ? [...(activities ?? [])].reverse().find(a => a.action === 'Tugas diselesaikan')?.timestamp
         : undefined
-    // Durasi berhenti di aktivitas penutup; tiket aktif memakai waktu sekarang.
     const durationStopped = ['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(status)
     const durationEnd = durationStopped
         ? [...(activities ?? [])].reverse().find(a => a.action === 'Tiket ditutup' || a.action === 'Tugas diselesaikan')?.timestamp
@@ -215,12 +214,9 @@ export function PhotoLightbox({ images, index, onClose, titles }: { images: stri
     )
 }
 
-// Data URL (portal) atau path storage (ticket-photos/guest/... / {kode tiket}/{uid}.{ext}).
 const FILE_TOKEN_RE = /(data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+|(?:ticket-photos\/)?[A-Za-z0-9-]+\/[A-Za-z0-9-]+(?:\/[A-Za-z0-9-]+)?\.\w+)/g
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'webp'])
 
-// Unduh foto: native → tulis ke cache lalu buka share sheet (pilihan 'Simpan ke Galeri'
-// / app lain); web → blob download. Fallback native: buka URL di browser jika gagal.
 export async function downloadFromUrl(url: string, filename: string) {
     try {
         const res = await fetch(url)
@@ -230,14 +226,13 @@ export async function downloadFromUrl(url: string, filename: string) {
                 const r = new FileReader()
                 r.onload = () => resolve(String(r.result))
                 r.onerror = () => reject(r.error)
-                r.readAsDataURL(blob) // data:...;base64,... → ambil bagian base64 saja
+                r.readAsDataURL(blob)
             })
             const data = b64.slice(b64.indexOf(',') + 1)
             const file = await Filesystem.writeFile({ path: filename, data, directory: Directory.Cache })
             try {
                 await Share.share({ url: file.uri, title: filename, dialogTitle: 'Bagikan Berkas' })
             } catch (err) {
-                // Cancel/dismiss share sheet = bukan error → diam, tanpa toast.
                 const msg = err instanceof Error ? err.message : String(err)
                 if (!/cancel/i.test(msg)) throw err
             } finally {
@@ -284,7 +279,6 @@ function getFileIcon(path: string): React.ReactNode {
     return <FileText className="h-6 w-6 text-muted-foreground" />
 }
 
-// Resolusi satu batch nilai foto → URL tampil (data URL tetap; path jadi signed URL).
 function usePhotoResolver(tokens: string[]): Record<string, string> {
     const [map, setMap] = useState<Record<string, string>>({})
     const key = tokens.join('\u0000')
@@ -296,8 +290,6 @@ function usePhotoResolver(tokens: string[]): Record<string, string> {
     return map
 }
 
-// Di Timeline & Activity, foto ditampilkan sebagai label yang bisa diklik (bukan <img> inline)
-// agar baris tetap ringan; foto penuh muncul lewat lightbox saat diklik.
 export function DetailsText({ text }: { text?: string }) {
     const [preview, setPreview] = useState<{ images: string[]; index: number; titles?: string[] } | null>(null)
     const parts = useMemo(() => text?.split(FILE_TOKEN_RE) ?? [], [text])
@@ -341,15 +333,11 @@ export function TicketTimeline({ items, isFinal }: { items: { timestamp: string;
     return <OrderTracking steps={steps} />
 }
 
-// Sanitasi tampilan timeline agar tidak memuat nama/role orang (mis. "Tiket ditugaskan
-// ke Rahma" → "…teknisi", baris "Pendukung: Hilman" dihapus). Data mentah di DB tetap
-// utuh untuk audit — hanya render yang dibersihkan.
 function sanitizeTimeline(action: string, details?: string, includeSupport?: boolean): { action: string; details?: string } {
     let a = action
     let d = details
     if (a.startsWith('Tiket ditugaskan ke')) {
         if (includeSupport) {
-            // Drawer: keep lead name in action, format details with schedule + support
             const leadName = a.replace('Tiket ditugaskan ke', '').trim()
             const schedule = d?.match(/Jadwal:\s*(.+)/)?.[1]?.trim()
             const supportMatch = d?.match(/^Pendukung:\s*(.+)$/m)
@@ -366,7 +354,6 @@ function sanitizeTimeline(action: string, details?: string, includeSupport?: boo
     if (a.startsWith('Kategori / akar masalah')) a = 'Temuan awal / akhir diperbarui'
     if (d) {
         if (a.startsWith('Temuan awal / akhir diperbarui')) {
-            // ponytail: aksi lama & baru tetap di DB; cukup ganti label saat render (root-cause fix)
             d = d.replace(/^Kategori:\s*/m, 'Temuan Awal: ').replace(/^Akar masalah:\s*/m, 'Temuan Akhir: ')
             const awal = /Temuan Awal:/.test(d)
             const akhir = /Temuan Akhir:/.test(d) || /Catatan:/.test(d)
@@ -377,8 +364,6 @@ function sanitizeTimeline(action: string, details?: string, includeSupport?: boo
     return { action: a, details: d }
 }
 
-// ponytail: `[ \t]` + `\S[^\n]*` sengaja — `\s*` dulu menyeberangi newline, jadi
-// baris "Jabatan: " yang kosong menelan baris "WA Pelapor:" di bawahnya.
 export function parseDescription(desc?: string): { jabatan?: string; waPelapor?: string; hasJabatan: boolean; deskripsi: string } {
     if (!desc) return { hasJabatan: false, deskripsi: '-' }
     const hasJabatan = /^Jabatan:/m.test(desc)
@@ -400,8 +385,6 @@ export function formatWIB(iso: string): string {
     }).format(new Date(iso)) + ' WIB'
 }
 
-// ponytail: jam operasional 08.00–17.00 WIB hardcode; sumber konfigurasi SLA Admin belum ada,
-// jadi Teknisi & PM berbagi helper ini dengan angka yang sama persis (BR 3.2.2 / 3.3.2).
 export function isScheduleOvertime(jadwal?: string): boolean {
     if (!jadwal) return false
     const d = new Date(jadwal.replace(' ', 'T'))
@@ -435,16 +418,12 @@ export function TicketDescription({ description }: { description?: string }) {
     )
 }
 
-// Katalog Temuan Awal/Akhir ditampilkan sebagai kartu kecil; guard null agar
-// tiket tanpa katalog tidak menambah baris kosong di drawer.
 export function TicketCatalogCards({ categoryId, rootCauseId, rootCauseNote, categoryNote }: { categoryId?: string | null; rootCauseId?: string | null; rootCauseNote?: string | null; categoryNote?: string | null }) {
     const [categories, setCategories] = useState<Map<string, string>>(new Map())
     const [roots, setRoots] = useState<Map<string, string>>(new Map())
     useEffect(() => {
         problemCategoriesApi.getAll().then((c) => setCategories(new Map(c.map((i) => [i.id, i.name]))))
         rootCausesApi.getAll().then((r) => setRoots(new Map(r.map((i) => [i.id, i.name]))))
-        // Refetch saat id berubah: entri katalog baru (mis. row 'Lainnya' yang
-        // sempat dihapus) bisa muncul lewat find-or-create.
     }, [categoryId, rootCauseId])
     if (!categoryId && !rootCauseId && !rootCauseNote && !categoryNote) return null
     return (
@@ -463,12 +442,6 @@ export function TicketCatalogCards({ categoryId, rootCauseId, rootCauseNote, cat
     )
 }
 
-// Informasi penugasan diekstrak dari aktivitas terbaru, bukan kolom terstruktur,
-// karena jadwal hanya ditulis sebagai detail aktivitas oleh alur assign.
-// Hanya tangkap tanggal+jam (YYYY-MM-DD HH:MM), bukan semua sisa teks setelah
-// "Jadwal:" — supaya "Jadwal: 2026-08-31 08:00. Alasan: ..." tetap jadi 2026-08-31 08:00
-// yang valid untuk new Date(). Regex longgar (.+) membuat new Date jadi NaN sehingga
-// guard jadwal (canTravel) tidak terkunci. (ponytail: tak perlu library tanggal.)
 const JADWAL_RE = /Jadwal:\s*(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2})/
 
 export function getAssignmentInfo(items: { action: string; details?: string }[]): { teknisi?: string; jadwal?: string; support?: string } {
@@ -479,10 +452,6 @@ export function getAssignmentInfo(items: { action: string; details?: string }[])
     let teknisi: string | undefined
     let jadwal: string | undefined
     let support: string | undefined
-    // Aktivitas terbaru dulu; teknisi diambil dari penyebut penugasan terakhir
-    // (termasuk 'Pengalihan disetujui' → lead baru), jadwal dari detail 'Jadwal:'
-    // terakhir, pendukung dari baris 'Pendukung:' detail penugasan terakhir.
-    // Iterasi lanjut sampai semua informasi ketemu.
     for (const act of [...items].reverse()) {
         const detail = act.details || ''
         if (teknisi === undefined) {
@@ -527,11 +496,6 @@ export function AssignmentCard({ items }: { items: { action: string; details?: s
 
 const PHOTO_SRC_RE = FILE_TOKEN_RE
 
-// Asal lampiran ditentukan dari ACTION aktivitas, bukan path storage: foto keluhan
-// (portal RPC 59 maupun tiket internal helpdesk) selalu ditulis di aktivitas
-// "Tiket dibuat…" / "Foto keluhan…", sedangkan dokumentasi teknisi di "Tugas
-// diselesaikan" / "Tiket dijeda". Path lama dipakai sebagai fallback untuk
-// aktivitas lain (tiket lama/unknown) agar klasifikasi tetap aman.
 function isClientActivity(action?: string): boolean {
     if (!action) return false
     return action.startsWith('Foto keluhan') || action.startsWith('Tiket dibuat')
@@ -543,9 +507,6 @@ export function extractAttachments(items: { timestamp?: string; action?: string;
     const all: { src: string; when: string; isClient: boolean }[] = []
     for (const act of items) {
         if (!act.details) continue
-        // Foto bukti pengajuan pending cukup berada di form pengajuan saja beserta
-        // alasannya — jangan membanjiri galeri "Dokumentasi" drawer. Keputusan PM
-        // tetap di timeline drawer & bukti tetap terlihat oleh PM via PendingEvidence.
         if (act.action === 'Pengajuan pending') continue
         for (const m of act.details.matchAll(PHOTO_SRC_RE)) {
             all.push({ src: m[0], when: act.timestamp ?? '', isClient: isClientActivity(act.action) || isClientPhotoPath(m[0]) })
@@ -554,9 +515,6 @@ export function extractAttachments(items: { timestamp?: string; action?: string;
     return all
 }
 
-// Galeri lampiran: foto (data URL / path gambar) ditampilkan sebagai thumbnail grid
-// yang bisa diklik via lightbox; file non-gambar ditampilkan sebagai kartu dengan
-// nama file & tombol download. Semua lampiran dipindai dari detail aktivitas tiket.
 function PhotoGallery({ items, status }: { items: { timestamp: string; action: string; details?: string }[]; status?: string }) {
     const all = extractAttachments(items)
     const photos = all.filter(p => isImageFileByPath(p.src))

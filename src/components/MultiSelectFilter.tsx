@@ -4,8 +4,6 @@ import { cn } from '@/lib/utils'
 
 type FilterOption = { value: string; label: string }
 
-// Semua <-> spesifik: klik spesifik mematikan 'all' (spesifik lain independen);
-// bila tidak ada spesifik terpilih, 'all' di-restore agar filter tak pernah kosong.
 export function toggleFilter(
     selected: Record<string, boolean>,
     key: string,

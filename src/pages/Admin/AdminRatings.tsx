@@ -55,7 +55,6 @@ export default function AdminRatings() {
 
   return (
     <div className="space-y-6">
-      {/* Leaderboard */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="px-5 py-4 border-b border-border">
           <h2 className="font-display font-bold">Peringkat Helpdesk</h2>
@@ -92,7 +91,6 @@ export default function AdminRatings() {
         )}
       </div>
 
-      {/* Detail rating */}
       <div className="bg-card border border-border rounded-lg overflow-hidden">
         <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3 flex-wrap">
           <h2 className="font-display font-bold">Detail Penilaian</h2>

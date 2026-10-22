@@ -10,8 +10,6 @@ export const ROLE_LABELS: Record<string, string> = {
 };
 
 export async function getTechnicians(): Promise<Array<{ id: string; name: string }>> {
-  // Role teknisi bisa jadi role aktif ATAU ada di daftar roles multi-role
-  // (mis. admin+teknisi) — kolom roles berisi CSV (migration 12).
   const { data } = await supabase
     .from("users")
     .select("id, full_name")

@@ -32,8 +32,6 @@ export interface TicketReportRow {
   source: string;
 }
 
-// Tabel layar: tanpa kolom deskripsi (deskripsi hanya muncul di export).
-// No. urut dirender terpisah di AdminReports; Serial Number & Jam Masuk–Keluar dihapus.
 export const TICKET_REPORT_TABLE_HEADERS = [
   "ID Tiket",
   "Pelanggan",
@@ -47,11 +45,8 @@ export const TICKET_REPORT_TABLE_HEADERS = [
   "Durasi",
 ];
 
-// Indeks layar pada Object.values(TicketReportRow); Serial Number (5),
-// Temuan Awal (6) & Jam Masuk–Keluar (11) dibuang.
 export const TICKET_REPORT_TABLE_INDEXES = [0, 1, 2, 3, 4, 7, 8, 9, 10, 12];
 
-// Urutan kolom export tiket: deskripsi disisipkan, tabel layar tidak berubah.
 export const TICKET_REPORT_HEADERS = [
   "ID Tiket",
   "Pelanggan",
@@ -70,9 +65,6 @@ export const TICKET_REPORT_HEADERS = [
   "Durasi",
 ];
 
-// Indeks ulang kolom: dari urutan properti TicketReportRow (Object.values) ke
-// urutan export. problemDesc (12) → kolom 7, rootCause (7) → kolom 9,
-// support (13) → kolom 13 (setelah Teknisi), timeRange (11) → kolom 14.
 export const TICKET_EXPORT_INDEXES = [0, 1, 2, 3, 4, 5, 13, 6, 7, 8, 9, 10, 14, 11, 12];
 
 export const SERIAL_NUMBER_HEADERS = ["ID Tiket", "Teknisi", "Site", "Unit", "Jam Masuk–Keluar", "Serial Number"];
@@ -105,8 +97,6 @@ function formatTimeRange(start: string, end?: string | null): string {
   return `${fmtShort(start)} ${y1}, ${fmtTime(start)} - ${fmtShort(end)} ${y2}, ${fmtTime(end)}`;
 }
 
-// Terima 'YYYY-MM-DD' atau ISO penuh; potong ke bagian tanggal agar tidak crash
-// saat nilai sudah berbentuk ISO (new Date('ISO T23:59:59') = Invalid Date).
 function dayStart(date: string): string {
   return new Date(`${date.slice(0, 10)}T00:00:00`).toISOString();
 }
@@ -114,9 +104,6 @@ function dayEnd(date: string): string {
   return new Date(`${date.slice(0, 10)}T23:59:59`).toISOString();
 }
 
-// Daftar perusahaan (distinct dari tiket) untuk opsi filter laporan.
-// 'Internal' (fallback tiket yang dibuat helpdesk tanpa pilihan) tidak
-// ditampilkan — tiket internal menyimpan nama perusahaan asli sejak 2026.
 export async function getReportCompanies(): Promise<string[]> {
   const { data } = await supabase.from("tickets").select("company").order("company");
   return [
@@ -167,8 +154,6 @@ function toTicketRow(
   serials?: Map<string, string>,
   supportById?: Map<string, string>,
 ): TicketReportRow {
-  // Deskripsi masalah: buang baris metadata (Jabatan/WA Pelapor) yang ditulis
-  // RPC pembuatan tiket, sisakan keluhan dari pelapor / catatan helpdesk.
   const rawDesc = (t.description || "").trim();
   const problemDesc = rawDesc
     .replace(/^Jabatan:[^\n]*\n?/m, "")
@@ -188,8 +173,6 @@ function toTicketRow(
     site: t.site || "—",
     unit: t.unit || "—",
     serial: serials?.get(`${t.site ?? ""}|${t.unit ?? ""}`) ?? "—",
-    // Temuan Awal dari relasi category_id, bukan kolom legacy `category`
-    // (yang pernah diisi nama unit oleh RPC lama create_public_ticket).
     category: t.category_note?.trim() || catName || "—",
     rootCause: t.root_cause_note?.trim() || rootCauseName || "—",
     priority: t.priority || "—",
@@ -205,10 +188,6 @@ function toTicketRow(
   };
 }
 
-// Deskripsi hasil: catatan penyelesaian dari aktivitas teknisi ("Selesai: …")
-// atau catatan remote helpdesk ("Remote Berhasil …"). Ambil segmen "Selesai"
-// bila ada; selain itu segmen pertama (tanpa prefix "Catatan Internal:").
-// Segmen foto/serial number tidak boleh bocor ke laporan.
 export async function getTicketReport(filters: ReportFilters): Promise<TicketReportRow[]> {
   const [res, usersRes, serials] = await Promise.all([
     buildTicketQuery(filters),
@@ -240,8 +219,6 @@ export async function getTicketReport(filters: ReportFilters): Promise<TicketRep
   return raw.map((t) => toTicketRow(t, names, serials, supportById));
 }
 
-// ponytail: relasi tiket→unit lewat kecocokan nama (site|unit), bukan FK —
-// bertahan karena struktur aset legacy; upgrade ke unit_id FK bila relasi dirapikan.
 async function loadSerialMap(): Promise<Map<string, string>> {
   const [unitsRes, sitesRes] = await Promise.all([
     supabase.from("units").select("site_id, name, serial_number"),
@@ -274,10 +251,6 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
   return rows;
 }
 
-// ── Riwayat Serial Number (parse dari aktivitas 'Tugas diselesaikan') ──
-// ponytail: serial number tak terstruktur (teks di activity) — parsing teks
-// untuk laporan retroaktif; kolom terstruktur bila butuh inventory/cost.
-// Format lama 'Sparepart:' tetap dibaca agar data historis tidak hilang.
 export async function getSerialNumberReport(
   filters: ReportFilters,
 ): Promise<Record<string, string>[]> {

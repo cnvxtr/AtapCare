@@ -26,7 +26,6 @@ export interface CreateTicketPayload {
 export async function createTicket(data: CreateTicketPayload) {
   let photos: string[] = []
   if (data.photos?.length) {
-    // Foto portal → Storage (bukan data URL) agar kolom DB tidak membengkak (K2).
     const folder = `ticket-photos/guest/${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
     try {
       const files = data.photos
@@ -40,8 +39,6 @@ export async function createTicket(data: CreateTicketPayload) {
     }
   }
 
-  // RPC SECURITY DEFINER: validasi + insert dilakukan di sisi server (RLS anon
-  // tidak lagi mengizinkan insert langsung ke tickets/activities).
   const { data: result, error } = await supabase.rpc("create_public_ticket", {
     p_reporter_name: data.reporterName,
     p_position: data.position,
@@ -62,14 +59,6 @@ export async function createTicket(data: CreateTicketPayload) {
   return { code: res.code }
 }
 
-// Tandai konfirmasi WA terkirim (Jalur B) → auto-close cron menutup setelah 24 jam (K3).
-export async function setConfirmSent(ticketId: string): Promise<boolean> {
-  const { error } = await supabase.rpc("set_confirm_sent", { p_ticket_id: ticketId })
-  return !error
-}
-
-// Teknisi pendukung meminta pengalihan penanggung jawab (persetujuan PM via
-// approve_backup). Sinyal + audit; bukan takeover langsung.
 export async function requestBackup(ticketId: string, reason?: string | null): Promise<boolean> {
   const { error } = await supabase.rpc("request_backup", { p_ticket_id: ticketId, p_reason: reason ?? null })
   return !error
@@ -81,7 +70,6 @@ export interface BackupRequest {
   requested_at: string
 }
 
-// Request pengalihan yang masih menunggu persetujuan PM (null jika tidak ada).
 export async function getBackupRequest(ticketId: string): Promise<BackupRequest | null> {
   const { data, error } = await supabase.rpc("get_backup_request", { p_ticket_id: ticketId })
   if (error) return null
@@ -117,8 +105,6 @@ export async function requestPending(ticketId: string, reason: string, photoPath
   return !error
 }
 
-// Teknisi pendukung (role 'teknisi' di ticket_assignments) yang sedang ditugaskan.
-// Dipakai prefill form ganti teknisi; lead ada di tickets.assigned_to.
 export async function getSupportMemberIds(ticketId: string): Promise<string[]> {
   const { data } = await supabase
     .from("ticket_assignments")
@@ -128,9 +114,6 @@ export async function getSupportMemberIds(ticketId: string): Promise<string[]> {
   return (data ?? []).map((r) => r.user_id)
 }
 
-// Isi temuan awal/akhir tiket (RPC terpisah dari transisi status).
-// `categoryName`/`rootCauseName` = nama dari dropdown (katalog); teks bebas
-// "Lainnya" jangan dikirim sebagai nama — masuk lewat categoryNote/rootCauseNote.
 export async function setTicketCatalog(
   ticketId: string,
   categoryName?: string | null,

@@ -19,8 +19,6 @@ export default function CustomerReport() {
     const [siteId, setSiteId] = useState('')
     const [unitId, setUnitId] = useState('')
 
-    // Prefill dari kartu "Kendala Umum" di beranda (?dari=TS-02) — customer
-    // tinggal tambah detail, tidak mengetik ulang.
     const [searchParams] = useSearchParams()
     const [description, setDescription] = useState(() => {
         const card = TROUBLE_CARDS.find(c => c.code === searchParams.get('dari'))
@@ -30,8 +28,6 @@ export default function CustomerReport() {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState('')
 
-    // Akun pelanggan cukup terhubung ke perusahaan (kode unik, migrasi 84).
-    // Site & Unit dipilih sendiri dari daftar milik perusahaannya.
     const locked = !!user?.customer_id
     const siteName = sites.find((s) => s.id === siteId)?.name || ''
     const unitName = units.find((u) => u.id === unitId)?.name || ''
@@ -45,7 +41,6 @@ export default function CustomerReport() {
             .then(({ data }) => setSites((data as { id: string; name: string }[]) || []))
     }, [user?.customer_id])
 
-    // Daftar Unit mengikuti Site terpilih.
     useEffect(() => {
         if (!siteId) return
         supabase.from('units').select('id, name').eq('site_id', siteId)

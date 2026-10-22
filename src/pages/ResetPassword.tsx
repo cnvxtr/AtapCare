@@ -20,8 +20,6 @@ export default function ResetPassword() {
   const [msg, setMsg] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
-  // Link recovery dari email membawa token di URL; supabase-js menangkapnya
-  // otomatis lalu memicu PASSWORD_RECOVERY / membuat sesi.
   useEffect(() => {
     let alive = true;
     const timer = setTimeout(() => alive && setPhase((p) => (p === "checking" ? "invalid" : p)), 4000);
@@ -50,15 +48,12 @@ export default function ResetPassword() {
       setBusy(false);
       return setMsg(authErrorMessage(error.message));
     }
-    // Keluar dari sesi recovery agar pengguna membuktikan sandi barunya di halaman masuk
     await supabase.auth.signOut();
     setBusy(false);
     setDone(true);
     setTimeout(() => navigate("/login"), 1500);
   };
 
-  // Kembali ke halaman masuk HARUS memutus sesi recovery dulu; tanpa itu /login
-  // melihat pengguna masih "login" dan langsung mengarahkan ulang ke dashboard.
   const handleBackToLogin = async () => {
     await supabase.auth.signOut();
     navigate("/login");

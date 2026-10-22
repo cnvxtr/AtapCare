@@ -1,6 +1,3 @@
-// Alarm tiket PENDING yang menggantung: tidak ada aktivitas setelah X jam.
-// ponytail: threshold statis 8 jam kerja (1 hari kerja). Upgrade ke
-// perhitungan jam operasional (08.00-17.00, libur) bila alarm jadi KPI.
 
 const PENDING_ALARM_MS = 8 * 60 * 60 * 1000;
 

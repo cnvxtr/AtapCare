@@ -9,8 +9,6 @@ interface CameraFileUploadProps {
   onFiles: (files: File[]) => void
 }
 
-// Upload foto & file dengan pilihan Kamera/File di mobile (APK + web layar kecil);
-// desktop web langsung membuka pemilih file biasa.
 export default function CameraFileUpload({ label, onFiles }: CameraFileUploadProps) {
   const isMobile = useIsMobile()
   const fileId = useId()

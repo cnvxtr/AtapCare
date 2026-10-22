@@ -5,8 +5,6 @@ import { Share } from '@capacitor/share'
 
 export type ExportCell = string | number | null | undefined;
 
-// Unduh file: web → blob download; native → share sheet (webview tak mendukung
-// anchor download). Tulis ke cache, share, lalu bersihkan.
 async function downloadBlob(blob: Blob, filename: string) {
   if (Capacitor.isNativePlatform()) {
     try {
@@ -40,7 +38,6 @@ export function todayStamp(): string {
   return new Date().toISOString().slice(0, 10).replace(/-/g, "");
 }
 
-// Fill prioritas (ARGB tanpa prefix) — dipakai template XLSX dan PDF.
 const PRIORITY_FILLS: Record<string, string> = { Critical: "DC2626", Medium: "F59E0B", Low: "3B82F6" };
 const hexRgb = (hex: string): [number, number, number] => [
   parseInt(hex.slice(0, 2), 16),
@@ -48,9 +45,6 @@ const hexRgb = (hex: string): [number, number, number] => [
   parseInt(hex.slice(4, 6), 16),
 ];
 
-// Template XLSX bergaya Arsip helpdesk: kop perusahaan + logo, band periode,
-// header uppercase + autoFilter, zebra, ID Consolas, fill prioritas & pill
-// status. priorityCols/statusCols 1-based, opsional.
 export async function exportStyledXlsx({
   rows,
   headers,
@@ -95,7 +89,6 @@ export async function exportStyledXlsx({
   });
   const lastCol = headers.length;
 
-  // Lebar kolom ikut konten (per dataset beda kolom).
   rows.forEach((r) =>
     r.forEach((c, i) => {
       const len = String(c ?? "").length + 2;
@@ -103,7 +96,6 @@ export async function exportStyledXlsx({
     }),
   );
 
-  // Kop: logo + nama perusahaan
   ws.getRow(1).height = 22;
   ws.getRow(2).height = 14;
   ws.mergeCells(1, 1, 2, lastCol);
@@ -116,8 +108,6 @@ export async function exportStyledXlsx({
   };
   brand.alignment = { vertical: "middle", wrapText: true, indent: 7 };
 
-  // Band judul — bila ada filterBox, judul dibelah (kolom 1..n-2) dan 2 kolom
-  // terakhir jadi kotak berisi lingkup filter (perusahaan/site/unit).
   const splitBand = Boolean(filterBox) && lastCol > 2;
   ws.getRow(3).height = splitBand ? 34 : 28;
   ws.mergeCells(3, 1, 3, splitBand ? lastCol - 2 : lastCol);
@@ -142,7 +132,6 @@ export async function exportStyledXlsx({
     };
   }
 
-  // Header tabel
   const headerRow = ws.getRow(4);
   headerRow.height = 24;
   headers.forEach((h, i) => {
@@ -155,7 +144,6 @@ export async function exportStyledXlsx({
   });
   ws.autoFilter = { from: { row: 4, column: 1 }, to: { row: 4, column: lastCol } };
 
-  // Data
   rows.forEach((r, idx) => {
     const row = ws.getRow(idx + 5);
     row.height = 18;
@@ -167,9 +155,7 @@ export async function exportStyledXlsx({
       cell.alignment = { horizontal: "left", vertical: "middle" };
       if (idx % 2 === 1) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: zebra } };
     });
-    // ID (kolom 1): monospace
     row.getCell(1).font = { name: "Consolas", size: 10, bold: true, color: { argb: ink } };
-    // Prioritas: solid sesuai badge web
     priorityCols.forEach((c) => {
       const cell = row.getCell(c);
       const fill = PRIORITY_FILLS[String(r[c - 1] ?? "")];
@@ -179,7 +165,6 @@ export async function exportStyledXlsx({
       }
       cell.alignment = { horizontal: "center", vertical: "middle" };
     });
-    // Status: pill hitam + label Indonesia
     statusCols.forEach((c) => {
       const cell = row.getCell(c);
       cell.value = STATUS_LABELS[String(r[c - 1] ?? "")] || r[c - 1];
@@ -189,7 +174,6 @@ export async function exportStyledXlsx({
     });
   });
 
-  // Logo (float di atas cell A1)
   const logoId = wb.addImage({ base64: logoBase64, extension: "png" });
   ws.addImage(logoId, { tl: { col: 0, row: 0 }, ext: { width: 44, height: 44 } });
 
@@ -202,8 +186,6 @@ export async function exportStyledXlsx({
   );
 }
 
-// Template PDF mirror XLSX: kop + logo, band judul, tabel landscape
-// (A4) dengan header abu, zebra, fill prioritas & status hitam.
 export async function exportStyledPdf({
   rows,
   headers,
@@ -240,20 +222,14 @@ export async function exportStyledPdf({
   doc.setFont("helvetica", "normal").setFontSize(9).setTextColor(122, 122, 122)
     .text("PT ATAP TEKNOLOGI INDONESIA", 33, 20);
 
-  // Status pill hitam → label Indonesia (spt XLSX), sekali sebelum render.
-  // `?? ""` wajib: undefined tidak diterima tipe RowInput autotable.
   const body = rows.map((r) =>
     r.map((v, i) =>
       (statusCols.includes(i + 1) ? STATUS_LABELS[String(v ?? "")] || v : v) ?? "",
     ),
   );
 
-  // Lebar kolom ikut konten (cap 10–40 char) persis aturan XLSX, dikonversi ke
-  // mm (1 char Excel ≈ 7px ≈ 1,85mm); kalau total melebihi halaman landscape,
-  // skala turun proporsional. Tabel sempit dibiarkan (mirip XLSX, tak dipaksa
-  // melebar penuh).
   const MM_PER_CHAR = 1.85;
-  const usable = 269; // A4 landscape 297mm − margin kiri/kanan 14mm
+  const usable = 269;
   const widths = headers.map((h, i) => {
     let chars = Math.min(40, Math.max(10, h.length + 2));
     for (const r of rows) {
@@ -268,8 +244,6 @@ export async function exportStyledPdf({
     widths.map((w, i) => [i, { cellWidth: w * scale }]),
   );
 
-  // Band judul — bila ada filterBox, 2 kolom terakhir (Jam Masuk/Keluar) jadi
-  // kotak putih berisi lingkup filter; judul di-center di sisa ruang kiri.
   const wS = widths.map((w) => w * scale);
   const tableW = wS.reduce((s, w) => s + w, 0);
   const splitBand = Boolean(filterBox) && headers.length > 2;
@@ -321,7 +295,6 @@ export async function exportStyledPdf({
     didParseCell: (data) => {
       if (data.section !== "body") return;
       const col = data.column.index + 1;
-      // ID (kolom 1) bold
       if (col === 1) data.cell.styles.fontStyle = "bold";
       const fill = priorityCols.includes(col) && PRIORITY_FILLS[String(data.cell.raw ?? "")];
       if (fill) {

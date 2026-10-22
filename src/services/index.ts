@@ -8,5 +8,4 @@ export {
   exportStyledXlsx,
   exportStyledPdf,
   todayStamp,
-  type ExportCell,
 } from "@/lib/export";

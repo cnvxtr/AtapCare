@@ -1,8 +1,5 @@
 import { Cpu, Router as RouterIcon, Wifi, Zap } from "lucide-react";
 
-// Data kartu "Kendala Umum" di beranda — dipakai juga buat prefill form
-// Lapor Kendala (?dari=TS-02). File terpisah dari komponennya biar fast-refresh
-// tetap jalan (react-refresh/only-export-components).
 export const TROUBLE_CARDS = [
   {
     code: "TS-01",

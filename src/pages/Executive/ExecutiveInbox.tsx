@@ -22,7 +22,6 @@ export default function ExecutiveInbox() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
 
-    // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka.
     const location = useLocation()
     const notifyOpenCode = notifyTicketCode(location.state, location.search)
     const navigate = useNavigate()
@@ -60,7 +59,6 @@ export default function ExecutiveInbox() {
 
     return (
         <div className={`space-y-6 flex flex-col ${view === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
-            {/* HEADER */}
             <div className="flex justify-end">
                 <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
                     <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
@@ -68,7 +66,6 @@ export default function ExecutiveInbox() {
                 </span>
             </div>
 
-            {/* BOX 1: Pencarian, Prioritas, Toggle View */}
             <div className="bg-card p-4 rounded-xl border border-border">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div className="relative flex-1">
@@ -102,7 +99,6 @@ export default function ExecutiveInbox() {
                 </div>
             </div>
 
-            {/* BOX 2: Status Flow (hanya di mode Tabel) */}
             {view === 'list' && (
                 <div className="bg-card p-4 rounded-xl border border-border">
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -125,7 +121,6 @@ export default function ExecutiveInbox() {
                 </div>
             )}
 
-            {/* KANBAN / LIST */}
             {view === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
                     <div className={`flex gap-2 flex-1 min-h-0 ${isMobile ? 'overflow-x-auto snap-x snap-mandatory pb-2' : 'overflow-x-auto'}`}>
@@ -214,7 +209,6 @@ export default function ExecutiveInbox() {
             </div>
             )}
 
-            {/* DRAWER DETAIL */}
             {liveTicket && (
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}

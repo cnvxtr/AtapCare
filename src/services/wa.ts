@@ -1,4 +1,3 @@
-// Normalisasi nomor HP → format internasional utk wa.me (0/62/+62 → 62).
 export function normalizeWaNumber(phone: string): string {
   const digits = phone.replace(/[^\d+]/g, "")
   if (digits.startsWith("+")) return digits.slice(1)

@@ -104,7 +104,6 @@ className="absolute -top-3 left-1/2 -ml-4 h-[2px] w-8 rounded-full bg-foreground
             )
           })}
 
-          {/* Profil tab — always last */}
           <button
             onClick={() => navigate('/profile')}
             className="relative flex flex-col items-center justify-center gap-0.5 outline-none tap-highlight-transparent"

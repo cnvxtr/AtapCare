@@ -22,15 +22,10 @@ import { getPendingAlarm } from '../../lib/pendingAlarm'
 import { SEGMENTS } from '../../lib/constants'
 import { useIsMobile } from '../../lib/platform'
 
-// Value sintetis opsi "Lainnya" di dropdown temuan awal: teks bebas tidak
-// jadi nama katalog — masuk lewat catatan (category_note), id/nama yang
-// disimpan menunjuk row resmi 'Lainnya' (seed migrasi 22).
 const LAINNYA = '__lainnya__'
 
-// KOLOM KANBAN = grup segmen alur status (tanpa 'Semua')
 const KANBAN_COLUMNS = SEGMENTS.filter(s => s.key !== 'semua')
 
-// GAYA INPUT BERSAMA (design system .input di index.css)
 const inputCls = 'input disabled:bg-muted disabled:text-muted-foreground disabled:cursor-not-allowed'
 const readOnlyInputCls = 'input read-only:bg-muted read-only:text-muted-foreground read-only:cursor-not-allowed'
 
@@ -45,7 +40,6 @@ export default function HPInbox() {
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null)
     const [activeDrawerTab, setActiveDrawerTab] = useState<'detail' | 'timeline'>('detail')
 
-    // Klik notifikasi (dalam app atau deep link push) → drawer tiket auto-terbuka.
     const location = useLocation()
     const notifyOpenCode = notifyTicketCode(location.state, location.search)
     const navigate = useNavigate()
@@ -59,7 +53,6 @@ export default function HPInbox() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [notifyOpenCode, tickets])
 
-    // State Modals
     const [showVoidModal, setShowVoidModal] = useState(false)
     const [showDuplicateModal, setShowDuplicateModal] = useState(false)
     const [showRemoteModal, setShowRemoteModal] = useState(false)
@@ -68,7 +61,6 @@ export default function HPInbox() {
     const [showEscalateModal, setShowEscalateModal] = useState(false)
     const [showConfirmReopen, setShowConfirmReopen] = useState(false)
 
-    // State Forms
     const [voidReason, setVoidReason] = useState('')
     const [duplicateTargetId, setDuplicateTargetId] = useState('')
     const [voidTicketId, setVoidTicketId] = useState<string | null>(null)
@@ -88,10 +80,8 @@ export default function HPInbox() {
     const [escNote, setEscNote] = useState('')
     const [escPriority, setEscPriority] = useState<Priority | ''>('')
     const [escErrors, setEscErrors] = useState<{ category?: string; priority?: string }>({})
-    // Review sebelum submit: isi form ditampilkan lagi untuk dicek.
     const [review, setReview] = useState<{ title: string; rows: ReviewRow[]; confirmLabel: string; run: () => void } | null>(null)
 
-    // State Form Internal
     const [formData, setFormData] = useState({
         sumberLaporan: 'Internal', reporterName: '', jabatan: '', noWaPelapor: '',
         company: '', site: '', unit: '', picName: '', picWa: '',
@@ -102,16 +92,12 @@ export default function HPInbox() {
     const addPhotos = (incoming: File[]) => {
         setPhotos(prev => [...prev, ...incoming]);
     }
-    // State Master Data (real, dari Supabase)
     const [mdCustomers, setMdCustomers] = useState<Customer[]>([])
     const [mdSites, setMdSites] = useState<SiteRow[]>([])
     const [mdUnits, setMdUnits] = useState<UnitRow[]>([])
-    // Katalog temuan awal: dropdown (katalog + sintetis "Lainnya"), juga
-    // buat prefill id tiket yang sudah pernah diisi.
     const [mdCategories, setMdCategories] = useState<CatalogItem[]>([])
     const [mdLoading, setMdLoading] = useState(true)
 
-    // State Alur Buat Tiket Internal
     const [createStep, setCreateStep] = useState<'form' | 'review' | 'remote' | 'path'>('form')
     const [submitting, setSubmitting] = useState(false)
     const [newTicketId, setNewTicketId] = useState<string | null>(null)
@@ -137,7 +123,6 @@ export default function HPInbox() {
         return () => { alive = false }
     }, [])
 
-    // FILTER & SORT LOGIC
     const activeSegmentStatuses = SEGMENTS.find(s => s.key === activeSegment)?.statuses || null
     const isActive = (t: Ticket) => !['VOID', 'DUPLICATE'].includes(t.status)
     const matchesPrioritySearch = (t: Ticket) =>
@@ -154,7 +139,6 @@ export default function HPInbox() {
     const liveTicket = selectedTicket ? (tickets.find(t => t.id === selectedTicket.id) ?? selectedTicket) : null
     const pendingAlarmCount = tickets.filter(t => t.status === 'PENDING' && getPendingAlarm(t.updatedAt)).length
 
-    // ---- HANDLER BUAT TIKET INTERNAL (Alur: Form → Review → Remote/Path/Void) ----
     const doAddTicket = async (initialStatus: TicketStatus, extraDetail?: string) => {
         if (submitting) return null
         setSubmitting(true)
@@ -338,7 +322,6 @@ export default function HPInbox() {
         }
     }
 
-    // Value dropdown dari id tiket: row 'Lainnya' dipetakan ke value sintetis.
     const catValue = (id?: string | null) => {
         const c = mdCategories.find(x => x.id === id)
         return c ? (c.name.toLowerCase() === 'lainnya' ? LAINNYA : c.id) : ''
@@ -365,15 +348,12 @@ export default function HPInbox() {
                 { label: 'Catatan', value: remoteNotes.trim(), multiline: true },
             ],
             run: () => {
-                // ponytail: ganti Lainnya → kategori biasa tidak menghapus catatan
-                // lama (RPC COALESCE) — upgrade: param reset terpisah kalau perlu.
                 setTicketCatalog(selectedTicket!.id, categoryNameOf(remoteCategoryId), null, null,
                     remoteCategoryId === LAINNYA ? remoteNote.trim() : null)
                 if (remoteResult === 'fail') {
                     updateTicketStatus(selectedTicket!.id, 'UNASSIGNED', `Remote Gagal via ${remoteMedia} (${remoteDuration} menit). Catatan: ${remoteNotes}`)
                     setShowRemoteModal(false); setSelectedTicket(null)
                 } else if (selectedTicket!.status === 'WORKING') {
-                    // Jalur reopen/rework: langsung tutup tanpa validasi ulang.
                     updateTicketStatus(selectedTicket!.id, 'CLOSED', `Remote Berhasil via ${remoteMedia}. Durasi: ${remoteDuration} menit. Catatan: ${remoteNotes}`)
                     setShowRemoteModal(false); setSelectedTicket(null)
                 } else {
@@ -465,7 +445,6 @@ export default function HPInbox() {
 
     return (
         <div className={`space-y-6 flex flex-col ${view === 'list' ? '' : 'h-[calc(100vh-7rem)]'}`}>
-            {/* HEADER */}
             <div className="flex justify-end">
                 <span className="bg-red-600 text-white px-3 py-1.5 rounded-sm text-sm font-medium border border-red-700 flex items-center gap-2">
                     <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
@@ -473,7 +452,6 @@ export default function HPInbox() {
                 </span>
             </div>
 
-            {/* BOX 1: Pencarian, Prioritas, Buat Tiket */}
             <div className="bg-card p-4 rounded-xl border border-border">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                     <div className="flex flex-1 items-center gap-2">
@@ -506,7 +484,6 @@ export default function HPInbox() {
                 </div>
             </div>
 
-            {/* BOX 2: Status Flow (hanya di mode Tabel) */}
             {view === 'list' && (
                 <div className="bg-card p-4 rounded-xl border border-border">
                     <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
@@ -529,7 +506,6 @@ export default function HPInbox() {
                 </div>
             )}
 
-            {/* KANBAN / LIST */}
             {view === 'kanban' ? (
                 <div className="rounded-xl border border-border bg-card p-4 flex-1 min-h-0 flex flex-col">
                     <div className={`flex gap-2 flex-1 min-h-0 ${isMobile ? 'overflow-x-auto snap-x snap-mandatory pb-2' : 'overflow-x-auto'}`}>
@@ -619,7 +595,6 @@ export default function HPInbox() {
             </div>
             )}
 
-            {/* DRAWER DETAIL */}
             {liveTicket && (
                 <TicketDrawer
                     onClose={() => setSelectedTicket(null)}
@@ -712,7 +687,6 @@ export default function HPInbox() {
                 </TicketDrawer>
             )}
 
-            {/* MODAL VOID, DUPLICATE, REMOTE, VALIDASI (Sama seperti sebelumnya) */}
             {showVoidModal && createPortal((
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
@@ -878,9 +852,6 @@ export default function HPInbox() {
                 </div>
             ), document.body)}
 
-            {/* ========================================== */}
-            {/* MODAL BUAT TIKET INTERNAL (ALUR 5 LANGKAH) */}
-            {/* ========================================== */}
             {isModalOpen && createPortal((
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 fade-in" onClick={closeCreateModal}
                     onDragOver={(e) => e.preventDefault()}

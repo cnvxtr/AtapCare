@@ -86,13 +86,8 @@ export default function MainLayout() {
   const [backupBusy, setBackupBusy] = useState<string | null>(null)
   const [isDark, setIsDark] = useState(getStoredTheme() === 'dark')
 
-  // Halaman publik membuang class dark saat mount; terapkan ulang tema dari
-  // simpanan begitu masuk shell (dark mode hanya hidup di dalam sistem).
   useEffect(() => { applyTheme() }, [])
 
-  // Reset flag ganti-role manual setelah transisi rute selesai di-commit,
-  // bukan dengan setTimeout(0) yang bisa jalan sebelum commit (menyebabkan
-  // RoleGate auto-switch balik ke role lama).
   useEffect(() => {
     if (!manualSwitchRef?.current) return
     const target = manualTargetRoleRef.current
@@ -118,7 +113,6 @@ export default function MainLayout() {
     const refresh = async () => {
       const [n, c] = await Promise.all([getMyNotifications(user.id), getUnreadCount(user.id)])
       if (!alive) return
-      // Chime hanya saat app terbuka & ada notif baru (banner OS datang dari push SW)
       const fresh = n.filter(x => !prevNotifIds.current.includes(x.id))
       prevNotifIds.current = n.map(x => x.id)
       if (!firstNotifLoad.current && fresh.length > 0 && document.visibilityState === 'visible') playChime()
@@ -127,10 +121,7 @@ export default function MainLayout() {
       setNotifCount(c)
     }
     refresh()
-    // Polling 30 detik (blueprint 2.8.1)
     const t = setInterval(refresh, 30_000)
-    // Realtime: notifikasi baru langsung memicu refresh (chime/badge instan),
-    // tanpa menunggu 30 dtk. Polling tetap ada sebagai jaring pengaman.
     const ch = supabase
       .channel('realtime-notifications')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => refresh())
@@ -140,7 +131,6 @@ export default function MainLayout() {
 
   useEffect(() => {
     if (!user) return
-    // Web Push: daftar SW + minta izin + subscribe (sekali per login)
     void registerPush(user.id)
   }, [user])
 
@@ -168,7 +158,6 @@ export default function MainLayout() {
 
   const initials = (user?.full_name || 'U').split(' ').map(s => s[0]).join('').slice(0, 2).toUpperCase()
 
-  // Avatar resolution
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null)
   useEffect(() => {
     resolveAvatarUrl(user?.avatar_url).then(setResolvedAvatar)
@@ -186,7 +175,6 @@ export default function MainLayout() {
     manualStartPathRef.current = location.pathname
     manualTargetRoleRef.current = r
     try {
-      // Optimistik: role berubah & navigasi langsung, tidak menunggu RPC.
       const resPromise = switchRole(r)
       applyRole(r)
       navigate(roleHome(r))
@@ -227,8 +215,6 @@ export default function MainLayout() {
     }
   }
 
-  // Klik notif → pindah ke role yang notif itu tujukan (bukan role aktif),
-  // lalu buka drawer tiket via kode tiket. Multi-role: switch role dulu.
   const handleNotifOpen = async (n: NotificationRow) => {
     if (!user) return
     const code = ticketCodeFromNotif(n)
@@ -281,7 +267,6 @@ export default function MainLayout() {
     }
   }
 
-  // Klik lonceng = tandai semua terbaca (badge hilang), notif tetap tampil.
   const handleNotifOpenChange = (open: boolean) => {
     setNotifOpen(open)
     if (open && user && notifCount > 0) {
@@ -311,9 +296,7 @@ export default function MainLayout() {
 
   return (
     <div className="max-w-full min-h-screen bg-background text-foreground flex">
-      {/* Sidebar */}
       <aside className={`fixed inset-y-0 left-0 z-50 flex w-60 ${collapsed ? 'lg:w-16' : ''} shrink-0 flex-col border-r border-border bg-card transition-all duration-200 overflow-hidden lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        {/* Logo */}
         <div className={`h-16 flex items-center gap-2 px-5 border-b border-border ${collapsed ? 'justify-center px-0' : ''}`}>
           <div className={`relative shrink-0 cursor-pointer`} onClick={collapsed ? () => setCollapsed(false) : () => navigate(user?.role === 'admin' ? '/admin' : '/dashboard')} onMouseEnter={() => setHoverLogo(true)} onMouseLeave={() => setHoverLogo(false)} role={collapsed ? 'button' : undefined} tabIndex={collapsed ? 0 : undefined}>
             {collapsed && hoverLogo ? (
@@ -338,7 +321,6 @@ export default function MainLayout() {
           )}
         </div>
 
-        {/* Navigation */}
         <TooltipProvider>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           <div className={`px-2 pb-2 pt-1 text-[10px] uppercase tracking-widest text-muted-foreground ${collapsed ? 'hidden' : ''}`}>
@@ -375,7 +357,6 @@ export default function MainLayout() {
         </nav>
         </TooltipProvider>
 
-        {/* Profile widget */}
         <div className="relative p-2 border-t border-border">
           <div className={`w-full glass rounded-[5px] p-3 relative overflow-hidden ${collapsed ? 'grid place-items-center' : ''}`}>
             <div className="absolute -top-6 -right-6 h-16 w-16 rounded-full bg-foreground/5 blur-2xl" />
@@ -448,9 +429,7 @@ export default function MainLayout() {
         </div>
       </aside>
 
-      {/* Main */}
       <div className={`flex-1 min-w-0 flex flex-col pt-16 ${collapsed ? 'lg:ml-16' : 'lg:ml-60'}`}>
-        {/* Top bar */}
         <header className={`h-16 fixed top-0 left-0 right-0 z-30 border-b border-border bg-background ${collapsed ? 'lg:left-16' : 'lg:left-60'}`}>
           <div className="h-full px-4 sm:px-6 flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(true)} className="p-3 sm:p-2 -ml-2 rounded hover:bg-accent transition lg:hidden">
@@ -534,20 +513,16 @@ export default function MainLayout() {
         </header>
 
         <main className="p-4 sm:p-6 flex-1 bg-background">
-          {/* ponytail: ErrorBoundary = jaring diagnostik render-crash (bukan solusi per-route); */}
-          {/* kalau crash terulang, pesan error muncul di layar sehingga bisa dilacak. */}
           <ErrorBoundary>
             <Outlet />
           </ErrorBoundary>
         </main>
       </div>
 
-      {/* BACKDROP MOBILE */}
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />
       )}
 
-      {/* MODAL AVATAR PREVIEW */}
       {showAvatarPreview && createPortal((
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in" onClick={() => setShowAvatarPreview(false)}>
           <div className="relative" onClick={(e) => e.stopPropagation()}>
@@ -562,7 +537,6 @@ export default function MainLayout() {
         </div>
       ), document.body)}
 
-      {/* MODAL LOGOUT */}
       {showLogoutConfirm && createPortal((
         <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm fade-in">
           <div className="bg-card border border-border w-full max-w-sm rounded-lg shadow-2xl p-6 text-center" onClick={(e) => e.stopPropagation()}>

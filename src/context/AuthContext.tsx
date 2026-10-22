@@ -41,7 +41,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Petakan error umum Supabase (Inggris) → pesan Indonesia; sisanya pesan generik.
 const AUTH_ERRORS: Record<string, string> = {
     'Invalid login credentials': 'Nama pengguna atau kata sandi salah.',
     'Email not confirmed': 'Email belum dikonfirmasi. Cek kotak masuk Anda.',
@@ -62,12 +61,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [manualSwitching, setManualSwitching] = useState(false)
     const manualSwitchRef = useRef(false)
     const navigate = useNavigate()
-    // Selama proses daftar, abaikan event sesi buatan signUp (konfirmasi email
-    // nonaktif → signUp langsung membuat sesi) agar tidak dianggap sudah login.
     const registeringRef = useRef(false)
 
-    // Akun nonaktif / ditandai terhapus dilarang login; sesi yang masih
-    // terbuka (login sebelum dinonaktifkan) juga harus ditutup.
     const isDeactivated = (p: UserProfile) => p.status === 'nonaktif' || !!p.is_deleted
 
     const fetchUserProfile = async (userId: string) => {
@@ -128,9 +123,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }, [])
 
     const login = async (username: string, password: string) => {
-        // Resolusi nama pengguna → email dilakukan di server (Edge Function) dan
-        // hanya setelah kata sandi terverifikasi, sehingga browser tidak dapat
-        // memanen email milik pengguna lain dari nama penggunanya.
         const invoke = await supabase.functions.invoke<{ email?: string }>('login-email', {
             body: { identifier: username, password },
         })
@@ -162,8 +154,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             setLastLoginTime(timeString)
             if (profile) setAuditActor(profile.full_name)
-            // Navigasi tujuan setelah login ditangani route /login lewat
-            // loginTarget (menghormati halaman asal / deep link notifikasi).
             return { error: null }
         }
         return { error: 'Login gagal' }
@@ -182,8 +172,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const register = async (name: string, email: string, phone: string, password: string, companyCode?: string) => {
         registeringRef.current = true
         try {
-            // 0. Pre-check server-side SEBELUM signUp agar akun Auth tidak dibuat
-            //    bila validasi gagal (anti akun "yatim" yang menempati email).
             const pre = await supabase.rpc('precheck_register', {
                 p_name: name,
                 p_email: email,
@@ -193,7 +181,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const pv = pre.data as { error?: string; ok?: boolean }
             if (pv?.error) return { error: pv.error }
 
-            // 1. Buat auth user lewat Supabase Auth
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
@@ -201,11 +188,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (authError) return { error: authErrorMessage(authError.message) }
             if (!authData.user) return { error: 'Gagal membuat akun.' }
 
-            // Konfirmasi email nonaktif → signUp membuat sesi langsung. Tutup sesi
-            // itu agar pelanggan masuk sendiri lewat halaman masuk (bukan auto-login).
             if (authData.session) await supabase.auth.signOut()
 
-            // 2. Insert ke tabel users lewat RPC (pakai auth UUID)
             const { data, error } = await supabase.rpc('register_customer', {
                 p_name: name,
                 p_email: email,
@@ -217,7 +201,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const res = data as { error?: string; ok?: boolean }
             if (res?.error) return { error: res.error }
 
-            // 3. Selesai — tanpa auto-login: pengguna diarahkan ke halaman masuk
             return { error: null }
         } finally {
             registeringRef.current = false
@@ -236,11 +219,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const switchRole = async (role: string) => {
         if (!user) return { error: 'Tidak ada sesi' }
         const target = role.trim()
-        // Optimistik: UI langsung mengikuti role tujuan, tidak menunggu fetch.
         setUser((prev) => (prev ? { ...prev, role: target } : prev))
         const { data, error } = await supabase.rpc('switch_role', { p_role: target })
         if (error) {
-            // rollback ke role sebelumnya
             setUser((prev) => (prev ? { ...prev, role: user.role } : prev))
             return { error: error.message }
         }
@@ -249,9 +230,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setUser((prev) => (prev ? { ...prev, role: user.role } : prev))
             return { error: res.error }
         }
-        // Jangan fetchUserProfile: bisa stale dan menimpa role.
-        // Naikkan versi setelah RPC commit agar TicketContext fetch ulang
-        // dengan RLS role baru, bukan role optimistik yang belum tersimpan.
         setRoleVersion((v) => v + 1)
         return { error: null }
     }

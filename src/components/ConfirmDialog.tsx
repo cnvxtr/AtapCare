@@ -1,8 +1,6 @@
 import { createPortal } from 'react-dom'
 import { AlertTriangle } from 'lucide-react'
 
-// Konfirmasi aksi destruktif. Pola overlay sama dgn ReviewConfirm (z-[140])
-// supaya tetap di atas sheet notifikasi (z-[56]) maupun dropdown (z-50).
 export default function ConfirmDialog({
     title, message, confirmLabel = 'Hapus', danger = true, onConfirm, onClose, busy = false,
 }: {
