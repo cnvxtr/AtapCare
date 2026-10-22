@@ -33,21 +33,23 @@ export interface TicketReportRow {
 }
 
 // Tabel layar: tanpa kolom deskripsi (deskripsi hanya muncul di export).
+// No. urut dirender terpisah di AdminReports; Serial Number & Jam Masuk–Keluar dihapus.
 export const TICKET_REPORT_TABLE_HEADERS = [
   "ID Tiket",
   "Pelanggan",
   "Perusahaan",
   "Site",
   "Unit",
-  "Serial Number",
-  "Temuan Awal",
   "Temuan Akhir",
   "Prioritas",
   "Status",
   "Teknisi",
-  "Jam Masuk–Keluar",
   "Durasi",
 ];
+
+// Indeks layar pada Object.values(TicketReportRow); Serial Number (5),
+// Temuan Awal (6) & Jam Masuk–Keluar (11) dibuang.
+export const TICKET_REPORT_TABLE_INDEXES = [0, 1, 2, 3, 4, 7, 8, 9, 10, 12];
 
 // Urutan kolom export tiket: deskripsi disisipkan, tabel layar tidak berubah.
 export const TICKET_REPORT_HEADERS = [
@@ -73,9 +75,7 @@ export const TICKET_REPORT_HEADERS = [
 // support (13) → kolom 13 (setelah Teknisi), timeRange (11) → kolom 14.
 export const TICKET_EXPORT_INDEXES = [0, 1, 2, 3, 4, 5, 13, 6, 7, 8, 9, 10, 14, 11, 12];
 
-export const ROOTCAUSE_HEADERS = ["Temuan Akhir", "Total"];
-
-export const SERIAL_NUMBER_HEADERS = ["ID Tiket", "Teknisi", "Tanggal", "Site", "Serial Number"];
+export const SERIAL_NUMBER_HEADERS = ["ID Tiket", "Teknisi", "Site", "Unit", "Jam Masuk–Keluar", "Serial Number"];
 
 export const KPI_HEADERS = ["Prioritas", "Total"];
 
@@ -128,7 +128,7 @@ async function buildTicketQuery(filters: ReportFilters) {
   let q = supabase
     .from("tickets")
     .select(
-      "id, code, customer, company, site, unit, category, category_id, problem_categories(name), root_cause_id, root_causes(name), description, priority, status, assigned_to, rejection_reason, created_at, closed_at, source",
+      "id, code, customer, company, site, unit, category, category_id, category_note, problem_categories(name), root_cause_id, root_cause_note, root_causes(name), description, priority, status, assigned_to, rejection_reason, created_at, closed_at, source",
     )
     .order("created_at", { ascending: false });
   if (filters.from) q = q.gte("created_at", dayStart(filters.from));
@@ -150,8 +150,10 @@ function toTicketRow(
     site: string;
     unit: string;
     category?: string | null;
+    category_note?: string | null;
     problem_categories?: { name?: string } | { name?: string }[] | null;
     root_cause_id?: string | null;
+    root_cause_note?: string | null;
     root_causes?: { name?: string } | { name?: string }[] | null;
     description?: string | null;
     priority: string;
@@ -188,8 +190,8 @@ function toTicketRow(
     serial: serials?.get(`${t.site ?? ""}|${t.unit ?? ""}`) ?? "—",
     // Temuan Awal dari relasi category_id, bukan kolom legacy `category`
     // (yang pernah diisi nama unit oleh RPC lama create_public_ticket).
-    category: catName || "—",
-    rootCause: rootCauseName || "—",
+    category: t.category_note?.trim() || catName || "—",
+    rootCause: t.root_cause_note?.trim() || rootCauseName || "—",
     priority: t.priority || "—",
     status: t.status,
     assignee: t.assigned_to ? names?.get(t.assigned_to) ?? "—" : "—",
@@ -260,7 +262,9 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
   const tickets = data || [];
   const rows: Record<string, string | number>[] = [];
   for (const p of ["Critical", "Medium", "Low"]) {
-    const group = tickets.filter((t) => t.priority === p && t.status === "CLOSED");
+    const group = tickets.filter(
+      (t) => t.priority === p && !["VOID", "DUPLICATE", "REJECTED"].includes(t.status),
+    );
     if (group.length === 0) continue;
     rows.push({
       priority: p,
@@ -268,42 +272,6 @@ export async function getKpiReport(filters: ReportFilters): Promise<Record<strin
     });
   }
   return rows;
-}
-
-// ── Temuan Akhir ──
-export async function getRootCauseReport(
-  filters: ReportFilters,
-): Promise<Record<string, string | number>[]> {
-  let q = supabase
-    .from("tickets")
-    .select("root_cause_id, root_causes(name), created_at, company");
-  if (filters.from) q = q.gte("created_at", dayStart(filters.from));
-  if (filters.to) q = q.lte("created_at", dayEnd(filters.to));
-  if (filters.company?.length) q = q.in("company", filters.company);
-  if (filters.site?.length) q = q.in("site", filters.site);
-  if (filters.unit?.length) q = q.in("unit", filters.unit);
-  q = q.in("status", ["CLOSED"]);
-  const { data } = await q;
-  const rows = data || [];
-
-  const counts = new Map<string, number>();
-  let noCause = 0;
-  for (const t of rows) {
-    const name = (t as { root_causes?: { name?: string } | null }).root_causes?.name;
-    if (name) counts.set(name, (counts.get(name) ?? 0) + 1);
-    else noCause++;
-  }
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([name, count]) => ({
-    "Temuan Akhir": name,
-    Total: count,
-  }));
-  if (noCause > 0) {
-    top.push({
-      "Temuan Akhir": "Tanpa temuan akhir",
-      Total: noCause,
-    });
-  }
-  return top;
 }
 
 // ── Riwayat Serial Number (parse dari aktivitas 'Tugas diselesaikan') ──
@@ -323,11 +291,17 @@ export async function getSerialNumberReport(
   const { data } = await q;
 
   const ids = [...new Set((data || []).map((a) => a.ticket_id).filter(Boolean))];
-  let byId = new Map<string, { code: string; site: string }>();
+  let byId = new Map<string, {
+    code: string;
+    site: string;
+    unit: string;
+    created_at: string;
+    closed_at: string | null;
+  }>();
   if (ids.length) {
     const { data: tickets } = await supabase
       .from("tickets")
-      .select("id, code, site")
+      .select("id, code, site, unit, created_at, closed_at")
       .in("id", ids);
     byId = new Map((tickets || []).map((t) => [t.id, t]));
   }
@@ -340,8 +314,9 @@ export async function getSerialNumberReport(
       {
         "ID Tiket": t?.code ?? "—",
         Teknisi: a.user_name ?? "—",
-        Tanggal: fmt(a.created_at),
         Site: t?.site || "—",
+        Unit: t?.unit || "—",
+        "Jam Masuk–Keluar": t ? formatTimeRange(t.created_at, t.closed_at) : "—",
         "Serial Number": (m[1] ?? m[2]).trim(),
       },
     ];

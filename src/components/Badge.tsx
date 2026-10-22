@@ -45,7 +45,7 @@ export function Badge({ type, value, className = '', small, label }: BadgeProps)
   const isStatus = type === 'status'
   const statusColor = isStatus ? STATUS_COLORS[value] : null
   const styles = isStatus ? '' : PRIORITY_STYLES[value]
-  const size = type === 'priority' ? (small ? 'px-1 py-px text-[8px]' : 'px-2 py-1 text-xs') : 'px-2 py-1 text-xs'
+  const size = small ? 'px-1 py-px text-[8px]' : 'px-2 py-1 text-xs'
 
   return (
     <span

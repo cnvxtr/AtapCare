@@ -162,7 +162,7 @@ interface TicketContextType {
     tickets: Ticket[]
     loading: boolean
     supportTickets: Set<string>
-    updateTicketStatus: (id: string, newStatus: TicketStatus, actionDetails?: string, newPriority?: Priority, resolvedBy?: 'helpdesk' | 'technician', rejectionReason?: string, duplicateOf?: string | null) => Promise<boolean>
+    updateTicketStatus: (id: string, newStatus: TicketStatus, actionDetails?: string, newPriority?: Priority, resolvedBy?: 'helpdesk' | 'technician', rejectionReason?: string, duplicateOf?: string | null, actionOverride?: string) => Promise<boolean>
     assignTicket: (id: string, technicianId: string | null, technicianName?: string, note?: string, supportIds?: string[]) => Promise<void>
     addTicket: (data: AddTicketData) => Promise<Ticket | null>
     getTicketCount: (status: TicketStatus) => number
@@ -180,7 +180,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
     const [tickets, setTickets] = useState<Ticket[]>([])
     const [loading, setLoading] = useState(true)
     const [supportTickets, setSupportTickets] = useState<Set<string>>(new Set())
-    const { user } = useAuth()
+    const { user, roleVersion } = useAuth()
 
     const prevPendingRef = useRef<PendingSnapshot>({})
 
@@ -283,7 +283,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             supabase.removeChannel(channel)
             document.removeEventListener('visibilitychange', onFocus)
         }
-    }, [user?.id, fetchTickets])
+    }, [user?.id, roleVersion, fetchTickets])
 
     const addTicket = async (data: AddTicketData): Promise<Ticket | null> => {
         if (!user) return null
@@ -341,7 +341,8 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
         newPriority?: Priority,
         resolvedBy?: 'helpdesk' | 'technician',
         rejectionReason?: string,
-        duplicateOf?: string | null
+        duplicateOf?: string | null,
+        actionOverride?: string
     ) => {
         if (!user) return false
 
@@ -369,7 +370,7 @@ export const TicketProvider = ({ children }: { children: ReactNode }) => {
             p_new_priority: newPriority,
             p_resolved_by: resolvedBy,
             p_rejection_reason: rejectionReason,
-            p_activity_action: actionMap[newStatus],
+            p_activity_action: actionOverride || actionMap[newStatus],
             p_activity_details: actionDetails || rejectionReason,
             p_duplicate_of: duplicateOf ?? null,
         })

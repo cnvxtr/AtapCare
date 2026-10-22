@@ -409,7 +409,16 @@ export default function HPInbox() {
 
     const handleReopen = () => {
         if (!selectedTicket) return
-        updateTicketStatus(selectedTicket.id, 'WORKING', 'Tiket dibuka kembali (reopen) oleh Helpdesk.')
+        updateTicketStatus(
+            selectedTicket.id,
+            'OPEN',
+            'Tiket dibuka kembali (reopen) oleh Helpdesk.',
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            'Tiket dibuka kembali (reopen)',
+        )
         setShowConfirmReopen(false)
     }
 
@@ -860,7 +869,7 @@ export default function HPInbox() {
                 <div className="fixed inset-0 bg-black/80 z-[120] flex items-center justify-center p-4 fade-in">
                     <div className="bg-card w-full max-w-md rounded-lg border-2 border-border p-6">
                         <h3 className="text-lg font-bold mb-3">Reopen Tiket</h3>
-                        <p className="text-sm text-muted-foreground mb-6">Apakah Anda yakin ingin membuka kembali tiket ini? Status akan kembali ke <strong>Dikerjakan</strong> (WORKING).</p>
+                        <p className="text-sm text-muted-foreground mb-6">Apakah Anda yakin ingin membuka kembali tiket ini? Status akan kembali ke <strong>Diproses</strong> (OPEN).</p>
                         <div className="flex gap-3">
                             <button onClick={() => setShowConfirmReopen(false)} className="flex-1 py-2 bg-muted rounded font-medium">Tidak</button>
                             <button onClick={handleReopen} className="flex-1 py-2 bg-blue-600 text-white rounded font-bold">Ya, Reopen</button>

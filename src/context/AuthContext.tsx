@@ -33,6 +33,7 @@ interface AuthContextType {
     switchRole: (role: string) => Promise<{ error: string | null }>
     applyRole: (role: string) => void
     refreshUser: () => Promise<void>
+    roleVersion: number
     manualSwitching: boolean
     setManualSwitching: (value: boolean) => void
     manualSwitchRef: { current: boolean }
@@ -57,6 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [user, setUser] = useState<UserProfile | null>(null)
     const [lastLoginTime, setLastLoginTime] = useState<string | null>(null)
     const [loading, setLoading] = useState(true)
+    const [roleVersion, setRoleVersion] = useState(0)
     const [manualSwitching, setManualSwitching] = useState(false)
     const manualSwitchRef = useRef(false)
     const navigate = useNavigate()
@@ -248,6 +250,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             return { error: res.error }
         }
         // Jangan fetchUserProfile: bisa stale dan menimpa role.
+        // Naikkan versi setelah RPC commit agar TicketContext fetch ulang
+        // dengan RLS role baru, bukan role optimistik yang belum tersimpan.
+        setRoleVersion((v) => v + 1)
         return { error: null }
     }
 
@@ -267,7 +272,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole, applyRole, refreshUser, manualSwitching, setManualSwitching, manualSwitchRef }}>
+        <AuthContext.Provider value={{ isAuthenticated, user, lastLoginTime, loading, login, register, logout, switchRole, applyRole, refreshUser, roleVersion, manualSwitching, setManualSwitching, manualSwitchRef }}>
             {children}
         </AuthContext.Provider>
     )

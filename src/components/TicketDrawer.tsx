@@ -47,6 +47,17 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
     const resolvedAt = ['RESOLVED', 'CLOSED'].includes(status)
         ? [...(activities ?? [])].reverse().find(a => a.action === 'Tugas diselesaikan')?.timestamp
         : undefined
+    // Durasi berhenti di aktivitas penutup; tiket aktif memakai waktu sekarang.
+    const durationStopped = ['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(status)
+    const durationEnd = durationStopped
+        ? [...(activities ?? [])].reverse().find(a => a.action === 'Tiket ditutup' || a.action === 'Tugas diselesaikan')?.timestamp
+        : undefined
+    const [, tick] = useState(0)
+    useEffect(() => {
+        if (durationStopped) return
+        const id = setInterval(() => tick((n) => n + 1), 1000)
+        return () => clearInterval(id)
+    }, [durationStopped])
 
     const close = () => {
         closingByMe.current = true
@@ -80,7 +91,7 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
             <div className={`${isMobile ? 'w-full h-full' : 'w-full max-w-2xl h-full'} bg-card/95 backdrop-blur-xl border-l border-border shadow-2xl flex flex-col drawer-enter`} onClick={(e) => e.stopPropagation()}>
                 <div className="sticky top-0 z-10 bg-card/80 backdrop-blur-xl px-4 py-2.5">
                     <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <p className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground mb-0.5">ID Tiket</p>
                             <div className="flex flex-wrap items-center gap-1.5">
                                 <h3 className="text-sm font-bold text-foreground font-mono tracking-tight">{code}</h3>
@@ -91,16 +102,21 @@ export default function TicketDrawer({ onClose, code, status, priority, createdA
                                 )}
                             </div>
                             <p className="mt-1 font-mono text-[11px] text-muted-foreground">
-                                {resolvedAt ? `${formatWIB(createdAt)} - ${formatWIB(resolvedAt)}` : formatWIB(createdAt)}
+                                Dibuat: {formatWIB(createdAt)}
+                            </p>
+                            {resolvedAt && (
+                                <p className="mt-0.5 font-mono text-[11px] text-muted-foreground">
+                                    Selesai: {formatWIB(resolvedAt)}
+                                </p>
+                            )}
+                            <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                                Durasi: {formatDuration(createdAt, durationEnd)}
                             </p>
                         </div>
-                        <div className="flex flex-col items-end gap-1 shrink-0">
+                        <div className="shrink-0">
                             <button onClick={close} className="p-1.5 bg-foreground text-background rounded-[5px] hover:opacity-80 transition-opacity" aria-label="Tutup">
                                 <X className="w-4 h-4" />
                             </button>
-                            <p className="font-mono text-[10px] text-muted-foreground whitespace-nowrap mt-3">
-                                Durasi: {formatDuration(createdAt, ['CLOSED', 'RESOLVED', 'VOID', 'DUPLICATE', 'REJECTED'].includes(status) ? (activities ?? []).slice().reverse().find(a => a.action === 'Tiket ditutup' || a.action === 'Tugas diselesaikan')?.timestamp : undefined)}
-                            </p>
                         </div>
                     </div>
                 </div>

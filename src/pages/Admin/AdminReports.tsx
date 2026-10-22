@@ -28,14 +28,13 @@ import { notifyTicketCode } from "@/services/notifications";
 import {
   getTicketReport,
   getKpiReport,
-  getRootCauseReport,
   getSerialNumberReport,
   getReportCompanies,
   TICKET_REPORT_HEADERS,
   TICKET_REPORT_TABLE_HEADERS,
+  TICKET_REPORT_TABLE_INDEXES,
   TICKET_EXPORT_INDEXES,
   KPI_HEADERS,
-  ROOTCAUSE_HEADERS,
   SERIAL_NUMBER_HEADERS,
   exportStyledXlsx,
   exportStyledPdf,
@@ -45,7 +44,7 @@ import {
 } from "@/services";
 
 type ExportCell = string | number | null | undefined;
-type TabKey = "tickets" | "kpi" | "rootcause" | "sparepart";
+type TabKey = "tickets" | "kpi" | "sparepart";
 
 const fmtIso = (iso: string) =>
   new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
@@ -57,29 +56,30 @@ const PRIORITY_OPTIONS = ["Critical", "Medium", "Low"].map((p) => ({ value: p, l
 const DATASETS: Array<{ key: TabKey; label: string }> = [
   { key: "tickets", label: "Tiket & Penanganan" },
   { key: "kpi", label: "KPI Agregat" },
-  { key: "rootcause", label: "Temuan Akhir" },
   { key: "sparepart", label: "Serial Number" },
 ];
 
-// Per-role dataset: admin semua; helpdesk tiket + temuan akhir.
+// Per-role dataset: admin semua; helpdesk & executive tiket + serial number.
 function datasetsFor(mode: "admin" | "helpdesk") {
   return DATASETS.filter((d) =>
-    mode === "admin" ? true : d.key === "tickets" || d.key === "rootcause",
+    mode === "admin" ? true : d.key === "tickets" || d.key === "sparepart",
   );
 }
 
 const PRIORITY_COLS: Record<TabKey, number[]> = {
-  tickets: [8],
+  tickets: [6],
   kpi: [0],
-  rootcause: [],
   sparepart: [],
 };
 const STATUS_COLS: Record<TabKey, number[]> = {
-  tickets: [9],
+  tickets: [7],
   kpi: [],
-  rootcause: [],
   sparepart: [],
 };
+
+// Posisi properti Priority/Status di TicketReportRow, dipakai untuk export.
+const TICKET_PRIORITY_PROP = 8;
+const TICKET_STATUS_PROP = 9;
 
 function FilterGroup({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
@@ -101,7 +101,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
-  const [exportConfirm, setExportConfirm] = useState<"xlsx" | "pdf" | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [loadedKeys, setLoadedKeys] = useState<Partial<Record<TabKey, string>>>({});
@@ -124,7 +123,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notifyOpenCode, tickets])
   const [kpis, setKpis] = useState<Array<Record<string, string | number>>>([]);
-  const [rootCauses, setRootCauses] = useState<Array<Record<string, string | number>>>([]);
   const [audits, setAudits] = useState<Array<Record<string, string>>>([]);
 
   useEffect(() => {
@@ -143,8 +141,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       if (tab === "tickets") setTickets(await getTicketReport(filters));
       if (tab === "kpi")
         setKpis((await getKpiReport(filters)) as unknown as Array<Record<string, string | number>>);
-      if (tab === "rootcause")
-        setRootCauses((await getRootCauseReport(filters)) as unknown as Array<Record<string, string | number>>);
       if (tab === "sparepart")
         setAudits((await getSerialNumberReport(filters)) as unknown as Array<Record<string, string>>);
     } finally {
@@ -161,8 +157,8 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
   const activeRows: ExportCell[][] =
     tab === "tickets"
       ? tickets.map((r) => Object.values(r))
-      : tab === "kpi" || tab === "rootcause"
-        ? (tab === "kpi" ? kpis : rootCauses).map((r) => Object.values(r))
+      : tab === "kpi"
+        ? kpis.map((r) => Object.values(r))
         : audits.map((r) => Object.values(r));
   const visibleRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -207,10 +203,12 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
       ? TICKET_REPORT_TABLE_HEADERS
       : tab === "kpi"
         ? KPI_HEADERS
-        : tab === "rootcause"
-            ? ROOTCAUSE_HEADERS
-            : SERIAL_NUMBER_HEADERS;
-  const twoCol = activeHeaders.length === 2;
+        : SERIAL_NUMBER_HEADERS;
+  const displayHeaders: string[] = ["No", ...activeHeaders];
+  const activeIndexes: number[] =
+    tab === "tickets"
+      ? TICKET_REPORT_TABLE_INDEXES
+      : Array.from({ length: activeHeaders.length }, (_, i) => i);
   const exportHeaders: string[] =
     tab === "tickets" ? TICKET_REPORT_HEADERS : activeHeaders;
 
@@ -226,9 +224,9 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     // tabel layar tetap memakai urutan aslinya.
     const rows =
       tab === "tickets"
-        ? visibleRows.map((r) => TICKET_EXPORT_INDEXES.map((i) => r[i]))
+        ? visibleRows.map((r, i) => [i + 1, ...TICKET_EXPORT_INDEXES.map((idx) => r[idx])])
         : visibleRows.map((r) => [...r]);
-    const headers = tab === "tickets" ? [...TICKET_REPORT_HEADERS] : [...exportHeaders];
+    const headers = tab === "tickets" ? ["No", ...TICKET_REPORT_HEADERS] : [...exportHeaders];
     const name = baseName;
     const label = datasetLabel;
     const periodText =
@@ -238,11 +236,11 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     // Kolom prioritas/status ikut bergeser di export tiket.
     const priorityCols =
       tab === "tickets"
-        ? PRIORITY_COLS[tab].map((c) => TICKET_EXPORT_INDEXES.indexOf(c) + 1)
+        ? [TICKET_EXPORT_INDEXES.indexOf(TICKET_PRIORITY_PROP) + 2]
         : PRIORITY_COLS[tab].map((c) => c + 1);
     const statusCols =
       tab === "tickets"
-        ? STATUS_COLS[tab].map((c) => TICKET_EXPORT_INDEXES.indexOf(c) + 1)
+        ? [TICKET_EXPORT_INDEXES.indexOf(TICKET_STATUS_PROP) + 2]
         : STATUS_COLS[tab].map((c) => c + 1);
     const filterBox = [
       filters.company?.length ? `Perusahaan: ${filters.company.join(", ")}` : null,
@@ -306,7 +304,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
     <div className="space-y-4">
       {/* ─── Tab Dataset ─────────────────────────────────────────── */}
       <Tabs value={tab} onValueChange={(v) => setTab(v as TabKey)} className="space-y-4">
-        <div className={`bg-card p-1 rounded-xl border border-border grid gap-1 ${mode === "admin" ? "grid-cols-2 md:grid-cols-4" : "grid-cols-2"}`}>
+        <div className={`bg-card p-1 rounded-xl border border-border grid gap-1 ${mode === "admin" ? "grid-cols-2 md:grid-cols-3" : "grid-cols-2"}`}>
           {visibleDatasets.map((d) => (
             <button
               key={d.key}
@@ -382,7 +380,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                 <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
                   <div className="flex items-center gap-2">
                     <Badge className="bg-foreground text-primary-foreground rounded">
-                      {tab === "kpi" || tab === "rootcause"
+                      {tab === "kpi"
                         ? visibleRows.reduce((s, r) => s + (Number(r[1]) || 0), 0)
                         : visibleRows.length}{" "}
                       tiket
@@ -406,7 +404,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                         <button
                           type="button"
                           disabled={exporting}
-                          onClick={() => { setExportOpen(false); setExportConfirm("xlsx"); }}
+                          onClick={() => { setExportOpen(false); doExport("xlsx"); }}
                           className="flex items-center gap-2 px-2.5 py-1.5 rounded-none bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 disabled:opacity-50 w-full"
                         >
                           <FileSpreadsheet className="h-3.5 w-3.5" /> XLSX
@@ -414,7 +412,7 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                         <button
                           type="button"
                           disabled={exporting}
-                          onClick={() => { setExportOpen(false); setExportConfirm("pdf"); }}
+                          onClick={() => { setExportOpen(false); doExport("pdf"); }}
                           className="flex items-center gap-2 px-2.5 py-1.5 rounded-none bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 w-full"
                         >
                           <FileText className="h-3.5 w-3.5" /> PDF
@@ -441,14 +439,14 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                     <>
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                       <div className="overflow-x-auto">
-                      <div className={twoCol ? "w-full" : "min-w-[900px]"}>
+                      <div className={tab === "kpi" ? "w-full" : "min-w-[900px]"}>
                       <Table>
                           <TableHeader>
                             <TableRow>
-                              {activeHeaders.map((h) => (
+                              {displayHeaders.map((h) => (
                                 <TableHead
                                   key={h}
-                                  className={`text-[9px] font-mono uppercase tracking-widest text-muted-foreground px-1.5 py-1.5 whitespace-nowrap ${twoCol ? "text-center w-1/2" : ""}`}
+                                  className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground px-1.5 py-1.5 whitespace-nowrap"
                                 >
                                   {h}
                                 </TableHead>
@@ -458,17 +456,23 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
                         <TableBody className="divide-y divide-border">
                           {paginatedRows.map((r, i) => (
                             <TableRow key={i} className={`hover:bg-muted cursor-pointer ${visibleInternalRows.has((page - 1) * pageSize + i) ? "text-yellow-700" : ""}`} onClick={() => { if (tab === 'tickets') { const ticketIndex = visibleTicketIndices[(page - 1) * pageSize + i]; if (ticketIndex !== undefined) setSelectedTicket(tickets[ticketIndex]); setActiveDrawerTab('detail') } }}>
-                              {r.slice(0, activeHeaders.length).map((c, j) => (
+                              <TableCell
+                                key="no"
+                                className="text-[10px] px-1.5 py-1.5 w-8 text-center"
+                              >
+                                {(page - 1) * pageSize + i + 1}
+                              </TableCell>
+                              {activeIndexes.map((idx, j) => (
                                 <TableCell
                                   key={j}
-                                  className={`text-[10px] px-1.5 py-1.5 ${twoCol ? "text-center w-1/2" : ""}`}
+                                  className="text-[10px] px-1.5 py-1.5"
                                 >
                                   {PRIORITY_COLS[tab].includes(j) ? (
-                                    <ColorBadge type="priority" value={String(c ?? "-")} />
+                                    <ColorBadge type="priority" value={String(r[idx] ?? "-")} />
                                   ) : STATUS_COLS[tab].includes(j) ? (
-                                    <ColorBadge type="status" value={String(c ?? "-")} />
+                                    <ColorBadge type="status" value={String(r[idx] ?? "-")} />
                                   ) : (
-                                    String(c ?? "-")
+                                    String(r[idx] ?? "-")
                                   )}
                                 </TableCell>
                               ))}
@@ -535,31 +539,6 @@ export function AdminReports({ helpdesk = false }: { helpdesk?: boolean } = {}) 
           </TicketDrawer>
         )
       })()}
-      {exportConfirm && (
-        <div className="fixed inset-0 z-[130] bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-card border border-border rounded-lg p-5 w-full max-w-md space-y-3">
-            <h3 className="text-sm font-bold text-foreground">Konfirmasi Unduhan</h3>
-            <p className="text-xs text-muted-foreground">
-              Format: {exportConfirm.toUpperCase()} · Dataset: {datasetLabel} · Baris: {visibleRows.length}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {[
-                filters.from && filters.to ? `Periode: ${fmtIso(filters.from)} – ${fmtIso(filters.to)}` : "Periode: Semua",
-                filters.company?.length ? `Perusahaan: ${filters.company.join(", ")}` : "Perusahaan: Semua",
-                filters.priority?.length ? `Prioritas: ${filters.priority.join(", ")}` : "Prioritas: Semua",
-                filters.status?.length ? `Status: ${filters.status.map((s) => STATUS_LABELS[s] || s).join(", ")}` : "Status: Semua",
-              ].join(" | ")}
-            </p>
-            <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" size="sm" onClick={() => setExportConfirm(null)} disabled={exporting}>Batal</Button>
-              <Button size="sm" onClick={() => { const f = exportConfirm; setExportConfirm(null); doExport(f); }} disabled={exporting} className={exportConfirm === "xlsx" ? "bg-emerald-600 text-white hover:bg-emerald-700" : "bg-red-600 text-white hover:bg-red-700"}>
-                {exporting ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
-                Download
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

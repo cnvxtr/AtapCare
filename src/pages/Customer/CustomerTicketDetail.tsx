@@ -127,6 +127,8 @@ export default function CustomerTicketDetail() {
   const [rootCauseMap, setRootCauseMap] = useState<Map<string, string>>(new Map())
   const [preview, setPreview] = useState<{ photos: { src: string; url: string }[]; index: number } | null>(null)
   const [gpsCoords, setGpsCoords] = useState<Record<string, string>>({})
+  // "Lainnya" menyimpan teks asli di rootCauseNote; nama katalog hanya fallback.
+  const rootCauseLabel = ticket?.rootCauseNote?.trim() || (ticket?.rootCauseId ? rootCauseMap.get(ticket.rootCauseId) : undefined)
 
   useEffect(() => {
     if (!ticket?.rootCauseId) return
@@ -353,8 +355,8 @@ export default function CustomerTicketDetail() {
           <div className="border-t border-border pt-6">
             <p className="text-sm font-semibold text-foreground mb-3">Hasil Pekerjaan</p>
 
-            {ticket.rootCauseId && rootCauseMap.has(ticket.rootCauseId) && (
-              <InfoCard label="Temuan Akhir" value={rootCauseMap.get(ticket.rootCauseId)!} />
+            {rootCauseLabel && (
+              <InfoCard label="Temuan Akhir" value={rootCauseLabel} />
             )}
 
             {(() => {

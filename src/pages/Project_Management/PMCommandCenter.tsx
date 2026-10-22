@@ -425,7 +425,7 @@ export default function PMCommandCenter() {
                                             const isUrgent = t.priority === 'Critical' && !['CLOSED', 'VOID', 'DUPLICATE'].includes(t.status)
                                             const isPendingCritical = t.status === 'PENDING' && (getPendingHours(t.updatedAt) ?? 0) >= 72
                                             return (
-                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${isPendingCritical ? 'bg-red-50 border-red-300' : 'bg-card'}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
+                                                <div key={t.id} className={`rounded border hover:shadow-md hover:-translate-y-0.5 transition-all cursor-pointer ${isMobile ? 'p-1.5' : 'p-2'} ${isUrgent ? 'pulse-ring border-red-200' : 'border-border'} ${isPendingCritical ? 'bg-red-50 border-red-300' : 'bg-card'} ${t.source === 'internal' ? 'border-l-4 border-l-orange-500' : ''}`} onClick={() => { setSelectedTicket(t); setActiveDrawerTab('detail') }}>
                                                     <div className="flex items-center justify-between gap-1 mb-1">
                                                         <span className={`font-mono text-muted-foreground truncate ${isMobile ? 'text-[7px]' : 'text-[8px]'}`}>{t.code}</span>
                                                     </div>
