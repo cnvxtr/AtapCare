@@ -171,7 +171,7 @@ export default function Landing() {
                     <div>
                       <p className="text-sm font-semibold">Jam Operasional</p>
                       <p className="mt-1 text-xs text-muted-foreground leading-relaxed">
-                        Senin–Jumat · 08.00–17.00 WIB. Pelaporan di luar jam kerja akan diproses pada jam operasional berikutnya.
+                        Senin-Jumat · 08.00-17.00 WIB. Pelaporan di luar jam kerja akan diproses pada jam operasional berikutnya.
                       </p>
                     </div>
                   </div>

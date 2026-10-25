@@ -281,18 +281,19 @@ export default function HPInbox() {
     }
 
     const handleCompanyChange = (customerId: string) => {
-        setFormData({ ...formData, company: customerId, site: '', unit: '', picName: '', picWa: '' })
+        const cust = mdCustomers.find(c => c.id === customerId)
+        setFormData({
+            ...formData,
+            company: customerId,
+            site: '',
+            unit: '',
+            picName: cust?.pic_name || '',
+            picWa: cust?.pic_phone || ''
+        })
     }
 
     const handleSiteChange = (siteName: string) => {
-        const site = mdSites.find(s => s.name === siteName)
-        setFormData({
-            ...formData,
-            site: siteName,
-            unit: '',
-            picName: site?.pic_name || '',
-            picWa: site?.pic_phone || ''
-        })
+        setFormData({ ...formData, site: siteName, unit: '' })
     }
 
     const selectedCompany = mdCustomers.find(c => c.id === formData.company)
@@ -953,15 +954,15 @@ export default function HPInbox() {
                                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                             <div>
                                                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">Nama PIC</label>
-                                                <input type="text" value={formData.picName} readOnly placeholder="Terisi otomatis saat Site dipilih" className={readOnlyInputCls} />
+                                                <input type="text" value={formData.picName} readOnly placeholder="Terisi otomatis saat Perusahaan dipilih" className={readOnlyInputCls} />
                                             </div>
                                             <div>
                                                 <label className="block text-xs font-semibold text-muted-foreground mb-1.5">No WA PIC</label>
-                                                <input type="text" value={formData.picWa} readOnly placeholder="Terisi otomatis saat Site dipilih" className={readOnlyInputCls} />
+                                                <input type="text" value={formData.picWa} readOnly placeholder="Terisi otomatis saat Perusahaan dipilih" className={readOnlyInputCls} />
                                             </div>
                                         </div>
                                         <p className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Auto-fill dari Data Induk Site yang dipilih
+                                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Auto-fill dari Data Induk Perusahaan yang dipilih
                                         </p>
                                     </section>
                                     <section className="rounded-xl border border-border bg-muted/40 p-4 space-y-4">
